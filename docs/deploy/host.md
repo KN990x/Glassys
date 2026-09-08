@@ -1,6 +1,6 @@
 # Host gateway
 
-Run the Glassys gateway as a normal process on the machine the agent should operate. The PWA is served by the same process. You bring the reverse proxy.
+Run the Glassys gateway as a normal process on the machine the agent should operate (systems work: git, files, services). The PWA is served by the same process. You bring the reverse proxy.
 
 This is how Glassys is installed: the agent needs the real workspace, host `git`, and the operator’s files.
 
@@ -30,7 +30,22 @@ Open `http://127.0.0.1:8787` (or `GLASSYS_PORT` if you set it) and complete the 
 
 ## Cursor SDK login (not cursor-cli)
 
-Glassys does not reuse Cursor IDE or `cursor-cli` / `cursor-agent` sessions. Sign in with **Cursor SDK** in the wizard (the PWA shows a URL if no browser opens on the host) or set `CURSOR_API_KEY`. Store path: `~/.cursor/sdk/auth.json` for the user whose `HOME` the service uses. See the credential matrix in the README.
+Glassys talks to `@cursor/sdk` (`Agent.create` / `resume` / `send`). It does not reuse Cursor IDE or `cursor-cli` / `cursor-agent` sessions. Sign in with **Cursor SDK** in the wizard (the PWA shows a URL if no browser opens on the host) or set `CURSOR_API_KEY`. Store path: `~/.cursor/sdk/auth.json` for the user whose `HOME` the service uses.
+
+Keep `cursor-cli` installed if you use it in a terminal. Sign in with the SDK (or paste a key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations)). Do not run two auto-run agents on the same `cwd` at once.
+
+Credential order: optional API key in Glassys secrets → `CURSOR_API_KEY` → `~/.cursor/sdk/auth.json` (only keys minted by `Cursor.auth.login()`). `settingSources` (default project + user) can load **rules** from `~/.cursor`; it does not copy IDE tokens.
+
+| Already on the machine | What to do |
+| --- | --- |
+| Only Cursor IDE or `cursor-cli` / `cursor-agent` signed in | Sign in with **Cursor SDK** in the wizard, or paste a dashboard key. The CLI can stay installed; it is not reused. |
+| Linux desktop, gateway in the foreground (`pnpm start`) | “Sign in with Cursor SDK” may open a browser. If it does not, open the URL the PWA shows. |
+| `systemd --user` (`pnpm run service:install`) | The unit has `HOME` but often no `DISPLAY`. Use the URL in the PWA, or set `CURSOR_API_KEY` on the service. Linger does not give a display. |
+| SSH / headless / PWA on a phone | Open the URL in the browser you are looking at. Do not wait for a browser on the server. |
+| Existing `~/.cursor/sdk/auth.json` | Works if the service `HOME` is that user and no bad `CURSOR_API_KEY` overrides it. |
+| systemd `User=glassys` | That account’s `$HOME` is a different `auth.json`. Log in as that user or use env/secrets. |
+| SDK key expired (~90 days) | Sign in with the SDK again or rotate the dashboard key. |
+| CLI and Glassys on the same `cwd` | Independent credentials. Do not run two auto-run agents on the same files at once. |
 
 The login POST returns as soon as the SDK has a URL; it does not hold an HTTP connection until you finish in the browser. Long proxy idle timeouts still apply to agent **WebSocket** runs, not to this short POST.
 

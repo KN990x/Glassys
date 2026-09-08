@@ -30,7 +30,7 @@ Host install one-liner (README / `docs/deploy/host.md`): `git clone … && cd gl
 | --- | --- |
 | `protocol/` | UI protocol. No SDK types. |
 | `adapters/contract/` | `Adapter` interface |
-| `adapters/<id>/` | One package per CLI/SDK |
+| `adapters/<id>/` | One package per adapter |
 | `gateway/` | Auth, WebSocket, queue, static PWA |
 | `web/` | Dumb PWA |
 | `docs/deploy/` | Host, Caddy, Cloudflare |

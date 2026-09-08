@@ -2,7 +2,7 @@
   "name": "glassys",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hosted chat face for local coding-agent CLIs",
+  "description": "Self-hosted chat face for systems work via local coding agents",
   "license": "MIT",
   "author": "KN <hello@kn990x.dev>",
   "repository": {
