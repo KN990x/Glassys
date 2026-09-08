@@ -1,0 +1,7 @@
+[
+  { "type": "thinking-delta", "text": "Inspect the repo" },
+  { "type": "thinking-completed", "thinkingDurationMs": 800 },
+  { "type": "tool-call-started", "callId": "1", "toolCall": { "name": "read", "args": { "path": "README.md" } } },
+  { "type": "tool-call-completed", "callId": "1", "toolCall": { "name": "read", "result": { "contents": "# hi" } } },
+  { "type": "text-delta", "text": "This repo is Glassys." }
+]

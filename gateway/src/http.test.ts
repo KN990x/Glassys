@@ -1,0 +1,122 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createServer, type Server } from "node:http";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import YAML from "yaml";
+import { defaultConfig, PROTOCOL_VERSION } from "@glassys/protocol";
+import { handleHttp } from "./http.js";
+import { hashPassword, loadSecrets, patchSecrets } from "./secrets.js";
+
+async function listen(server: Server): Promise<string> {
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") throw new Error("no port");
+      resolve(`http://127.0.0.1:${addr.port}`);
+    });
+  });
+}
+
+describe("http api", () => {
+  let dir: string;
+  let server: Server;
+  let base: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "glassys-http-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    delete process.env.GLASSYS_JWT_SECRET;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = "";
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    await loadSecrets();
+    server = createServer(async (req, res) => {
+      const handled = await handleHttp(req, res);
+      if (!handled && !res.writableEnded) {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    base = await listen(server);
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  });
+
+  it("reports the gateway package version on /health", async () => {
+    const res = await fetch(`${base}/health`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; name: string; version: string; protocolVersion: number };
+    expect(body.ok).toBe(true);
+    expect(body.name).toBe("glassys");
+    expect(body.version).toBe("0.1.0");
+    expect(body.protocolVersion).toBe(PROTOCOL_VERSION);
+  });
+
+  it("rejects a short setup password", async () => {
+    const res = await fetch(`${base}/api/auth/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "short" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a setup password that is too long", async () => {
+    const res = await fetch(`${base}/api/auth/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "x".repeat(257) }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("sets up, logs in, and refuses onboarding without a cwd", async () => {
+    const setup = await fetch(`${base}/api/auth/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    expect(setup.status).toBe(200);
+    const { token } = (await setup.json()) as { token: string };
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    expect(login.status).toBe(200);
+
+    const onboard = await fetch(`${base}/api/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ onboarding: { completed: true } }),
+    });
+    expect(onboard.status).toBe(400);
+
+    const ok = await fetch(`${base}/api/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ onboarding: { completed: true }, agent: { cwd: dir } }),
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("does not swap in Cursor's catalog for another adapter", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const claude = await fetch(`${base}/api/models?adapter=claude`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(claude.status).toBe(200);
+    const body = (await claude.json()) as { models: Array<{ id: string }>; source: string };
+    expect(body.models.some((m) => m.id === "grok-4.6")).toBe(false);
+    expect(body.models.length).toBeGreaterThan(0);
+  });
+});

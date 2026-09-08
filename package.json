@@ -1,0 +1,33 @@
+{
+  "name": "glassys",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted chat face for local coding-agent CLIs",
+  "license": "MIT",
+  "author": "KN <hello@kn990x.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KN990x/Glassys.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KN990x/Glassys/issues"
+  },
+  "homepage": "https://github.com/KN990x/Glassys#readme",
+  "packageManager": "pnpm@11.14.0",
+  "engines": {
+    "node": ">=22.13.0",
+    "pnpm": ">=11.14.0"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm --filter @glassys/protocol --filter @glassys/adapter-contract --filter @glassys/adapter-cursor --filter @glassys/adapter-claude --filter @glassys/adapter-opencode --filter @glassys/adapter-gemini --filter @glassys/adapter-codex --filter @glassys/adapter-acp run build && concurrently -n pkgs,gateway,web -c cyan,green,magenta \"pnpm --filter @glassys/protocol --filter @glassys/adapter-contract --filter @glassys/adapter-cursor --filter @glassys/adapter-claude --filter @glassys/adapter-opencode --filter @glassys/adapter-gemini --filter @glassys/adapter-codex --filter @glassys/adapter-acp --parallel run build:watch\" \"pnpm --filter @glassys/gateway run dev\" \"pnpm --filter @glassys/web run dev\"",
+    "start": "node gateway/dist/index.js",
+    "test": "pnpm --filter @glassys/protocol --filter @glassys/adapter-contract run build && pnpm --filter @glassys/protocol --filter @glassys/adapter-contract --filter @glassys/adapter-cursor --filter @glassys/adapter-claude --filter @glassys/adapter-opencode --filter @glassys/adapter-gemini --filter @glassys/adapter-codex --filter @glassys/adapter-acp --filter @glassys/gateway --filter @glassys/web run test",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "node scripts/lint.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}

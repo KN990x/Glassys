@@ -1,0 +1,54 @@
+# Copy to $GLASSYS_DATA_DIR/config.yaml (default: ./data/config.yaml).
+# Secrets do not belong here — use environment variables or data/secrets.json.
+
+space:
+  name: Glassys # PWA always displays Glassys; not editable in Settings.
+  locale: en
+  theme: dark
+
+onboarding:
+  completed: false
+
+agent:
+  # cursor | claude | opencode | gemini | codex | acp
+  adapter: cursor
+  # Absolute host path. Empty until the wizard sets it.
+  cwd: ""
+  # Empty until the adapter fills its default (Cursor: grok-4.6 extra high).
+  model: ""
+  modelParams: []
+  # Adapter-specific. Cursor: settingSources, sandbox, autoRun.
+  # Claude: permissionMode, autoRun. ACP: command, args, registryId.
+  options:
+    settingSources:
+      - project
+      - user
+    sandbox: false
+    # true = tools run unattended.
+    # Cursor false = local.autoReview (classifier denies; headless SDK cannot prompt).
+    autoRun: true
+
+network:
+  bind: 127.0.0.1
+  port: 8787
+  publicUrl: ""
+  allowedOrigins: []
+  wsKeepaliveSeconds: 25 # Clamped to 15–30. Applied per WebSocket connection.
+
+security:
+  # none | cloudflare-access | header
+  edgeAuth: none
+  cloudflare:
+    teamDomain: ""
+    audience: ""
+  identityHeader: ""
+  sessionTtlHours: 168
+
+display:
+  thinkingDefault: collapsed
+  diffPreview: true
+  shellLinesVisible: 12
+
+session:
+  resumeOnStart: true
+  queue: fifo
