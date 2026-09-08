@@ -43,7 +43,7 @@ Reports that require the operator password, adapter API keys, or a shell on the 
 ## Deployment reminders
 
 - Never commit `.env`, `secrets.json`, or `$GLASSYS_DATA_DIR`.
-- Prefer Cursor SDK login (`~/.cursor/sdk/auth.json`) or the matching CLI on the host over storing an API key. Cursor IDE / cursor-cli login is a different store.
+- Prefer Cursor SDK login (`~/.cursor/sdk/auth.json`) or the adapter’s API key. Cursor IDE / cursor-cli login is a different store.
 - Default bind is `127.0.0.1`. Binding `0.0.0.0` is explicit in `config.yaml` / `GLASSYS_BIND`.
 - Put a TLS reverse proxy in front if the PWA is reachable off the LAN. Keep WebSocket idle timeouts high (`/ws`); agent runs last minutes.
 - Rotate the operator password from Settings. That bumps `jwtEpoch` and signs other sessions out.

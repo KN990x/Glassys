@@ -4,9 +4,11 @@ This is the canonical project briefing. Edit this file, not `CLAUDE.md`.
 
 ## What it is
 
-Glassys is a **face** (PWA + Node gateway) over **local CLI coding agents**. It does not infer, it has no personality, and it is not the agent. It translates a runtime stream into a stable UI protocol and serves it in a browser or phone.
+Glassys is a self-hosted **chat face** (PWA + Node gateway) for the coding agent that already runs on the host. It does not infer, it has no personality, and it is not the agent. The job is **systems work** on that machine (files, services, git), not application development. Coding agents are the runtime; Glassys is not an IDE. Adapters talk to each vendor’s **local SDK** (or ACP). The gateway translates that stream into a stable UI protocol and serves it in a browser or phone.
 
-Analogy: Open WebUI is to Ollama what Glassys is to Cursor CLI, Claude Code, OpenCode, and similar tools.
+Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCode, and similar tools — the UI, not the runtime.
+
+**Agent / adapter** is the product on the host. **Transport** is SDK or ACP (never print-mode). **CLI** is the vendor’s terminal app: optional unless an adapter probes for a binary (`codex`, `opencode`); its login does not authenticate Glassys.
 
 - Self-hosted only. Every operator runs their own instance. Not a Glassys SaaS.
 - Product language: English default, UI i18n-ready (`en` + `es`). Public `README.md` is bilingual (English then Spanish). `AGENTS.md`, code comments, and UI message keys: English.
@@ -18,6 +20,7 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor CLI, Claude Code, Ope
 - Cursor transport: `@cursor/sdk` **local** runtime — `Agent.create` / `resume` / `send` + `onDelta` + always `wait()`. Do not use Cursor-via-ACP while the SDK exists.
 - Not OpenClaw, not Open WebUI, not a PTY/xterm product. A raw terminal may exist later as debug, not as the UI.
 - Not an editor. No Apply/Reject on buffers. The agent writes the disk (ACP host auto-applies `fs/*` / `terminal/*` when auto-run is on; auto-run off denies writes and `terminal/create`). Glassys shows the transcript (thinking, tools, diffs).
+- Not a development IDE. Operators use it for systems work on the host; coding agents are the runtime.
 - Do not clone Cursor (or any vendor) branding or assets.
 
 ## Configure, don't fork
@@ -38,7 +41,7 @@ Default bind is `127.0.0.1`. Binding `0.0.0.0` is an explicit operator choice in
 
 | Path | Role |
 | --- | --- |
-| `protocol/` | Versioned UI protocol. Gateway and web import this. **Never** SDK/CLI types or vendor catalogs. |
+| `protocol/` | Versioned UI protocol. Gateway and web import this. **Never** SDK/ACP types or vendor catalogs. |
 | `adapters/contract/` | `Adapter` interface: `create`, `resume`, `listModels`, `capabilities`. `send` lives on the session; `cancel` on the run. |
 | `adapters/cursor/` | Only package that imports `@cursor/sdk`. Owns the Cursor fallback catalog. |
 | `adapters/claude/` | Claude Agent SDK. |

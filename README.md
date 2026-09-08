@@ -48,57 +48,52 @@
 
 # Glassys
 
-Glassys is a **face** — a PWA with IDE-chat UX — over **local CLI coding agents**. It is not the agent. It does not infer and has no personality. It translates a runtime stream into a stable UI protocol and serves it in the browser or on a phone.
+Glassys is a self-hosted **chat face** for the coding agent that already runs on your machine. It is not the agent. The job is **systems work** on that host (the machine, files, services, git) from a phone or another device — not application development. Coding agents are the runtime; Glassys is not an IDE.
 
-Analogy: Open WebUI is to Ollama what Glassys is to Cursor CLI, Claude Code, OpenCode, and similar tools.
+A Node gateway talks to each vendor’s **local SDK** (or ACP), translates the stream into a stable UI protocol, and serves a PWA.
 
-- **Audience:** anyone who already runs a coding agent from a CLI/SDK and wants the same chat feel on a phone or another machine, with a persistent thread.
+Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCode, and similar tools — the UI, not the runtime.
+
+- **Audience:** operators and sysadmins who want a persistent chat while a local coding agent does systems work on the host.
 - **UI language:** English by default; Spanish (`es`) is available in Settings.
 - **Distribution:** self-hosted. Every operator runs their own instance. Not a Glassys SaaS.
-- **Adapters:** Cursor (`@cursor/sdk` local, not `cursor-agent --print`), Claude Code, OpenCode, Gemini CLI, Codex CLI, plus a generic ACP host. Same UI protocol. Cursor, Claude, and OpenCode list models from the live CLI catalog; Gemini, Codex, and ACP use a documented static fallback.
+- **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet), Codex SDK (needs the `codex` binary), plus a generic ACP host. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; Gemini, Codex, and ACP use a documented static fallback.
 - **v1:** one profile / one agent / one thread / one run at a time (FIFO queue).
+
+**Agent / adapter** is the product on the host. **Transport** is how Glassys talks to it (SDK or ACP — never print-mode). **CLI** is the vendor’s terminal app: it may stay installed; its login does not authenticate Glassys. Codex and OpenCode still need their binary on PATH.
 
 ## What it is not
 
-- Not a wrapper of `cursor-agent -p --output-format stream-json` (print mode suppresses thinking).
-- Not OpenClaw, Open WebUI, or a PTY/xterm product.
+- Not the agent. It does not infer and has no personality.
+- Not a development IDE. Coding agents can still write files; the product is for operating the machine, not pairing on application code.
 - Not an editor: no Apply/Reject. The agent writes the disk; Glassys shows thinking, tools, and diffs.
+- Not OpenClaw, Open WebUI, or a PTY/xterm product.
 - Not a Cloudflare product. Tunnel and Access are optional recipes.
+- Not a wrapper of `cursor-agent -p --output-format stream-json` (print mode suppresses thinking).
 
 ## Requirements
 
 - Node.js **22.13+** (`.nvmrc`)
 - **pnpm** 11.14+ (this repo is a pnpm workspace; do not use npm)
 - A git workspace on the machine that will run the agent
-- Cursor SDK login on that host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **or** optional `CURSOR_API_KEY` for CI or an override. **cursor-cli, cursor-agent, and Cursor IDE login are a different store** and do not authenticate Glassys. The wizard shows a login URL if the host has no display (Linux systemd, SSH, phone).
-- Other adapters: the matching CLI/SDK on the host (`claude`, `opencode`, `gemini`, `codex`) and optional `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. The Gemini adapter talks to `@google/gemini-cli-sdk` when it is installed or linked; that package is not on npm yet, so Gemini stays visible in the wizard but **not selectable** until it is.
+- Cursor: **Cursor SDK** sign-in on that host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **or** optional `CURSOR_API_KEY` for CI or an override. Installing the vendor CLI does not sign Glassys in. The wizard shows a login URL if the host has no display (Linux systemd, SSH, phone).
+- Other adapters: the matching SDK (and, for Codex/OpenCode, the host binary) plus optional `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. The Gemini adapter talks to `@google/gemini-cli-sdk` when it is installed or linked; that package is not on npm yet, so Gemini stays visible in the wizard but **not selectable** until it is.
 
-### Cursor credentials vs cursor-cli
+### Already have cursor-cli?
 
-Glassys talks to `@cursor/sdk` (`Agent.create` / `resume` / `send`). Credential order: optional API key in Glassys secrets → `CURSOR_API_KEY` → `~/.cursor/sdk/auth.json` (only keys minted by `Cursor.auth.login()`).
-
-| Already on the machine | What to do |
-| --- | --- |
-| Only Cursor IDE or `cursor-cli` / `cursor-agent` signed in | Sign in with **Cursor SDK** in the wizard, or paste a key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). The CLI can stay installed; it is not reused. |
-| Linux desktop, gateway in the foreground (`pnpm start`) | “Sign in with Cursor SDK” may open a browser. If it does not, open the URL the PWA shows. |
-| `systemd --user` (`pnpm run service:install`) | The unit has `HOME` but often no `DISPLAY`. Use the URL in the PWA, or set `CURSOR_API_KEY` on the service. Linger does not give a display. |
-| SSH / headless / PWA on a phone | Open the URL in the browser you are looking at. Do not wait for a browser on the server. |
-| Existing `~/.cursor/sdk/auth.json` | Works if the service `HOME` is that user and no bad `CURSOR_API_KEY` overrides it. |
-| systemd `User=glassys` | That account’s `$HOME` is a different `auth.json`. Log in as that user or use env/secrets. |
-| SDK key expired (~90 days) | Sign in with the SDK again or rotate the dashboard key. |
-| CLI and Glassys on the same `cwd` | Independent credentials. Do not run two auto-run agents on the same files at once. |
+Keep it. Glassys talks to `@cursor/sdk`, not `cursor-cli` / `cursor-agent`. Sign in with **Cursor SDK** in the wizard, or paste a key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). Do not run two auto-run agents on the same `cwd` at once. Credential order and per-setup notes: [docs/deploy/host.md](docs/deploy/host.md).
 
 `settingSources` (default project + user) can load **rules** from `~/.cursor`; it does not copy IDE tokens.
 
 ## Quick start
 
-Install on the machine the agent should operate (git, your files).
+Install on the machine the agent should operate (systems work: git, files, services).
 
 ```bash
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). That one line clones, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host — not cursor-cli). An API key is optional. The PWA will not enter chat until onboarding is done.
+Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). That one line clones, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
 
 If you are already inside the repo: `pnpm install && pnpm run service:install`.
 
@@ -134,7 +129,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Non-secrets live in `$GLASSYS_DATA_DIR/config.yaml` (created from defaults on first run). See [config.example.yaml](config.example.yaml). In-app Settings writes locale, theme, agent, display, and session. Bind, port, allowed origins, and edge auth are yaml (or env) only.
 
-Secrets (optional per-adapter API keys, operator password hash, JWT secret) live in environment variables or `$GLASSYS_DATA_DIR/secrets.json` (gitignored). The UI can show **configured / rotate**, never the full key again. Host installs should prefer Cursor SDK login (`~/.cursor/sdk/auth.json`) over storing a key. cursor-cli / IDE login is a different store.
+Secrets (optional per-adapter API keys, operator password hash, JWT secret) live in environment variables or `$GLASSYS_DATA_DIR/secrets.json` (gitignored). The UI can show **configured / rotate**, never the full key again. Host installs should prefer Cursor SDK login (`~/.cursor/sdk/auth.json`) over storing a key. The vendor terminal CLI / IDE login is a different store.
 
 ## Security
 
@@ -155,9 +150,9 @@ Glassys with auto-run and a host workspace is **operator access to that machine*
 | `adapters/contract/` | Adapter interface |
 | `adapters/cursor/` | Only package that imports `@cursor/sdk` |
 | `adapters/claude/` | Claude Agent SDK |
-| `adapters/opencode/` | OpenCode |
-| `adapters/gemini/` | Gemini CLI |
-| `adapters/codex/` | Codex CLI |
+| `adapters/opencode/` | OpenCode SDK + local server |
+| `adapters/gemini/` | Gemini CLI SDK |
+| `adapters/codex/` | Codex SDK |
 | `adapters/acp/` | Generic ACP host |
 | `web/` | Dumb PWA |
 | `docs/deploy/` | Host, Caddy, Cloudflare appendix |
@@ -172,57 +167,52 @@ MIT. See [LICENSE](LICENSE).
 
 # Glassys
 
-Glassys es una **cara** — una PWA con UX de chat de IDE — sobre **agentes de código CLI locales**. No es el agente. No infiere y no tiene personalidad. Traduce un stream de runtime a un protocolo de UI estable y lo sirve en el navegador o en el teléfono.
+Glassys es una **cara de chat** self-hosted para el agente de código que ya corre en tu máquina. No es el agente. El trabajo es **sistemas** en ese host (la máquina, archivos, servicios, git) desde el teléfono u otro dispositivo — no desarrollar aplicaciones. Los agentes de código son el runtime; Glassys no es un IDE.
 
-Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor CLI, Claude Code, OpenCode y herramientas similares.
+Un gateway Node habla con el **SDK local** de cada vendor (o ACP), traduce el stream a un protocolo de UI estable y sirve una PWA.
 
-- **Audiencia:** quien ya ejecuta un agente de código desde un CLI/SDK y quiere el mismo chat en el teléfono u otra máquina, con un hilo persistente.
+Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenCode y herramientas similares — la UI, no el runtime.
+
+- **Audiencia:** operadores y sysadmins que quieren un chat persistente mientras un agente de código local hace tareas de sistemas en el host.
 - **Idioma de la UI:** inglés por defecto; español (`es`) en Ajustes.
 - **Distribución:** self-hosted. Cada operador monta la suya. No hay SaaS de Glassys.
-- **Adaptadores:** Cursor (`@cursor/sdk` local, no `cursor-agent --print`), Claude Code, OpenCode, Gemini CLI, Codex CLI, más un host ACP genérico. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del CLI; Gemini, Codex y ACP usan un fallback estático documentado.
+- **Adaptadores:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + servidor local, Gemini CLI SDK (aún no en npm), Codex SDK (hace falta el binario `codex`), más un host ACP genérico. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del runtime; Gemini, Codex y ACP usan un fallback estático documentado.
 - **v1:** un perfil / un agente / un hilo / un run a la vez (cola FIFO).
+
+**Agente / adaptador** es el producto en el host. **Transporte** es cómo le habla Glassys (SDK o ACP — nunca print-mode). **CLI** es el programa de terminal del vendor: puede seguir instalado; su login no autentica Glassys. Codex y OpenCode sí necesitan su binario en el PATH.
 
 ## Qué no es
 
-- No es un wrapper de `cursor-agent -p --output-format stream-json` (el print mode oculta el thinking).
-- No es OpenClaw, Open WebUI ni un producto PTY/xterm.
+- No es el agente. No infiere y no tiene personalidad.
+- No es un IDE de desarrollo. El agente puede escribir archivos; el producto es operar la máquina, no programar aplicaciones.
 - No es un editor: no hay Apply/Reject. El agente escribe el disco; Glassys muestra thinking, tools y diffs.
+- No es OpenClaw, Open WebUI ni un producto PTY/xterm.
 - No es un producto de Cloudflare. Tunnel y Access son recetas opcionales.
+- No es un wrapper de `cursor-agent -p --output-format stream-json` (el print mode oculta el thinking).
 
 ## Requisitos
 
 - Node.js **22.13+** (`.nvmrc`)
 - **pnpm** 11.14+ (este repo es un workspace pnpm; no uses npm)
 - Un workspace git en la máquina que ejecutará el agente
-- Login del SDK de Cursor en ese host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **o** `CURSOR_API_KEY` opcional para CI o un override. **cursor-cli, cursor-agent y el login del IDE son otro almacén** y no autentican Glassys. El asistente muestra una URL de login si el host no tiene display (systemd en Linux, SSH, teléfono).
-- Otros adaptadores: el CLI/SDK correspondiente en el host (`claude`, `opencode`, `gemini`, `codex`) y opcionalmente `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. El adaptador Gemini habla con `@google/gemini-cli-sdk` cuando está instalado o enlazado; ese paquete aún no está en npm, así que Gemini se ve en el asistente pero **no se puede elegir** hasta entonces.
+- Cursor: login del **SDK de Cursor** en ese host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **o** `CURSOR_API_KEY` opcional para CI o un override. Instalar el CLI del vendor no autentica Glassys. El asistente muestra una URL de login si el host no tiene display (systemd en Linux, SSH, teléfono).
+- Otros adaptadores: el SDK correspondiente (y, para Codex/OpenCode, el binario en el host) más opcionalmente `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. El adaptador Gemini habla con `@google/gemini-cli-sdk` cuando está instalado o enlazado; ese paquete aún no está en npm, así que Gemini se ve en el asistente pero **no se puede elegir** hasta entonces.
 
-### Credenciales de Cursor vs cursor-cli
+### ¿Ya tienes cursor-cli?
 
-Glassys habla con `@cursor/sdk` (`Agent.create` / `resume` / `send`). Orden: API key opcional en secrets de Glassys → `CURSOR_API_KEY` → `~/.cursor/sdk/auth.json` (solo keys acuñadas por `Cursor.auth.login()`).
-
-| Ya está en la máquina | Qué hacer |
-| --- | --- |
-| Solo IDE o `cursor-cli` / `cursor-agent` con sesión | Inicia sesión con el **SDK de Cursor** en el asistente, o pega una key de [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). El CLI puede seguir instalado; no se reutiliza. |
-| Desktop Linux, gateway en primer plano (`pnpm start`) | “Sign in with Cursor SDK” puede abrir el navegador. Si no, abre la URL que muestra la PWA. |
-| `systemd --user` (`pnpm run service:install`) | La unidad tiene `HOME` pero a menudo no `DISPLAY`. Usa la URL en la PWA, o `CURSOR_API_KEY` en el servicio. Linger no da un display. |
-| SSH / headless / PWA en el teléfono | Abre la URL en el navegador que estás mirando. No esperes un navegador en el servidor. |
-| Ya existe `~/.cursor/sdk/auth.json` | Vale si el `HOME` del servicio es ese usuario y no hay un `CURSOR_API_KEY` malo que lo pise. |
-| systemd `User=glassys` | Otro `$HOME` → otro `auth.json`. Entra como ese usuario o usa env/secrets. |
-| Key del SDK caducada (~90 días) | Vuelve a iniciar sesión con el SDK o rota la key del dashboard. |
-| CLI y Glassys sobre el mismo `cwd` | Credenciales independientes. No lances dos agentes auto-run a la vez sobre los mismos archivos. |
+Déjalo. Glassys habla con `@cursor/sdk`, no con `cursor-cli` / `cursor-agent`. Inicia sesión con el **SDK de Cursor** en el asistente, o pega una key de [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). No lances dos agentes auto-run a la vez sobre el mismo `cwd`. Orden de credenciales y notas por entorno: [docs/deploy/host.md](docs/deploy/host.md).
 
 `settingSources` (por defecto project + user) puede cargar **reglas** de `~/.cursor`; no copia tokens del IDE.
 
 ## Arranque rápido
 
-Instálalo en la máquina que el agente debe operar (git, tus archivos).
+Instálalo en la máquina que el agente debe operar (tareas de sistemas: git, archivos, servicios).
 
 ```bash
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). Esa línea clona, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host — no cursor-cli). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
+Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). Esa línea clona, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
 
 Si ya estás dentro del repo: `pnpm install && pnpm run service:install`.
 
@@ -258,7 +248,7 @@ Véase [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Lo que no es secreto vive en `$GLASSYS_DATA_DIR/config.yaml` (se crea con valores por defecto en el primer arranque). Véase [config.example.yaml](config.example.yaml). Ajustes escribe locale, tema, agente, display y sesión. Bind, puerto, orígenes permitidos y edge auth son solo yaml (o env).
 
-Los secretos (API keys opcionales por adaptador, hash de la contraseña, secreto JWT) viven en variables de entorno o `$GLASSYS_DATA_DIR/secrets.json` (gitignored). La UI puede mostrar **configurado / rotar**, nunca la clave completa otra vez. En el host, preferible el login del SDK de Cursor (`~/.cursor/sdk/auth.json`) a guardar una key. El login de cursor-cli / IDE es otro almacén.
+Los secretos (API keys opcionales por adaptador, hash de la contraseña, secreto JWT) viven en variables de entorno o `$GLASSYS_DATA_DIR/secrets.json` (gitignored). La UI puede mostrar **configurado / rotar**, nunca la clave completa otra vez. En el host, preferible el login del SDK de Cursor (`~/.cursor/sdk/auth.json`) a guardar una key. El login del CLI de terminal / IDE es otro almacén.
 
 ## Seguridad
 
@@ -279,9 +269,9 @@ Glassys con auto-run y un workspace del host es **acceso de operador a esa máqu
 | `adapters/contract/` | Interfaz de adaptador |
 | `adapters/cursor/` | Único paquete que importa `@cursor/sdk` |
 | `adapters/claude/` | Claude Agent SDK |
-| `adapters/opencode/` | OpenCode |
-| `adapters/gemini/` | Gemini CLI |
-| `adapters/codex/` | Codex CLI |
+| `adapters/opencode/` | OpenCode SDK + servidor local |
+| `adapters/gemini/` | Gemini CLI SDK |
+| `adapters/codex/` | Codex SDK |
 | `adapters/acp/` | Host ACP genérico |
 | `web/` | PWA tonta |
 | `docs/deploy/` | Host, Caddy, apéndice Cloudflare |
