@@ -1,0 +1,8 @@
+packages:
+  - protocol
+  - adapters/*
+  - gateway
+  - web
+engineStrict: true
+allowBuilds:
+  esbuild: true

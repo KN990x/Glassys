@@ -1,0 +1,63 @@
+{
+  "$id": "https://glassys.dev/protocol/v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Glassys protocol v1",
+  "description": "WebSocket message envelope. Discriminate on type. protocolVersion major is 1. Artifact only — the gateway does not validate messages against this schema at runtime.",
+  "oneOf": [
+    { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello" }, "protocolVersion": { "type": "integer" } } },
+    { "type": "object", "required": ["type", "token"], "properties": { "type": { "const": "auth" }, "token": { "type": "string" } } },
+    { "type": "object", "required": ["type", "text"], "properties": { "type": { "const": "user.message" }, "text": { "type": "string" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.cancel" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "config.get" } } },
+    { "type": "object", "required": ["type", "patch"], "properties": { "type": { "const": "config.set" }, "patch": { "type": "object" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "ping" }, "ts": { "type": "number" } } },
+    { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello.ok" }, "protocolVersion": { "type": "integer" } } },
+    { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello.incompatible" }, "protocolVersion": { "type": "integer" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "auth.ok" } } },
+    { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "auth.error" }, "message": { "type": "string" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "pong" }, "ts": { "type": "number" } } },
+    { "type": "object", "required": ["type", "config"], "properties": { "type": { "const": "config" }, "config": { "type": "object" } } },
+    { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "config.error" }, "message": { "type": "string" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "thinking.delta" }, "text": { "type": "string" } } },
+    { "type": "object", "required": ["type", "durationMs"], "properties": { "type": { "const": "thinking.done" }, "durationMs": { "type": "integer" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "text.delta" }, "text": { "type": "string" } } },
+    {
+      "type": "object",
+      "required": ["type", "callId", "kind", "title"],
+      "properties": {
+        "type": { "const": "tool.start" },
+        "callId": { "type": "string" },
+        "kind": { "enum": ["read", "write", "edit", "grep", "glob", "ls", "semsearch", "shell", "mcp", "task", "other"] },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "command": { "type": "string" }
+      }
+    },
+    { "type": "object", "required": ["type", "callId"], "properties": { "type": { "const": "tool.progress" }, "callId": { "type": "string" }, "chunk": { "type": "string" } } },
+    {
+      "type": "object",
+      "required": ["type", "callId", "ok", "kind"],
+      "properties": {
+        "type": { "const": "tool.end" },
+        "callId": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "kind": { "enum": ["read", "write", "edit", "grep", "glob", "ls", "semsearch", "shell", "mcp", "task", "other"] },
+        "diff": { "type": "string" },
+        "stats": {
+          "type": "object",
+          "properties": { "add": { "type": "integer" }, "del": { "type": "integer" } }
+        },
+        "outputPreview": { "type": "string" },
+        "error": { "type": "string" },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.queued" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.start" }, "runId": { "type": "string" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.done" } } },
+    { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "run.error" }, "message": { "type": "string" }, "phase": { "enum": ["startup", "run"] } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.cancelled" } } },
+    { "type": "object", "required": ["type", "profileId", "busy"], "properties": { "type": { "const": "session" }, "profileId": { "type": "string" }, "agentId": { "type": ["string", "null"] }, "busy": { "type": "boolean" } } },
+    { "type": "object", "required": ["type", "events"], "properties": { "type": { "const": "transcript.snapshot" }, "events": { "type": "array" } } }
+  ]
+}
