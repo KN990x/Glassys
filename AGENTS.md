@@ -81,7 +81,7 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 
 Document two modes; the operator chooses:
 
-- **A — host gateway** (recommended if the agent must operate the machine): systemd/launchd, PWA served by the gateway, operator's proxy.
+- **A — host gateway** (recommended if the agent must operate the machine): documented one-liner `git clone … && cd glassys && pnpm install && pnpm run service:install` writes a user systemd unit or LaunchAgent; PWA served by the gateway; operator's proxy. Uninstall: `cd glassys && pnpm run service:uninstall`. Foreground `pnpm start` is for debugging.
 - **B — Compose**: mounted workspace + data. Warn about UID, Docker socket, DinD. Host `127.0.0.1` is **not** reachable from a sidecar; use host-gateway, host network, or a shared network.
 
 Recipes (Caddy, Cloudflare Tunnel + Access) are appendices. Glassys does not depend on Cloudflare. Do not pretend A and B are equivalent.

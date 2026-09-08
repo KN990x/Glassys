@@ -22,6 +22,8 @@ pnpm run dev
 
 That Vite proxy is not a homelab reverse proxy. Production serves the PWA from the gateway.
 
+Host install one-liner (README / `docs/deploy/host.md`): `git clone … && cd glassys && pnpm install && pnpm run service:install`. Uninstall: `cd glassys && pnpm run service:uninstall`. Do not hardcode a hostname or a specific user’s home in that script.
+
 ## Layout
 
 | Path | Role |

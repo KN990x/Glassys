@@ -1,6 +1,6 @@
 # Manual check after a clean install (Linux or macOS, Node 22.13+).
 
-1. `pnpm install && pnpm run build && GLASSYS_DATA_DIR=./data node gateway/dist/index.js`
+1. `git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install` (already in the repo: `pnpm install && pnpm run service:install`; foreground: `pnpm run build && GLASSYS_DATA_DIR=./data node gateway/dist/index.js`)
 2. Open the PWA on localhost. Complete operator password + adapter + absolute cwd. Sign in with the chosen CLI on the host (API key optional).
 3. First message: thinking, tools, diffs, and text stream from the first token. Cursor default is Grok 4.6 Extra high when that catalog is live; otherwise the PWA shows a fallback warning.
 4. Second message in the same thread (resume / same agentId).
