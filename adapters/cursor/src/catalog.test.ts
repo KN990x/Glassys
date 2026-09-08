@@ -77,7 +77,7 @@ describe("cursor catalog", () => {
     expect(CURSOR_STATIC_CATALOG[0]?.variants?.find((v) => v.isDefault)?.params).toEqual([{ id: "effort", value: "xhigh" }]);
   });
 
-  it("rewrites empty and composer-2.5 to grok-4.6 extra high", () => {
+  it("rewrites an empty model to grok-4.6 extra high and keeps Composer when chosen", () => {
     const empty = normalizeCursorConfig({
       adapter: "cursor",
       cwd: "/tmp",
@@ -94,8 +94,7 @@ describe("cursor catalog", () => {
       modelParams: [],
       options: {},
     });
-    expect(composer.model).toBe(CURSOR_FLAGSHIP_MODEL_ID);
-    expect(composer.modelParams).toEqual([{ id: "effort", value: "xhigh" }]);
+    expect(composer.model).toBe("composer-2.5");
     const kept = normalizeCursorConfig({
       adapter: "cursor",
       cwd: "/tmp",
@@ -103,7 +102,7 @@ describe("cursor catalog", () => {
       modelParams: [{ id: "fast", value: "true" }],
       options: {},
     });
-    expect(kept.model).toBe(CURSOR_FLAGSHIP_MODEL_ID);
+    expect(kept.model).toBe("composer-2.5");
     expect(kept.modelParams).toEqual([{ id: "fast", value: "true" }]);
   });
 });

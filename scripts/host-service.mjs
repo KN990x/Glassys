@@ -32,6 +32,24 @@ export function systemdQuote(value) {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
+export const GRAPHICAL_ENV_KEYS = ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"];
+
+export function graphicalEnvFrom(env = process.env) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const key of GRAPHICAL_ENV_KEYS) {
+    const value = env[key];
+    if (typeof value === "string" && value.length > 0) out[key] = value;
+  }
+  return out;
+}
+
+export function gatewayListenPort(env = process.env) {
+  const raw = env.GLASSYS_PORT;
+  const n = raw ? Number.parseInt(raw, 10) : 8787;
+  return Number.isFinite(n) && n > 0 ? n : 8787;
+}
+
 export function nodeMeetsMin(version = process.versions.node) {
   const parts = String(version)
     .split(".")
@@ -64,6 +82,9 @@ export function renderSystemdUserUnit(opts) {
     `GLASSYS_DATA_DIR=${opts.dataDir}`,
     `GLASSYS_WEB_DIR=${opts.webDir}`,
   ];
+  for (const [key, value] of Object.entries(opts.graphical ?? {})) {
+    env.push(`${key}=${value}`);
+  }
   return `[Unit]
 Description=Glassys gateway
 After=network.target
@@ -101,6 +122,7 @@ export function renderLaunchdPlist(opts) {
     PATH: opts.path,
     GLASSYS_DATA_DIR: opts.dataDir,
     GLASSYS_WEB_DIR: opts.webDir,
+    ...(opts.graphical ?? {}),
   };
   const envXml = Object.entries(env)
     .map(
@@ -165,6 +187,8 @@ export function resolveInstallPaths(env = process.env, root = repoRootFrom()) {
     path,
     logOut: join(dataDir, "glassys.log"),
     logErr: join(dataDir, "glassys.err"),
+    graphical: graphicalEnvFrom(env),
+    port: gatewayListenPort(env),
   };
 }
 
@@ -197,7 +221,8 @@ function printNextSteps(opts) {
   console.log("Glassys is installed as a background service.");
   console.log("Closing the terminal will not stop it.");
   console.log("");
-  console.log("Open  http://127.0.0.1:8787");
+  const port = opts.port || gatewayListenPort();
+  console.log(`Open  http://127.0.0.1:${port}`);
   console.log(`Data  ${opts.dataDir}`);
   console.log("");
   console.log("pnpm run service:status     # is it running?");

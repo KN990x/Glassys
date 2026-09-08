@@ -27,9 +27,15 @@ describe("transcript reducer", () => {
     expect(snap.map((b) => b.kind)).toEqual(["user", "text"]);
   });
 
-  it("paints cancelled as an info banner", () => {
-    const next = reduceTranscript([], { type: "run.cancelled" });
-    expect(next[0]).toMatchObject({ kind: "banner", text: "cancelled", tone: "info" });
+  it("closes running tools when the run is cancelled", () => {
+    const start = reduceTranscript([], {
+      type: "tool.start",
+      callId: "c1",
+      kind: "read",
+      title: "Read",
+    });
+    const closed = reduceTranscript(start, { type: "run.cancelled" });
+    expect(closed.find((b) => b.kind === "tool")).toMatchObject({ status: "done" });
   });
 
   it("closes open thinking on run.done without inventing a duration", () => {

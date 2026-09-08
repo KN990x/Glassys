@@ -126,14 +126,13 @@ export const geminiAdapter: Adapter = {
   async listModels() {
     try {
       await loadSdk();
-      return {
-        models: GEMINI_STATIC_CATALOG,
-        source: "fallback" as const,
-        error: "Gemini CLI does not expose a live model catalog",
-      };
-    } catch (err) {
-      return { models: GEMINI_STATIC_CATALOG, source: "fallback" as const, error: errorMessage(err) };
+    } catch {
+      /* Static catalog; probe() reports a missing SDK. Do not surface that as a live-catalog failure. */
     }
+    return {
+      models: GEMINI_STATIC_CATALOG,
+      source: "fallback" as const,
+    };
   },
 
   async probe() {

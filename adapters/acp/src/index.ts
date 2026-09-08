@@ -65,6 +65,14 @@ async function authenticateIfNeeded(
   }
 }
 
+export function acpResumeUnsupported(resumeId: string | undefined, caps: Record<string, unknown> | undefined): boolean {
+  if (!resumeId) return false;
+  const sessionCaps = asRecord(caps?.session) ?? caps;
+  const loadSession = acpShouldLoadSession(caps);
+  const canResume = sessionCaps?.resume === true || sessionCaps?.sessionResume === true;
+  return !canResume && !loadSession;
+}
+
 export function acpShouldLoadSession(caps: Record<string, unknown> | undefined): boolean {
   const sessionCaps = asRecord(caps?.session) ?? caps;
   return sessionCaps?.loadSession === true;
@@ -92,6 +100,7 @@ async function openAcpSession(
       await rpc.request("session/load", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] });
       return resumeId;
     }
+    throw new AdapterError("ACP agent cannot resume the stored session", "startup");
   }
   const created = asRecord(await rpc.request("session/new", { cwd: opts.cwd, mcpServers: [] }));
   return typeof created?.sessionId === "string" ? created.sessionId : randomUUID();
@@ -242,7 +251,6 @@ export const acpAdapter: Adapter = {
     return {
       models: FALLBACK,
       source: "fallback" as const,
-      error: "ACP agents expose models per session, not a live catalog",
     };
   },
 

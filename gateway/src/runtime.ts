@@ -15,6 +15,7 @@ import { PROFILE_ID, isPersistedTranscriptEvent } from "@glassys/protocol";
 import { agentFingerprint, applyPatch, loadConfig, redacted } from "./config.js";
 import { adapterApiKey, loadSecrets, secretsFlags } from "./secrets.js";
 import { getAdapter, listAdapters, probeAdapter } from "./adapters.js";
+import { cancelLoginJob, snapshotLoginJob, startLoginJob } from "./adapter-login.js";
 import { hub } from "./hub.js";
 import { log, paths } from "./paths.js";
 import { loadState, saveState } from "./state.js";
@@ -403,7 +404,7 @@ async function runOnce(text: string): Promise<void> {
     await persistAgentId(handle.agentId);
     await drainEmit();
     await closeThinkingIfOpen();
-    if (status === "cancelled") await emit({ type: "run.cancelled" });
+    if (cancelGeneration !== gen || status === "cancelled") await emit({ type: "run.cancelled" });
     else if (status === "error") {
       if (!sawRunError) await emit({ type: "run.error", message: "Run failed", phase: "run" });
     } else await emit({ type: "run.done" });
@@ -451,13 +452,7 @@ export async function cancelRun(): Promise<void> {
   try {
     await currentRun.cancel();
   } catch (err) {
-    if (cancelGeneration === gen) cancelGeneration -= 1;
     log("warn", "cancel failed", { error: String(err) });
-    await emit({
-      type: "run.error",
-      message: err instanceof Error ? err.message : String(err),
-      phase: "run",
-    });
   }
 }
 
@@ -502,6 +497,7 @@ export async function initRuntime(): Promise<void> {
 }
 
 export async function shutdownRuntime(): Promise<void> {
+  await cancelLoginJob().catch(() => undefined);
   await withQueueLock(async () => {
     queue = [];
     cancelGeneration += 1;
@@ -562,16 +558,23 @@ export async function listAdapterInfo(): Promise<AdapterPublicInfo[]> {
   return out;
 }
 
-export async function adapterLogin(adapterId: string): Promise<void> {
+export async function adapterLogin(adapterId: string): Promise<{ url?: string }> {
   const adapter = getAdapter(adapterId);
   if (!adapter.loginInteractive) throw new Error("Interactive login is not available for this adapter");
-  await adapter.loginInteractive();
+  return startLoginJob(adapterId, (opts) => adapter.loginInteractive!(opts));
+}
+
+export async function adapterLoginCancel(): Promise<void> {
+  await cancelLoginJob();
 }
 
 export async function adapterAuthStatus(adapterId: string): Promise<{
   loggedIn: boolean;
   email?: string;
   apiKeyConfigured: boolean;
+  loginUrl?: string;
+  loginStatus?: string;
+  loginError?: string;
 }> {
   const adapter = getAdapter(adapterId);
   const secrets = await loadSecrets();
@@ -581,10 +584,14 @@ export async function adapterAuthStatus(adapterId: string): Promise<{
   } catch (err) {
     log("warn", "adapter authStatus failed", { adapter: adapterId, error: String(err) });
   }
+  const login = snapshotLoginJob(adapterId);
   return {
     loggedIn: status.loggedIn,
     email: status.email,
     apiKeyConfigured: adapterApiKey(secrets, adapterId).length > 0,
+    ...(login.status !== "idle" && login.url ? { loginUrl: login.url } : {}),
+    ...(login.status !== "idle" ? { loginStatus: login.status } : {}),
+    ...(login.error ? { loginError: login.error } : {}),
   };
 }
 
@@ -594,8 +601,8 @@ export async function discoverAdapter(adapterId: string): Promise<AdapterDiscove
   return adapter.discover();
 }
 
-export async function cursorLogin(): Promise<void> {
-  await adapterLogin("cursor");
+export async function cursorLogin(): Promise<{ url?: string }> {
+  return adapterLogin("cursor");
 }
 
 export async function cursorAuthStatus(): Promise<{ loggedIn: boolean; email?: string; apiKeyConfigured: boolean }> {

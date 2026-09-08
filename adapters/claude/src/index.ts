@@ -271,6 +271,10 @@ export const claudeAdapter: Adapter = {
     }
   },
 
+  async probe() {
+    await loadSdk();
+  },
+
   async create(opts) {
     return ClaudeSession.start(opts);
   },

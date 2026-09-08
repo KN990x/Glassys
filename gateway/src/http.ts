@@ -22,6 +22,7 @@ import {
   applyConfigPatch,
   adapterAuthStatus,
   adapterLogin,
+  adapterLoginCancel,
   cursorAuthStatus,
   cursorLogin,
   cwdErrorInPatch,
@@ -290,8 +291,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const body = (await readJson(req)) as { adapter?: string };
     try {
-      await adapterLogin(body.adapter || "cursor");
-      send(res, 200, { ok: true, configured: true });
+      const result = await adapterLogin(body.adapter || "cursor");
+      send(res, 200, { ok: true, configured: true, url: result.url });
     } catch (err) {
       if (err instanceof UnknownAdapterError) {
         send(res, 400, { error: err.message });
@@ -299,6 +300,13 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       }
       send(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/auth/adapter-login/cancel") {
+    if (!(await requireAuth(req, res))) return true;
+    await adapterLoginCancel();
+    send(res, 200, { ok: true });
     return true;
   }
 
@@ -313,8 +321,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     // Alias of POST /api/auth/adapter-login { adapter: "cursor" }
     if (!(await requireAuth(req, res))) return true;
     try {
-      await cursorLogin();
-      send(res, 200, { ok: true, configured: true });
+      const result = await cursorLogin();
+      send(res, 200, { ok: true, configured: true, url: result.url });
     } catch (err) {
       send(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }

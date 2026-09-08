@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Hub, isHandshakeEphemeral } from "./hub.js";
+import { Hub, flushHandshakeBuffer, isHandshakeEphemeral } from "./hub.js";
 import { WebSocket } from "ws";
-import { PROFILE_ID } from "@glassys/protocol";
+import { PROFILE_ID, type ServerMessage } from "@glassys/protocol";
 
 function fakeSocket(sent: string[]) {
   return {
@@ -56,34 +56,23 @@ describe("hub", () => {
     expect(JSON.parse(sent[1]).text).toBe("y");
   });
 
-  it("flushes ephemeral buffered messages after a snapshot without duplicating persisted deltas", () => {
-    const hub = new Hub();
-    const sent: string[] = [];
-    const fake = fakeSocket(sent);
-    hub.add(fake, { buffer: true });
-    hub.broadcast({ type: "text.delta", text: "late-persist" });
-    hub.broadcast({
-      type: "session",
-      profileId: PROFILE_ID,
-      agentId: "a1",
-      busy: false,
-    });
-    hub.broadcast({ type: "run.start", runId: "r1" });
-    hub.send(fake, { type: "transcript.snapshot", events: [] });
-    for (const msg of hub.takeBuffer(fake)) {
-      if (isHandshakeEphemeral(msg)) hub.send(fake, msg);
-    }
-    hub.send(fake, {
-      type: "session",
-      profileId: PROFILE_ID,
-      agentId: "a1",
-      busy: false,
-    });
-    hub.release(fake);
-    const types = sent.map((raw) => JSON.parse(raw).type);
-    expect(types).toEqual(["transcript.snapshot", "session", "run.start", "session"]);
-    expect(sent.some((raw) => JSON.parse(raw).text === "late-persist")).toBe(false);
-    hub.broadcast({ type: "text.delta", text: "live" });
-    expect(JSON.parse(sent.at(-1)!).text).toBe("live");
+  it("flushes leftover persisted deltas that missed the second transcript read", () => {
+    const later = [{ type: "text.delta", text: "from-disk" } as const];
+    const buffered: ServerMessage[] = [
+      { type: "text.delta", text: "from-disk" },
+      { type: "text.delta", text: "late-persist" },
+      {
+        type: "session",
+        profileId: PROFILE_ID,
+        agentId: "a1",
+        busy: false,
+      },
+      { type: "run.start", runId: "r1" },
+    ];
+    const flushed = flushHandshakeBuffer(buffered, [...later]);
+    expect(flushed.map((m) => m.type)).toEqual(["text.delta", "session", "run.start"]);
+    expect(flushed.some((m) => m.type === "text.delta" && "text" in m && m.text === "late-persist")).toBe(true);
+    expect(flushed.filter((m) => m.type === "text.delta" && "text" in m && m.text === "from-disk")).toHaveLength(0);
+    expect(isHandshakeEphemeral(buffered[2]!)).toBe(true);
   });
 });

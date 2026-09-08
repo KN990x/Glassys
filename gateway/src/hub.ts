@@ -63,4 +63,22 @@ export function isHandshakeEphemeral(msg: ServerMessage): boolean {
   return !isPersistedTranscriptEvent(msg);
 }
 
+/** After snapshot + later transcript read, send leftover buffer without duplicating persisted events. */
+export function flushHandshakeBuffer(buffered: ServerMessage[], alreadySent: ServerMessage[]): ServerMessage[] {
+  const seen = new Set(alreadySent.map((ev) => JSON.stringify(ev)));
+  const out: ServerMessage[] = [];
+  for (const msg of buffered) {
+    if (isHandshakeEphemeral(msg)) {
+      out.push(msg);
+      continue;
+    }
+    const raw = JSON.stringify(msg);
+    if (!seen.has(raw)) {
+      out.push(msg);
+      seen.add(raw);
+    }
+  }
+  return out;
+}
+
 export const hub = new Hub();

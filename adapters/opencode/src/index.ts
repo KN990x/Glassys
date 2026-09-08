@@ -5,6 +5,7 @@ import {
   asRecord,
   errorMessage,
   pendingRun,
+  requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -238,6 +239,7 @@ class OpencodeSession implements AdapterSession {
             continue;
           }
           if (next.done || promptSettled) break;
+          throw new AdapterError("OpenCode timed out waiting for run events", "run");
         }
         for (const leftover of this.pump.drain()) {
           if (isCancelled()) break;
@@ -326,6 +328,13 @@ export const opencodeAdapter: Adapter = {
     } catch (err) {
       return { models: FALLBACK, source: "fallback" as const, error: errorMessage(err) };
     }
+  },
+
+  async probe() {
+    await requireHostCommand(
+      "opencode",
+      "OpenCode CLI is not on PATH. Install the OpenCode CLI on this host.",
+    );
   },
 
   async create(opts) {

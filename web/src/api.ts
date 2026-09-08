@@ -47,10 +47,16 @@ export const api = {
   adapters: () => req<{ adapters: AdapterPublicInfo[] }>("/api/adapters"),
   discover: (id: string) => req<{ agents: AdapterDiscoverItem[] }>(`/api/adapters/${id}/discover`),
   adapterStatus: (adapter: string) =>
-    req<{ loggedIn: boolean; email?: string; apiKeyConfigured: boolean }>(
-      `/api/auth/adapter-status?adapter=${encodeURIComponent(adapter)}`,
-    ),
+    req<{
+      loggedIn: boolean;
+      email?: string;
+      apiKeyConfigured: boolean;
+      loginUrl?: string;
+      loginStatus?: string;
+      loginError?: string;
+    }>(`/api/auth/adapter-status?adapter=${encodeURIComponent(adapter)}`),
   adapterLogin: (adapter: string) =>
-    req<{ ok: boolean }>("/api/auth/adapter-login", { method: "POST", body: JSON.stringify({ adapter }) }),
+    req<{ ok: boolean; url?: string }>("/api/auth/adapter-login", { method: "POST", body: JSON.stringify({ adapter }) }),
+  adapterLoginCancel: () => req<{ ok: boolean }>("/api/auth/adapter-login/cancel", { method: "POST" }),
   restart: () => req<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
 };

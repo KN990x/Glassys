@@ -72,8 +72,26 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor CLI, Claude Code, Ope
 - Node.js **22.13+** (`.nvmrc`)
 - **pnpm** 11.14+ (this repo is a pnpm workspace; do not use npm)
 - A git workspace on the machine that will run the agent
-- Cursor SDK login on that host (`Sign in with Cursor` / `Cursor.auth.login()`), **or** optional `CURSOR_API_KEY` for Docker/CI
+- Cursor SDK login on that host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **or** optional `CURSOR_API_KEY` for Docker/CI. **cursor-cli, cursor-agent, and Cursor IDE login are a different store** and do not authenticate Glassys. The wizard shows a login URL if the host has no display (Linux systemd, SSH, phone).
 - Other adapters: the matching CLI/SDK on the host (`claude`, `opencode`, `gemini`, `codex`) and optional `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. The Gemini adapter talks to `@google/gemini-cli-sdk` when it is installed or linked; that package is not on npm yet, so Gemini stays visible in the wizard but **not selectable** until it is.
+
+### Cursor credentials vs cursor-cli
+
+Glassys talks to `@cursor/sdk` (`Agent.create` / `resume` / `send`). Credential order: optional API key in Glassys secrets → `CURSOR_API_KEY` → `~/.cursor/sdk/auth.json` (only keys minted by `Cursor.auth.login()`).
+
+| Already on the machine | What to do |
+| --- | --- |
+| Only Cursor IDE or `cursor-cli` / `cursor-agent` signed in | Sign in with **Cursor SDK** in the wizard, or paste a key from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). The CLI can stay installed; it is not reused. |
+| Linux desktop, gateway in the foreground (`pnpm start`) | “Sign in with Cursor SDK” may open a browser. If it does not, open the URL the PWA shows. |
+| `systemd --user` (`pnpm run service:install`) | The unit has `HOME` but often no `DISPLAY`. Use the URL in the PWA, or set `CURSOR_API_KEY` on the service. Linger does not give a display. |
+| SSH / headless / PWA on a phone | Open the URL in the browser you are looking at. Do not wait for a browser on the server. |
+| Existing `~/.cursor/sdk/auth.json` | Works if the service `HOME` is that user and no bad `CURSOR_API_KEY` overrides it. |
+| Docker Compose | Prefer `CURSOR_API_KEY` or mount the host SDK store (`docs/deploy/compose.md`). Sign-in inside the container almost never has a browser. |
+| systemd `User=glassys` | That account’s `$HOME` is a different `auth.json`. Log in as that user or use env/secrets. |
+| SDK key expired (~90 days) | Sign in with the SDK again or rotate the dashboard key. |
+| CLI and Glassys on the same `cwd` | Independent credentials. Do not run two auto-run agents on the same files at once. |
+
+`settingSources` (default project + user) can load **rules** from `~/.cursor`; it does not copy IDE tokens.
 
 ## Quick start (host gateway — mode A)
 
@@ -83,7 +101,7 @@ Recommended if the agent should operate the real machine (Docker, git, your file
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). That one line clones, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` and complete the wizard (operator password, adapter, absolute workspace path, CLI sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
+Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). That one line clones, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host — not cursor-cli). An API key is optional. The PWA will not enter chat until onboarding is done.
 
 If you are already inside the repo: `pnpm install && pnpm run service:install`.
 
@@ -131,7 +149,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Non-secrets live in `$GLASSYS_DATA_DIR/config.yaml` (created from defaults on first run). See [config.example.yaml](config.example.yaml). In-app Settings writes locale, theme, agent, display, and session. Bind, port, allowed origins, and edge auth are yaml (or env) only.
 
-Secrets (optional per-adapter API keys, operator password hash, JWT secret) live in environment variables or `$GLASSYS_DATA_DIR/secrets.json` (gitignored). The UI can show **configured / rotate**, never the full key again. Host installs should prefer CLI/SDK login over storing a key.
+Secrets (optional per-adapter API keys, operator password hash, JWT secret) live in environment variables or `$GLASSYS_DATA_DIR/secrets.json` (gitignored). The UI can show **configured / rotate**, never the full key again. Host installs should prefer Cursor SDK login (`~/.cursor/sdk/auth.json`) over storing a key. cursor-cli / IDE login is a different store.
 
 ## Security
 
@@ -191,8 +209,26 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor CLI, Claude Code, O
 - Node.js **22.13+** (`.nvmrc`)
 - **pnpm** 11.14+ (este repo es un workspace pnpm; no uses npm)
 - Un workspace git en la máquina que ejecutará el agente
-- Login del SDK de Cursor en ese host (`Sign in with Cursor` / `Cursor.auth.login()`), **o** `CURSOR_API_KEY` opcional para Docker/CI
+- Login del SDK de Cursor en ese host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **o** `CURSOR_API_KEY` opcional para Docker/CI. **cursor-cli, cursor-agent y el login del IDE son otro almacén** y no autentican Glassys. El asistente muestra una URL de login si el host no tiene display (systemd en Linux, SSH, teléfono).
 - Otros adaptadores: el CLI/SDK correspondiente en el host (`claude`, `opencode`, `gemini`, `codex`) y opcionalmente `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. El adaptador Gemini habla con `@google/gemini-cli-sdk` cuando está instalado o enlazado; ese paquete aún no está en npm, así que Gemini se ve en el asistente pero **no se puede elegir** hasta entonces.
+
+### Credenciales de Cursor vs cursor-cli
+
+Glassys habla con `@cursor/sdk` (`Agent.create` / `resume` / `send`). Orden: API key opcional en secrets de Glassys → `CURSOR_API_KEY` → `~/.cursor/sdk/auth.json` (solo keys acuñadas por `Cursor.auth.login()`).
+
+| Ya está en la máquina | Qué hacer |
+| --- | --- |
+| Solo IDE o `cursor-cli` / `cursor-agent` con sesión | Inicia sesión con el **SDK de Cursor** en el asistente, o pega una key de [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). El CLI puede seguir instalado; no se reutiliza. |
+| Desktop Linux, gateway en primer plano (`pnpm start`) | “Sign in with Cursor SDK” puede abrir el navegador. Si no, abre la URL que muestra la PWA. |
+| `systemd --user` (`pnpm run service:install`) | La unidad tiene `HOME` pero a menudo no `DISPLAY`. Usa la URL en la PWA, o `CURSOR_API_KEY` en el servicio. Linger no da un display. |
+| SSH / headless / PWA en el teléfono | Abre la URL en el navegador que estás mirando. No esperes un navegador en el servidor. |
+| Ya existe `~/.cursor/sdk/auth.json` | Vale si el `HOME` del servicio es ese usuario y no hay un `CURSOR_API_KEY` malo que lo pise. |
+| Docker Compose | Prefiere `CURSOR_API_KEY` o monta el store del host (`docs/deploy/compose.md`). El sign-in dentro del contenedor casi nunca tiene navegador. |
+| systemd `User=glassys` | Otro `$HOME` → otro `auth.json`. Entra como ese usuario o usa env/secrets. |
+| Key del SDK caducada (~90 días) | Vuelve a iniciar sesión con el SDK o rota la key del dashboard. |
+| CLI y Glassys sobre el mismo `cwd` | Credenciales independientes. No lances dos agentes auto-run a la vez sobre los mismos archivos. |
+
+`settingSources` (por defecto project + user) puede cargar **reglas** de `~/.cursor`; no copia tokens del IDE.
 
 ## Arranque rápido (gateway en el host — modo A)
 
@@ -202,7 +238,7 @@ Recomendado si el agente debe operar la máquina real (Docker, git, tus archivos
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). Esa línea clona, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del CLI en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
+Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). Esa línea clona, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host — no cursor-cli). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
 
 Si ya estás dentro del repo: `pnpm install && pnpm run service:install`.
 
@@ -250,7 +286,7 @@ Véase [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Lo que no es secreto vive en `$GLASSYS_DATA_DIR/config.yaml` (se crea con valores por defecto en el primer arranque). Véase [config.example.yaml](config.example.yaml). Ajustes escribe locale, tema, agente, display y sesión. Bind, puerto, orígenes permitidos y edge auth son solo yaml (o env).
 
-Los secretos (API keys opcionales por adaptador, hash de la contraseña, secreto JWT) viven en variables de entorno o `$GLASSYS_DATA_DIR/secrets.json` (gitignored). La UI puede mostrar **configurado / rotar**, nunca la clave completa otra vez. En el host, preferible el login del CLI/SDK a guardar una key.
+Los secretos (API keys opcionales por adaptador, hash de la contraseña, secreto JWT) viven en variables de entorno o `$GLASSYS_DATA_DIR/secrets.json` (gitignored). La UI puede mostrar **configurado / rotar**, nunca la clave completa otra vez. En el host, preferible el login del SDK de Cursor (`~/.cursor/sdk/auth.json`) a guardar una key. El login de cursor-cli / IDE es otro almacén.
 
 ## Seguridad
 

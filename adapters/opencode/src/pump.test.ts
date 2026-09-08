@@ -25,6 +25,14 @@ describe("EventPump", () => {
     expect(result.done).toBe(true);
   });
 
+  it("times out without an event when the stream is idle", async () => {
+    const pump = new EventPump(hang());
+    const result = await pump.next(30);
+    expect(result.event).toBeUndefined();
+    expect(result.done).toBe(false);
+    pump.abort();
+  });
+
   it("drain() returns buffered events without waiting", async () => {
     async function* once() {
       yield { type: "a" };

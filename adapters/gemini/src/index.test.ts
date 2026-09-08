@@ -7,11 +7,10 @@ describe("gemini adapter", () => {
     expect(GEMINI_STATIC_CATALOG.length).toBeGreaterThan(0);
   });
 
-  it("listModels reports fallback even when the SDK is present", async () => {
+  it("listModels reports fallback without treating a static catalog as a live-catalog failure", async () => {
     const listed = await geminiAdapter.listModels();
     expect(listed.source).toBe("fallback");
     expect(listed.models.map((m) => m.id)).toEqual(GEMINI_STATIC_CATALOG.map((m) => m.id));
-    expect(listed.error).toBeTruthy();
   });
 
   it("does not advertise resume until the SDK honors it", () => {
