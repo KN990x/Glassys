@@ -5,6 +5,7 @@ import {
   AdapterError,
   asRecord,
   errorMessage,
+  imagePartsFromAttachments,
   pendingRun,
   promptWithAttachments,
   requireHostCommand,
@@ -211,6 +212,11 @@ class AcpSession implements AdapterSession {
     }
     const runId = randomUUID();
     const promptText = promptWithAttachments(text, sendOpts?.attachments);
+    const images = imagePartsFromAttachments(sendOpts?.attachments);
+    const promptBlocks: Array<Record<string, unknown>> = [{ type: "text", text: promptText }];
+    for (const img of images) {
+      promptBlocks.push({ type: "image", mimeType: img.mime, data: img.data });
+    }
     return pendingRun(runId, async ({ isCancelled }) => {
       const onUpdate = (params: unknown) => {
         for (const ev of mapAcpUpdate(params, this.tools)) onEvent(ev);
@@ -218,7 +224,7 @@ class AcpSession implements AdapterSession {
       const off = this.rpc.onNotification("session/update", onUpdate);
       const prompt = this.rpc.request("session/prompt", {
         sessionId: this.sessionId,
-        prompt: [{ type: "text", text: promptText }],
+        prompt: promptBlocks,
       });
       let stop = false;
       let cancelledAt = 0;
@@ -247,6 +253,24 @@ class AcpSession implements AdapterSession {
         ]);
         if (isCancelled()) return "cancelled";
         const rec = asRecord(result);
+        const usage = asRecord(rec?.usage);
+        if (usage) {
+          const inputTokens =
+            typeof usage.inputTokens === "number"
+              ? usage.inputTokens
+              : typeof usage.input_tokens === "number"
+                ? usage.input_tokens
+                : undefined;
+          const outputTokens =
+            typeof usage.outputTokens === "number"
+              ? usage.outputTokens
+              : typeof usage.output_tokens === "number"
+                ? usage.output_tokens
+                : undefined;
+          if (inputTokens != null || outputTokens != null) {
+            onEvent({ type: "run.usage", inputTokens, outputTokens });
+          }
+        }
         if (rec?.stopReason === "cancelled") return "cancelled";
         if (rec?.stopReason === "max_tokens" || rec?.stopReason === "error") return "error";
         return "finished";
@@ -280,7 +304,7 @@ export const acpAdapter: Adapter = {
     resume: false,
     discover: true,
     toolConfirmation: "auto-review-deny",
-    attachments: false,
+    attachments: true,
     auth: { kind: "cli-binary", envNames: [] },
     defaultModel: { id: "default", params: [] },
     liveCatalog: false,

@@ -22,8 +22,26 @@ import { ToolCard } from "../components/ToolCard";
 import { ModelPicker } from "../components/ModelPicker";
 import { PermissionChip } from "../components/PermissionChip";
 import { Settings } from "./Settings";
+import { operatorError, shouldSubmitOnEnter } from "../operatorError";
 
 const COMPOSER_MAX_PX = 160;
+
+export { shouldSubmitOnEnter };
+
+function overlayState(): { glassysOverlay?: string } | null {
+  const st = history.state;
+  if (st && typeof st === "object" && "glassysOverlay" in st) return st as { glassysOverlay?: string };
+  return null;
+}
+
+function pushOverlay(kind: "threads" | "settings") {
+  if (overlayState()) history.replaceState({ glassysOverlay: kind }, "");
+  else history.pushState({ glassysOverlay: kind }, "");
+}
+
+function popOverlay() {
+  if (overlayState()) history.back();
+}
 
 export function formatElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -78,6 +96,7 @@ export function Chat({
   const [modelSource, setModelSource] = useState<ModelListSource>("live");
   const [catalogError, setCatalogError] = useState("");
   const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
+  const [hostLabel, setHostLabel] = useState("");
   const [snapshotReady, setSnapshotReady] = useState(false);
   const sendRef = useRef<(msg: ClientMessage) => boolean>(() => false);
   const keepaliveRef = useRef<(seconds: number) => void>(() => undefined);
@@ -88,7 +107,13 @@ export function Chat({
   const settingsBtn = useRef<HTMLButtonElement>(null);
   const closeSettings = useCallback(() => {
     setSettings(false);
+    popOverlay();
     queueMicrotask(() => settingsBtn.current?.focus());
+  }, []);
+  const closeThreads = useCallback(() => {
+    setThreadOpen(false);
+    popOverlay();
+    queueMicrotask(() => threadBtn.current?.focus());
   }, []);
   const onLogoutRef = useRef(onLogout);
   onLogoutRef.current = onLogout;
@@ -133,8 +158,12 @@ export function Chat({
           return;
         }
         if (msg.type === "config.error") {
-          setConfigError(msg.message);
+          setConfigError(operatorError(msg.message, t));
           return;
+        }
+        if (msg.type === "threads.snapshot") {
+          setThreads(msg.threads);
+          setCurrentThreadId(msg.currentId);
         }
         if (msg.type === "transcript.snapshot") {
           snapshotReadyRef.current = true;
@@ -186,6 +215,13 @@ export function Chat({
       setThreads(r.threads);
       setCurrentThreadId(r.currentId);
     }).catch(() => undefined);
+    api
+      .reachability()
+      .then((r) => {
+        const parts = [r.user, r.hostname].filter((p): p is string => Boolean(p && p.trim()));
+        setHostLabel(parts.join("@"));
+      })
+      .catch(() => undefined);
   }, [loadModels, config.agent.adapter, config.agent.cwd]);
 
   useEffect(() => {
@@ -220,6 +256,25 @@ export function Chat({
   }, []);
 
   useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (settings) return;
+      if (threadOpen) closeThreads();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [settings, threadOpen, closeThreads]);
+
+  useEffect(() => {
+    function onPop() {
+      setSettings(false);
+      setThreadOpen(false);
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
     if (!busy) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -234,10 +289,10 @@ export function Chat({
   const statusClass =
     protocolError || conn === "error"
       ? "error"
-      : waiting
-        ? "queued"
-        : busy
-          ? "running"
+      : busy
+        ? "running"
+        : waiting
+          ? "queued"
           : conn;
 
   function applyThreadList(r: { threads: ThreadSummary[]; currentId: string | null }) {
@@ -251,7 +306,7 @@ export function Chat({
       setThreadOpen(false);
       setSendError("");
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : t("threads.busy"));
+      setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
 
@@ -266,7 +321,7 @@ export function Chat({
       applyThreadList(await api.deleteThread(id));
       setSendError("");
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : t("threads.busy"));
+      setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
 
@@ -284,12 +339,12 @@ export function Chat({
       setThreadOpen(false);
       setSendError("");
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : t("threads.busy"));
+      setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
 
-  async function onAttach(files: FileList | null) {
-    if (!files?.length) return;
+  async function onAttach(files: FileList | File[] | null) {
+    if (!files || !files.length) return;
     setAttachError("");
     try {
       for (const file of Array.from(files)) {
@@ -297,7 +352,7 @@ export function Chat({
         setDrafts((cur) => [...cur, att]);
       }
     } catch (err) {
-      setAttachError(err instanceof Error ? err.message : t("chat.attachFailed"));
+      setAttachError(operatorError(err instanceof Error ? err.message : t("chat.attachFailed"), t));
     }
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -334,10 +389,12 @@ export function Chat({
 
   const statusKey = protocolError
     ? "status.error"
-    : waiting
-      ? "status.queued"
+    : busy && waiting
+      ? "status.runningQueued"
       : busy
         ? "status.running"
+        : waiting
+          ? "status.queued"
         : conn === "connected"
           ? "status.connected"
           : conn === "reconnecting"
@@ -355,7 +412,7 @@ export function Chat({
             <div>
               <strong>{t("app.name")}</strong>
               <span className="host-context muted">
-                {[cwdBasename(config.agent.cwd), currentAdapter?.displayName || config.agent.adapter]
+                {[hostLabel, cwdBasename(config.agent.cwd), currentAdapter?.displayName || config.agent.adapter]
                   .filter(Boolean)
                   .join(" · ")}
               </span>
@@ -370,11 +427,26 @@ export function Chat({
               type="button"
               className="ghost"
               aria-expanded={threadOpen}
-              onClick={() => setThreadOpen((v) => !v)}
+              onClick={() => {
+                if (threadOpen) closeThreads();
+                else {
+                  pushOverlay("threads");
+                  setThreadOpen(true);
+                }
+              }}
             >
               {t("nav.threads")}
             </button>
-            <button ref={settingsBtn} type="button" className="ghost" onClick={() => setSettings(true)}>
+            <button
+              ref={settingsBtn}
+              type="button"
+              className="ghost"
+              onClick={() => {
+                if (threadOpen) setThreadOpen(false);
+                pushOverlay("settings");
+                setSettings(true);
+              }}
+            >
               {t("nav.settings")}
             </button>
           </div>
@@ -386,10 +458,7 @@ export function Chat({
             type="button"
             className="thread-scrim"
             aria-label={t("settings.close")}
-            onClick={() => {
-              setThreadOpen(false);
-              queueMicrotask(() => threadBtn.current?.focus());
-            }}
+            onClick={() => closeThreads()}
           />
           <aside className="thread-panel">
             <header>
@@ -544,7 +613,7 @@ export function Chat({
           if (b.kind === "banner") {
             return (
               <p key={b.id} className={`banner ${b.tone}`} role={b.tone === "error" ? "alert" : "status"}>
-                {b.text}
+                {operatorError(b.text, t)}
               </p>
             );
           }
@@ -559,7 +628,25 @@ export function Chat({
         </div>
       </div>
       </main>
-      <form className="composer" onSubmit={submit}>
+      <form
+        className="composer"
+        onSubmit={submit}
+        onPaste={(e) => {
+          const images = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+          if (!images.length) return;
+          e.preventDefault();
+          void onAttach(images);
+        }}
+        onDragOver={(e) => {
+          if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
+        }}
+        onDrop={(e) => {
+          const images = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+          if (!images.length) return;
+          e.preventDefault();
+          void onAttach(images);
+        }}
+      >
         <div className="composer-inner">
           <div className="composer-meta">
             {caps?.models !== false && (
@@ -631,7 +718,6 @@ export function Chat({
               ref={fileRef}
               type="file"
               accept="image/*"
-              capture="environment"
               multiple
               hidden
               onChange={(e) => void onAttach(e.target.files)}
@@ -647,7 +733,7 @@ export function Chat({
                 resizeComposer(e.currentTarget);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (shouldSubmitOnEnter(e)) {
                   e.preventDefault();
                   submit(e);
                 }

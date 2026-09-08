@@ -14,9 +14,9 @@ import { type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { isCodexTurnDone, mapCodexJsonl, threadIdFromEvent } from "./mapper.js";
 
 export const CODEX_STATIC_CATALOG: ModelCatalogItem[] = [
-  { id: "gpt-5-codex", displayName: "GPT-5 Codex" },
-  { id: "gpt-5", displayName: "GPT-5" },
-  { id: "o3", displayName: "o3" },
+  { id: "gpt-5.6-sol", displayName: "GPT-5.6 Sol" },
+  { id: "gpt-5.6-terra", displayName: "GPT-5.6 Terra" },
+  { id: "gpt-5.6-luna", displayName: "GPT-5.6 Luna" },
 ];
 
 function threadOpts(opts: AdapterCreateOptions) {
@@ -102,12 +102,12 @@ export const codexAdapter: Adapter = {
     toolConfirmation: "none",
     attachments: false,
     auth: { kind: "cli-binary", envNames: ["CODEX_API_KEY", "OPENAI_API_KEY"] },
-    defaultModel: { id: "gpt-5-codex", params: [] },
+    defaultModel: { id: "gpt-5.6-sol", params: [] },
     liveCatalog: false,
   },
 
   normalizeConfig(agent: AgentConfig): AgentConfig {
-    return { ...agent, model: agent.model || "gpt-5-codex" };
+    return { ...agent, model: agent.model || "gpt-5.6-sol" };
   },
 
   async listModels() {

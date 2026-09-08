@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AdapterCapabilities, RedactedConfig } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { optionBool, optionString, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
+import { operatorError } from "../operatorError";
 
 export function PermissionChip({
   config,
@@ -16,7 +17,19 @@ export function PermissionChip({
   const t = useT();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  if (!caps?.sandbox && !caps?.autoRun && caps?.toolConfirmation !== "permission-mode") return null;
+  const wrap = useRef<HTMLDivElement>(null);
+  const visible = Boolean(caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode");
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  if (!caps || !visible) return null;
 
   const autoRun = optionBool(config.agent.options, "autoRun", true);
   const sandbox = optionBool(config.agent.options, "sandbox", false);
@@ -35,12 +48,12 @@ export function PermissionChip({
       setError("");
       onConfig(await api.saveConfig({ agent: { options } }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("chat.modelFailed"));
+      setError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
     }
   }
 
   return (
-    <div className="chip-wrap">
+    <div className="chip-wrap" ref={wrap}>
       <button type="button" className="ghost tiny" onClick={() => setOpen((v) => !v)}>
         {sandbox ? `${label} · ${t("wizard.exec.sandbox")}` : label}
       </button>

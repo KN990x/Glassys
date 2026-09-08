@@ -17,6 +17,14 @@ describe("mapClaudeMessage", () => {
     ).toEqual([{ type: "thinking.delta", text: "plan" }]);
   });
 
+  it("closes thinking on content_block_stop", () => {
+    const state = { sawStreamEvent: false, thinkingStarted: Date.now() - 50 };
+    expect(
+      mapClaudeMessage({ type: "stream_event", event: { type: "content_block_stop" } }, new Map(), state)[0],
+    ).toMatchObject({ type: "thinking.done" });
+    expect(state.thinkingStarted).toBeUndefined();
+  });
+
   it("maps tool_use start/end", () => {
     const tools = new Map<string, string>();
     const start = mapClaudeMessage(
@@ -49,6 +57,16 @@ describe("mapClaudeMessage", () => {
       tools,
     );
     expect(end[0]).toMatchObject({ type: "tool.end", callId: "t1", ok: true, kind: "read" });
+  });
+
+  it("maps tool_progress when the SDK emits it", () => {
+    expect(
+      mapClaudeMessage({
+        type: "tool_progress",
+        tool_use_id: "t1",
+        content: "bytes",
+      }),
+    ).toEqual([{ type: "tool.progress", callId: "t1", chunk: "bytes" }]);
   });
 
   it("maps result.usage", () => {

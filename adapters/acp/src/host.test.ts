@@ -1,6 +1,8 @@
-import { resolve } from "node:path";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { registerHostHandlers, resolveInsideCwd } from "./host.js";
+import { MAX_ACP_READ_BYTES, registerHostHandlers, resolveInsideCwd } from "./host.js";
 
 describe("resolveInsideCwd", () => {
   const cwd = resolve("/tmp/glassys-ws");
@@ -50,6 +52,24 @@ describe("registerHostHandlers autoRun", () => {
       await expect(map.get("session/request_permission")?.({ toolCall: { kind: "edit" } })).resolves.toMatchObject({
         outcome: { outcome: "cancelled" },
       });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("refuses to read oversized files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const rpc = {
+      handle(method: string, fn: (params: unknown) => Promise<unknown> | unknown) {
+        map.set(method, fn);
+      },
+    };
+    const cleanup = registerHostHandlers(rpc, dir, { autoRun: true });
+    try {
+      const big = join(dir, "big.log");
+      await writeFile(big, Buffer.alloc(MAX_ACP_READ_BYTES + 1));
+      await expect(map.get("fs/read_text_file")?.({ path: "big.log" })).rejects.toThrow(/larger than/);
     } finally {
       cleanup();
     }

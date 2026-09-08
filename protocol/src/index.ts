@@ -280,6 +280,7 @@ export type ServerMessage =
       runStartedAt?: number;
     }
   | { type: "queue.snapshot"; items: QueueItem[] }
+  | { type: "threads.snapshot"; threads: ThreadSummary[]; currentId: string | null }
   | { type: "config"; config: RedactedConfig }
   | { type: "config.error"; message: string }
   | { type: "transcript.snapshot"; events: TranscriptEvent[] }

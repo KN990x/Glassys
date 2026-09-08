@@ -19,4 +19,13 @@ describe("listWorkspaces", () => {
     expect(hits.some((h) => h.path === root)).toBe(true);
     expect(hits.some((h) => h.path === repo && h.name === "app")).toBe(true);
   });
+
+  it("lists immediate subdirectories even when they are not git repos", async () => {
+    const root = await mkdtemp(join(tmpdir(), "glassys-ws-"));
+    const stack = join(root, "stack");
+    await mkdir(stack);
+    const hits = await listWorkspaces(root);
+    expect(hits.some((h) => h.path === root)).toBe(true);
+    expect(hits.some((h) => h.path === stack && h.name === "stack")).toBe(true);
+  });
 });

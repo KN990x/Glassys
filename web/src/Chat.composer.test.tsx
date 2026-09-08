@@ -63,7 +63,15 @@ vi.mock("./api", () => ({
     switchThread: vi.fn(async () => ({ threads: [], currentId: null })),
     deleteThread: vi.fn(async () => ({ threads: [], currentId: null })),
     restart: vi.fn(async () => ({ ok: true })),
-    upload: vi.fn(),
+    upload: vi.fn(async (file: File) => ({ id: `up-${file.name}`, mime: file.type, name: file.name })),
+    reachability: vi.fn(async () => ({
+      bind: "127.0.0.1",
+      port: 8787,
+      publicUrl: "",
+      loopback: true,
+      hostname: "box",
+      user: "ops",
+    })),
   },
   clearToken: vi.fn(),
   getToken: () => "tok",
@@ -122,6 +130,7 @@ describe("Chat composer and layout", () => {
     act(() => root.unmount());
     host.remove();
     saveConfig.mockReset();
+    vi.unstubAllGlobals();
   });
 
   async function renderChat() {
@@ -266,5 +275,85 @@ describe("Chat composer and layout", () => {
     const row = host.querySelector(".thread-list")?.textContent ?? "";
     expect(row).toContain("cursor");
     expect(row).toContain("/tmp/ws");
+  });
+
+  it("shows the host user and hostname in the topbar", async () => {
+    await renderChat();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.querySelector(".host-context")?.textContent).toContain("ops@box");
+  });
+
+  it("applies threads.snapshot without a page reload", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.emit({
+        type: "threads.snapshot",
+        threads: [
+          {
+            id: "t2",
+            title: "ops",
+            adapter: "cursor",
+            cwd: "/opt/stack",
+            updatedAt: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+        currentId: "t2",
+      });
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click();
+    });
+    const row = host.querySelector(".thread-list")?.textContent ?? "";
+    expect(row).toContain("/opt/stack");
+    expect(row).toContain("ops");
+  });
+
+  it("shows Working and queued together when a run and the FIFO both have work", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+      socket.emit({ type: "session", profileId: "default", agentId: "a", busy: true, threadId: "t1" });
+      socket.emit({ type: "queue.snapshot", items: [{ id: "q1", text: "later" }] });
+    });
+    expect(host.querySelector(".status")?.textContent).toBe("Working · queued");
+  });
+
+  it("attaches pasted images from the composer", async () => {
+    const { api } = await import("./api");
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const file = new File([new Uint8Array([1, 2, 3])], "shot.png", { type: "image/png" });
+    const form = host.querySelector("form.composer") as HTMLFormElement;
+    await act(async () => {
+      const ev = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "clipboardData", { value: { files: [file] } });
+      form.dispatchEvent(ev);
+    });
+    expect(api.upload).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.querySelector(".draft-thumbs img")?.getAttribute("alt")).toBe("shot.png");
+  });
+
+  it("does not send on Enter when the device has a touch screen", async () => {
+    vi.stubGlobal("navigator", { maxTouchPoints: 5 });
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    await typeIn(textarea, "hello");
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(textarea.value).toBe("hello");
   });
 });

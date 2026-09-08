@@ -172,4 +172,27 @@ describe("config patch", () => {
       vi.mocked(probeAdapter).mockRestore();
     }
   });
+
+  it("probes ACP with command options when saving ACP config", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "acp";
+    cfg.agent.options = { command: "true" };
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { probeAdapter } = await import("./adapters.js");
+    const seen: Array<Record<string, unknown> | undefined> = [];
+    vi.mocked(probeAdapter).mockImplementation(async (_adapter, options) => {
+      seen.push(options);
+      return { ok: true };
+    });
+    try {
+      const { applyPatch } = await import("./config.js");
+      await applyPatch({ agent: { options: { command: "true", args: [] } } });
+      expect(seen.some((o) => o && o.command === "true")).toBe(true);
+    } finally {
+      vi.mocked(probeAdapter).mockRestore();
+    }
+  });
 });

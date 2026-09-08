@@ -129,6 +129,27 @@ export function mapOpencodeEvent(
     return text ? snapshotDelta(snapshots, "reasoning", text, "thinking") : [];
   }
   if (type === "session.idle" || type === "session.idle.updated") return [];
+  if (type === "session.usage" || type.endsWith(".usage")) {
+    const usage = asRecord(props.usage) ?? asRecord(props.tokens) ?? asRecord(rec.usage) ?? props;
+    const inputTokens =
+      typeof usage.input_tokens === "number"
+        ? usage.input_tokens
+        : typeof usage.inputTokens === "number"
+          ? usage.inputTokens
+          : typeof usage.input === "number"
+            ? usage.input
+            : undefined;
+    const outputTokens =
+      typeof usage.output_tokens === "number"
+        ? usage.output_tokens
+        : typeof usage.outputTokens === "number"
+          ? usage.outputTokens
+          : typeof usage.output === "number"
+            ? usage.output
+            : undefined;
+    if (inputTokens == null && outputTokens == null) return [];
+    return [{ type: "run.usage", inputTokens, outputTokens }];
+  }
   if (type === "session.error" || type === "error") {
     return [{ type: "run.error", message: str(props.message) || str(props.error) || "Run failed", phase: "run" }];
   }

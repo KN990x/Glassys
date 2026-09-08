@@ -17,6 +17,9 @@ import { EventPump } from "./pump.js";
 
 export { EventPump } from "./pump.js";
 
+const OPENCODE_IDLE_MS = 600_000;
+const OPENCODE_DRAIN_MS = 2_000;
+
 const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Default (OpenCode config)" }];
 
 type OcBundle = Awaited<ReturnType<typeof createOpencode>>;
@@ -177,7 +180,9 @@ class OpencodeSession implements AdapterSession {
       let id = sessionId;
       if (id) {
         const get = (bundle.client.session as { get?: (args: unknown) => Promise<unknown> }).get;
-        if (get) {
+        if (!get) {
+          id = undefined;
+        } else {
           try {
             await get({
               path: { id },
@@ -228,7 +233,7 @@ class OpencodeSession implements AdapterSession {
       });
       try {
         while (!isCancelled()) {
-          const waitMs = promptSettled ? 2_000 : 180_000;
+          const waitMs = promptSettled ? OPENCODE_DRAIN_MS : OPENCODE_IDLE_MS;
           const next = await this.pump.next(waitMs, signal);
           if (isCancelled()) break;
           if (next.event) {

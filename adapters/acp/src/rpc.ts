@@ -5,9 +5,17 @@ type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 export type RpcHandler = (params: unknown) => Promise<unknown> | unknown;
 
+function indexOfCrlfCrlf(buf: Buffer): number {
+  for (let i = 0; i + 3 < buf.length; i++) {
+    if (buf[i] === 13 && buf[i + 1] === 10 && buf[i + 2] === 13 && buf[i + 3] === 10) return i;
+  }
+  return -1;
+}
+
 export class JsonRpcStdio {
   private nextId = 1;
-  private buf = "";
+  private buf = Buffer.alloc(0);
+  private framing: "unknown" | "lsp" | "ndjson" = "unknown";
   private stderrTail = "";
   private pending = new Map<number | string, Pending>();
   private notifications = new Map<string, Array<(params: unknown) => void>>();
@@ -16,7 +24,7 @@ export class JsonRpcStdio {
 
   constructor(command: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv) {
     this.child = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, ...env } });
-    this.child.stdout?.on("data", (chunk: Buffer) => this.onData(chunk.toString("utf8")));
+    this.child.stdout?.on("data", (chunk: Buffer) => this.onData(chunk));
     this.child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       this.stderrTail = (this.stderrTail + text).slice(-8_192);
@@ -58,15 +66,60 @@ export class JsonRpcStdio {
   }
 
   private send(msg: unknown) {
-    this.child.stdin?.write(`${JSON.stringify(msg)}\n`);
+    const json = JSON.stringify(msg);
+    if (this.framing === "ndjson") {
+      this.child.stdin?.write(`${json}\n`);
+      return;
+    }
+    const payload = Buffer.from(json, "utf8");
+    this.child.stdin?.write(`Content-Length: ${payload.length}\r\n\r\n`);
+    this.child.stdin?.write(payload);
   }
 
-  private onData(chunk: string) {
-    this.buf += chunk;
-    const lines = this.buf.split("\n");
-    this.buf = lines.pop() ?? "";
-    for (const line of lines) {
+  private onData(chunk: Buffer) {
+    this.buf = Buffer.concat([this.buf, chunk]);
+    this.consume();
+  }
+
+  private consume() {
+    for (;;) {
+      if (this.framing === "unknown") {
+        const head = this.buf.subarray(0, Math.min(this.buf.length, 32)).toString("utf8");
+        if (/^\s*Content-Length:/i.test(head)) this.framing = "lsp";
+        else if (this.buf.includes(0x0a)) this.framing = "ndjson";
+        else return;
+      }
+      if (this.framing === "lsp") {
+        const headerEnd = indexOfCrlfCrlf(this.buf);
+        if (headerEnd < 0) return;
+        const header = this.buf.subarray(0, headerEnd).toString("utf8");
+        const match = header.match(/Content-Length:\s*(\d+)/i);
+        if (!match) {
+          this.framing = "ndjson";
+          continue;
+        }
+        const len = Number(match[1]);
+        const bodyStart = headerEnd + 4;
+        if (this.buf.length < bodyStart + len) return;
+        const body = this.buf.subarray(bodyStart, bodyStart + len).toString("utf8");
+        this.buf = this.buf.subarray(bodyStart + len);
+        try {
+          this.onMessage(JSON.parse(body) as unknown);
+        } catch {
+          /* ignore */
+        }
+        continue;
+      }
+      const nl = this.buf.indexOf(0x0a);
+      if (nl < 0) return;
+      const line = this.buf.subarray(0, nl).toString("utf8").replace(/\r$/, "");
+      this.buf = this.buf.subarray(nl + 1);
       if (!line.trim()) continue;
+      if (/^Content-Length:/i.test(line)) {
+        this.framing = "lsp";
+        this.buf = Buffer.concat([Buffer.from(`${line}\n`, "utf8"), this.buf]);
+        continue;
+      }
       try {
         this.onMessage(JSON.parse(line) as unknown);
       } catch {

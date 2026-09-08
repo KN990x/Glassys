@@ -35,7 +35,7 @@ export function WorkspacePicker({
     <div className="stack">
       <label>
         {t("wizard.workspace.path")}
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="/home/you/src/project" />
+        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="/home/you" />
       </label>
       {recents.length > 0 && (
         <div className="picker-list">
@@ -49,7 +49,7 @@ export function WorkspacePicker({
       )}
       <label>
         {t("wizard.workspace.browseRoot")}
-        <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="/home/you/src" />
+        <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="/opt" />
       </label>
       <button
         type="button"

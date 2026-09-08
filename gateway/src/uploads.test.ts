@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetLiveThreadCache } from "./threads.js";
-import { assertImageMime, saveUpload, loadUpload, resolveAttachments } from "./uploads.js";
+import { assertImageMime, saveUpload, loadUpload, resolveAttachments, materializeAttachments } from "./uploads.js";
 
 describe("uploads", () => {
   let dir: string;
@@ -32,6 +32,17 @@ describe("uploads", () => {
     const files = await resolveAttachments([att]);
     expect(files[0]?.path).toBe(stored?.path);
     expect(await loadUpload("../secret")).toBeNull();
+  });
+
+  it("copies uploads into the workspace so sandbox cwd can read them", async () => {
+    const att = await saveUpload(Buffer.from("png-bytes"), "image/png", "shot.png");
+    const cwd = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
+    const files = await materializeAttachments(cwd, [att]);
+    expect(files).toHaveLength(1);
+    expect(files[0]?.path).toContain(".glassys-uploads");
+    expect(files[0]?.path.startsWith(cwd)).toBe(true);
+    expect(files[0]?.body?.toString()).toBe("png-bytes");
+    expect(await materializeAttachments(cwd, [{ id: "nope", mime: "image/png", name: "x.png" }])).toEqual([]);
   });
 
   it("garbage-collects unreferenced uploads after the TTL", async () => {

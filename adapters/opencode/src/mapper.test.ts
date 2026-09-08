@@ -113,4 +113,13 @@ describe("mapOpencodeEvent", () => {
       ),
     ).toEqual([{ type: "text.delta", text: "lo" }]);
   });
+
+  it("maps session.usage when the runtime provides tokens", () => {
+    expect(
+      mapOpencodeEvent({
+        type: "session.usage",
+        properties: { tokens: { input: 11, output: 7 } },
+      }),
+    ).toEqual([{ type: "run.usage", inputTokens: 11, outputTokens: 7 }]);
+  });
 });

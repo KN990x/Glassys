@@ -29,6 +29,13 @@ export interface AdapterCreateOptions {
   options: Record<string, unknown>;
 }
 
+export interface PromptAttachment {
+  path: string;
+  mime: string;
+  name: string;
+  body?: Buffer;
+}
+
 export type AdapterEventHandler = (event: ServerMessage) => void;
 
 export interface AdapterRun {
@@ -46,7 +53,7 @@ export interface AdapterSession {
       force?: boolean;
       model?: string;
       modelParams?: ModelParam[];
-      attachments?: { path: string; mime: string; name: string }[];
+      attachments?: PromptAttachment[];
     },
   ): Promise<AdapterRun>;
   dispose(): Promise<void>;

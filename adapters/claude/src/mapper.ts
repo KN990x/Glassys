@@ -13,11 +13,19 @@ function toolLoc(block: Record<string, unknown>): { path?: string; command?: str
   };
 }
 
-function mapStreamEvent(event: unknown, tools: Map<string, string>): ServerMessage[] {
+function mapStreamEvent(
+  event: unknown,
+  tools: Map<string, string>,
+  state?: { sawStreamEvent?: boolean; thinkingStarted?: number },
+): ServerMessage[] {
   const rec = asRecord(event);
   if (!rec || typeof rec.type !== "string") return [];
   if (rec.type === "content_block_start") {
     const block = asRecord(rec.content_block);
+    if (block?.type === "thinking" || block?.type === "redacted_thinking") {
+      if (state && state.thinkingStarted === undefined) state.thinkingStarted = Date.now();
+      return [];
+    }
     if (block?.type === "tool_use") {
       const id = str(block.id) ?? "tool";
       const name = str(block.name) ?? "tool";
@@ -33,11 +41,17 @@ function mapStreamEvent(event: unknown, tools: Map<string, string>): ServerMessa
     if (!delta) return [];
     if (delta.type === "text_delta" && str(delta.text)) return [{ type: "text.delta", text: String(delta.text) }];
     if ((delta.type === "thinking_delta" || delta.type === "reasoning_delta") && str(delta.thinking ?? delta.text)) {
+      if (state && state.thinkingStarted === undefined) state.thinkingStarted = Date.now();
       return [{ type: "thinking.delta", text: String(delta.thinking ?? delta.text) }];
     }
     return [];
   }
   if (rec.type === "content_block_stop") {
+    if (state?.thinkingStarted !== undefined) {
+      const durationMs = Math.max(0, Date.now() - state.thinkingStarted);
+      state.thinkingStarted = undefined;
+      return [{ type: "thinking.done", durationMs }];
+    }
     return [];
   }
   return [];
@@ -103,13 +117,19 @@ function mapAssistantFallback(rec: Record<string, unknown>, tools: Map<string, s
 export function mapClaudeMessage(
   message: unknown,
   tools = new Map<string, string>(),
-  state?: { sawStreamEvent?: boolean },
+  state?: { sawStreamEvent?: boolean; thinkingStarted?: number },
 ): ServerMessage[] {
   const rec = asRecord(message);
   if (!rec || typeof rec.type !== "string") return [];
   if (rec.type === "stream_event") {
     if (state) state.sawStreamEvent = true;
-    return mapStreamEvent(rec.event ?? rec, tools);
+    return mapStreamEvent(rec.event ?? rec, tools, state);
+  }
+  if (rec.type === "tool_progress" || rec.type === "tool_use_progress") {
+    const id = str(rec.tool_use_id) || str(rec.toolUseId) || str(rec.id);
+    const chunk = str(rec.content) || str(rec.delta) || str(rec.output);
+    if (id && chunk) return [{ type: "tool.progress", callId: id, chunk }];
+    return [];
   }
   // Text/thinking/tool_use already arrive as stream_event when includePartialMessages is on.
   if (rec.type === "assistant") {

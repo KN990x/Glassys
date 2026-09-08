@@ -73,6 +73,10 @@ export function mapAcpUpdate(params: unknown, tools = new Map<string, string>())
   if (sessionUpdate === "tool_call_update") {
     const id = str(update.toolCallId) || str(update.toolCallID) || "tool";
     const status = str(update.status);
+    if (status === "in_progress" || status === "pending") {
+      const chunk = previewFromContent(update.content) || str(update.output);
+      return chunk ? [{ type: "tool.progress", callId: id, chunk }] : [];
+    }
     if (status === "completed" || status === "failed" || status === "cancelled") {
       const { diff, stats, truncated } = extractDiff(update);
       const err =

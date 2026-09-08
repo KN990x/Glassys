@@ -66,4 +66,25 @@ describe("PermissionChip", () => {
     });
     expect(saveConfig).not.toHaveBeenCalled();
   });
+
+  it("closes the popover on a click outside", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <PermissionChip config={cfg()} caps={caps} onConfig={() => undefined} />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => {
+      host.querySelector("button")?.click();
+    });
+    expect(host.querySelector(".chip-pop")).toBeTruthy();
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(host.querySelector(".chip-pop")).toBeNull();
+  });
 });

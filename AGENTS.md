@@ -59,11 +59,13 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 
 - Contract: `protocolVersion` major `1`. Client rejects incompatible majors.
 - Runs go over **WebSocket with keepalive** (ping 15–30s, default 25). No SSE / long HTTP. Proxies and Cloudflare cut idle HTTP around ~100s; agent runs last minutes.
-- Client: `hello`, `auth`, `user.message` (optional `id`, `attachments`), `run.cancel`, `queue.cancel`, `thread.new` / `thread.switch`, `config.get` / `config.set`, `ping`. The PWA creates and switches threads over HTTP (`POST /api/threads`, `POST /api/threads/:id/switch`, `DELETE /api/threads/:id`). WS `thread.new` / `thread.switch` stay for non-PWA clients; both paths hit the same runtime and broadcast `transcript.snapshot`.
-- Server: `thinking.*`, `text.delta`, `tool.*` (`tool.end` with `denied: true` when Auto-review or auto-run off blocked a call), `run.*` (including optional `run.usage`), `user.retracted`, `session` (`threadId`, `runStartedAt`), `queue.snapshot` (live, not persisted), redacted `config`, `config.error`, plus `hello.ok` / `hello.incompatible`, `auth.ok` / `auth.error`, and `transcript.snapshot` for reconnect.
+- Client: `hello`, `auth`, `user.message` (optional `id`, `attachments`), `run.cancel`, `queue.cancel`, `thread.new` / `thread.switch`, `config.get` / `config.set`, `ping`. The PWA creates and switches threads over HTTP (`POST /api/threads`, `POST /api/threads/:id/switch`, `DELETE /api/threads/:id`). WS `thread.new` / `thread.switch` stay for non-PWA clients; both paths hit the same runtime and broadcast `transcript.snapshot` and `threads.snapshot`.
+- Server: `thinking.*`, `text.delta`, `tool.*` (`tool.end` with `denied: true` when Auto-review or auto-run off blocked a call), `run.*` (including optional `run.usage`), `user.retracted`, `session` (`threadId`, `runStartedAt`), `queue.snapshot` (live, not persisted), `threads.snapshot` after new/switch/delete/archive, redacted `config`, `config.error`, plus `hello.ok` / `hello.incompatible`, `auth.ok` / `auth.error`, and `transcript.snapshot` for reconnect.
 - Paint text from the first token. Never wait for `run.done` to start rendering.
 - `GET /api/models?adapter=` returns `{ models, source: "live" | "fallback", error? }`. Never silently swap in Cursor’s static catalog for another adapter.
 - Runtime must not call `adapter.resume` when `capabilities.resume` is false (keep the Glassys transcript; create on the next send).
+- `session.resumeOnStart` only governs **gateway process start** (`initRuntime`). Switching threads or the next `send` always resumes when the adapter can and a usable `agentId` exists. `resumeOnStart: false` must not create a new vendor session after `switchLiveThread`.
+- Image attachments are copied into `$cwd/.glassys-uploads/<id>-<name>` (that directory is gitignored) so a sandboxed agent can read them. Adapters that accept native image parts also send bytes. If the operator sent attachment ids and **none** resolve, the run errors (`Attachments could not be read`).
 - `GET /api/adapters` includes `available: { ok } | { ok: false, error }`. Do not `config.set` an adapter with `ok: false`, and do not complete onboarding with one.
 
 ## Cursor adapter traps
@@ -79,6 +81,10 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 - Changing model is a sticky next `send`. Changing cwd / sandbox / `settingSources` / adapter archives the live Glassys transcript and creates a new agent (new thread). Warn in the UI. An explicit new thread with the same cwd does the same.
 - Do not single-file-bundle `@cursor/sdk` on Node. Keep `node_modules`. Node `>=22.13`.
 - Store: `JsonlLocalAgentStore` under `$GLASSYS_DATA_DIR/cursor-store`. Other adapters use `$GLASSYS_DATA_DIR/<id>-store`. The live Glassys transcript is `$GLASSYS_DATA_DIR/threads/<threadId>/transcript.jsonl` (legacy `transcript.jsonl` is migrated on first run). The PWA replays that file; the SDK store is for model resume.
+
+## GitHub CI after push
+
+After any `git push` to GitHub (`main` or a PR branch), **do not end the session until workflow `ci` is green**. Watch it (`gh run watch --exit-status`, or `gh pr checks --watch` on a PR). If it fails, read the failing job log, fix, commit, push, and wait again. Do this without being asked. Never skip hooks, never force-push to `main`, and never change the workflow just to make a failure pass.
 
 ## Deploy
 

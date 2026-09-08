@@ -39,6 +39,19 @@ describe("mapAcpUpdate", () => {
     expect(start).toMatchObject({ type: "tool.start", kind: "read", title: "Reading package.json" });
   });
 
+  it("maps in-progress tool updates as tool.progress", () => {
+    expect(
+      mapAcpUpdate({
+        update: {
+          sessionUpdate: "tool_call_update",
+          toolCallId: "t1",
+          status: "in_progress",
+          content: [{ type: "content", text: "out" }],
+        },
+      }),
+    ).toEqual([{ type: "tool.progress", callId: "t1", chunk: "out" }]);
+  });
+
   it("maps cancelled tool updates as denied", () => {
     const tools = new Map<string, string>([["t3", "write"]]);
     expect(

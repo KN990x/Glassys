@@ -1,8 +1,10 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { asRecord } from "@glassys/adapter-contract";
 import { optionBool } from "@glassys/protocol";
+
+export const MAX_ACP_READ_BYTES = 1_048_576;
 
 export function resolveInsideCwd(cwd: string, path: string): string {
   const root = resolve(cwd);
@@ -25,6 +27,10 @@ export function registerHostHandlers(
     const rec = asRecord(params) ?? {};
     const path = typeof rec.path === "string" ? rec.path : "";
     const abs = resolveInsideCwd(cwd, path);
+    const info = await stat(abs);
+    if (info.size > MAX_ACP_READ_BYTES) {
+      throw new Error(`File is larger than ${MAX_ACP_READ_BYTES} bytes`);
+    }
     const content = await readFile(abs, "utf8");
     return { content };
   });

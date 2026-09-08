@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode } from "./adapterOptions";
+import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread } from "./adapterOptions";
 
 const cursor: AdapterPublicInfo = {
   id: "cursor",
@@ -70,6 +70,16 @@ describe("setAutoRun", () => {
     });
     expect(setAutoRun({ autoRun: true }, false, "auto-review-deny")).toMatchObject({ autoRun: false });
     expect(setAutoRun({ autoRun: true }, false, "auto-review-deny").permissionMode).toBeUndefined();
+  });
+});
+
+describe("archivesLiveThread", () => {
+  it("is true when adapter, cwd, or options change", () => {
+    const before = { adapter: "cursor", cwd: "/tmp/a", options: { sandbox: false, autoRun: true } };
+    expect(archivesLiveThread(before, { ...before })).toBe(false);
+    expect(archivesLiveThread(before, { ...before, cwd: "/tmp/b" })).toBe(true);
+    expect(archivesLiveThread(before, { ...before, adapter: "claude" })).toBe(true);
+    expect(archivesLiveThread(before, { ...before, options: { sandbox: true, autoRun: true } })).toBe(true);
   });
 });
 

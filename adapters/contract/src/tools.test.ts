@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractDiff, looksLikeDiff, promptWithAttachments, toolDenied, toolKindFromName } from "./tools.js";
+import { extractDiff, imagePartsFromAttachments, looksLikeDiff, promptWithAttachments, toolDenied, toolKindFromName } from "./tools.js";
 
 describe("extractDiff", () => {
   const sample = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n";
@@ -47,5 +47,12 @@ describe("extractDiff", () => {
   it("appends attachment paths to the user prompt", () => {
     expect(promptWithAttachments("hi", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("/tmp/a.png");
     expect(promptWithAttachments("", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("image(s)");
+  });
+
+  it("encodes native image parts from attachment bytes", () => {
+    expect(imagePartsFromAttachments([{ mime: "image/png", name: "a.png", path: "/x" }])).toEqual([]);
+    expect(imagePartsFromAttachments([{ mime: "image/png", name: "a.png", body: Buffer.from("hi") }])).toEqual([
+      { mime: "image/png", name: "a.png", data: Buffer.from("hi").toString("base64") },
+    ]);
   });
 });

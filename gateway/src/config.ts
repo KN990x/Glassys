@@ -152,8 +152,8 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
     const adapterChanging =
       isObj(rest.agent) && typeof rest.agent.adapter === "string" && rest.agent.adapter !== before.agent.adapter;
     const completing = rest.onboarding?.completed === true;
-    if (adapter && (adapterChanging || completing)) {
-      const availability = await probeAdapter(adapter);
+    if (adapter && (adapterChanging || completing || (adapter.id === "acp" && isObj(rest.agent)))) {
+      const availability = await probeAdapter(adapter, after.agent.options);
       if (!availability.ok) throw new HttpError(400, availability.error);
     }
     if (typeof operatorPassword === "string" && operatorPassword.length > 0) {
