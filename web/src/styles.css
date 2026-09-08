@@ -348,7 +348,7 @@ details label { margin-top: 0.35rem; }
   flex-shrink: 0;
 }
 .pill.running { color: var(--warn); }
-.pill.error { color: var(--danger); }
+.pill.error, .pill.denied { color: var(--danger); }
 .tool-body { padding: 0 0.85rem 0.85rem; }
 .shell-cmd, .shell-out, .preview, .diff {
   font-family: var(--mono);
@@ -450,6 +450,11 @@ details label { margin-top: 0.35rem; }
   outline-offset: -2px;
   z-index: 1;
 }
+.composer-box .composer-attach:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+  z-index: 1;
+}
 .composer-box .composer-send {
   width: var(--composer-btn);
   min-width: var(--composer-btn);
@@ -472,6 +477,109 @@ details label { margin-top: 0.35rem; }
   height: 1.15rem;
 }
 
+.bubble.user.pending { opacity: 0.72; }
+.bubble.user.retracted { text-decoration: line-through; opacity: 0.55; }
+.bubble-flag { display: block; font-size: 0.75rem; margin-top: 0.35rem; }
+
+.thread-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: grid;
+  grid-template-columns: min(22rem, 100%) 1fr;
+}
+.thread-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, #000 50%, transparent);
+  padding: 0;
+}
+.thread-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-elev);
+  border-right: 1px solid var(--stroke);
+  padding: 1rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  overflow: auto;
+}
+.thread-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.thread-panel h2 { margin: 0; font-size: 1rem; }
+.thread-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.picker-list, .queue-list { display: grid; gap: 0.35rem; }
+.picker-item {
+  display: grid;
+  gap: 0.15rem;
+  text-align: left;
+  width: 100%;
+}
+.picker-item.current { outline: 1px solid var(--stroke); }
+.queue-list { list-style: none; margin: 0; padding: 0; }
+.queue-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.live-line, .usage { font-size: 0.75rem; margin: 0; }
+.thumbs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.thumbs img, .thumb-remove img {
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--stroke);
+}
+.thumb-remove {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.qr {
+  width: 9rem;
+  height: 9rem;
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.35rem;
+}
+.chip-wrap { position: relative; }
+.chip-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.4rem);
+  z-index: 5;
+  min-width: 16rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 35%, transparent);
+}
+.composer-box .composer-attach {
+  width: var(--composer-btn);
+  min-width: var(--composer-btn);
+  height: var(--composer-btn);
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--stroke);
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+  flex: none;
+  align-self: flex-end;
+}
+.composer-box .composer-attach svg { width: 1.15rem; height: 1.15rem; }
 .md { line-height: 1.6; overflow-wrap: break-word; overflow-x: auto; }
 .md p:first-child { margin-top: 0; }
 .md p:last-child { margin-bottom: 0; }
@@ -564,4 +672,6 @@ details label { margin-top: 0.35rem; }
 
 @media (max-width: 640px) {
   .top-actions .ghost { padding: 0.4rem 0.7rem; }
+  .thread-drawer { grid-template-columns: min(100%, 22rem) 1fr; }
+  .thread-panel { width: min(22rem, 100%); }
 }

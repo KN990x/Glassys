@@ -90,10 +90,12 @@ Keep it. Glassys talks to `@cursor/sdk`, not `cursor-cli` / `cursor-agent`. Sign
 Install on the machine the agent should operate (systems work: git, files, services).
 
 ```bash
-git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
+curl -fsSL https://raw.githubusercontent.com/KN990x/Glassys/main/scripts/install.sh | bash
 ```
 
-Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). That one line clones, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
+Same result as `git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install`. From a clone: `bash scripts/install.sh`.
+
+Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). The installer clones if needed, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
 
 If you are already inside the repo: `pnpm install && pnpm run service:install`.
 
@@ -209,10 +211,12 @@ Déjalo. Glassys habla con `@cursor/sdk`, no con `cursor-cli` / `cursor-agent`. 
 Instálalo en la máquina que el agente debe operar (tareas de sistemas: git, archivos, servicios).
 
 ```bash
-git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
+curl -fsSL https://raw.githubusercontent.com/KN990x/Glassys/main/scripts/install.sh | bash
 ```
 
-Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). Esa línea clona, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
+Equivalente a `git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install`. Desde un clone: `bash scripts/install.sh`.
+
+Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). El script clona si hace falta, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
 
 Si ya estás dentro del repo: `pnpm install && pnpm run service:install`.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractDiff, looksLikeDiff, toolKindFromName } from "./tools.js";
+import { extractDiff, looksLikeDiff, promptWithAttachments, toolDenied, toolKindFromName } from "./tools.js";
 
 describe("extractDiff", () => {
   const sample = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n";
@@ -35,5 +35,16 @@ describe("extractDiff", () => {
         content: [{ type: "diff", path: "f", oldText: "old", newText: "new" }],
       }).diff,
     ).toContain("+++ b/f");
+  });
+
+  it("detects denied tool results", () => {
+    expect(toolDenied("denied")).toBe(true);
+    expect(toolDenied("completed", "Glassys denied this write")).toBe(true);
+    expect(toolDenied("completed")).toBe(false);
+  });
+
+  it("appends attachment paths to the user prompt", () => {
+    expect(promptWithAttachments("hi", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("/tmp/a.png");
+    expect(promptWithAttachments("", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("image(s)");
   });
 });

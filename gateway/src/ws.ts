@@ -17,12 +17,16 @@ import { HttpError } from "./errors.js";
 import { createMutex } from "./lock.js";
 import {
   applyConfigPatch,
+  cancelQueued,
   cancelRun,
   cwdErrorInPatch,
   drainEmit,
   enqueueMessage,
   readTranscript,
+  snapshotQueue,
   snapshotRuntime,
+  startNewLiveThread,
+  switchLiveThread,
 } from "./runtime.js";
 
 const MAX_WS_PAYLOAD = 1_000_000;
@@ -217,6 +221,7 @@ async function handleClient(
     }
     hub.release(ws);
     hub.send(ws, { type: "session", ...snapshotRuntime() });
+    hub.send(ws, { type: "queue.snapshot", items: snapshotQueue() });
     return;
   }
 
@@ -227,10 +232,33 @@ async function handleClient(
 
   switch (msg.type) {
     case "user.message":
-      await enqueueMessage(msg.text);
+      await enqueueMessage(msg.text, msg.attachments);
       break;
     case "run.cancel":
       await cancelRun();
+      break;
+    case "queue.cancel":
+      await cancelQueued(msg.id);
+      break;
+    case "thread.new":
+      try {
+        await startNewLiveThread();
+      } catch (err) {
+        hub.send(ws, {
+          type: "config.error",
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+      break;
+    case "thread.switch":
+      try {
+        await switchLiveThread(msg.id);
+      } catch (err) {
+        hub.send(ws, {
+          type: "config.error",
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
       break;
     case "config.get":
       hub.send(ws, { type: "config", config: await redacted() });

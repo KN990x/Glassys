@@ -73,6 +73,8 @@ export interface AdapterCapabilities {
   auth: AdapterAuthCapability;
   /** When false, a static catalog is expected; the PWA must not treat source:fallback as a failure. Default true. */
   liveCatalog?: boolean;
+  /** Adapter can pass image parts natively. Missing/false still allows path-note fallback. */
+  attachments?: boolean;
   defaultModel?: { id: string; params: ModelParam[] };
 }
 
@@ -187,12 +189,33 @@ export type ConfigPatch = {
   operatorPassword?: string;
 };
 
+export interface MessageAttachment {
+  id: string;
+  mime: string;
+  name: string;
+}
+
+export interface QueueItem {
+  id: string;
+  text: string;
+}
+
+export interface ThreadSummary {
+  id: string;
+  title: string;
+  adapter: string;
+  cwd: string;
+  updatedAt: string;
+}
+
 export type ClientMessage =
   | { type: "hello"; protocolVersion: number }
   | { type: "auth"; token: string }
-  /** `attachments` is reserved for a later protocol revision; v1 ignores it. */
-  | { type: "user.message"; text: string; attachments?: unknown }
+  | { type: "user.message"; text: string; id?: string; attachments?: MessageAttachment[] }
   | { type: "run.cancel" }
+  | { type: "queue.cancel"; id: string }
+  | { type: "thread.new" }
+  | { type: "thread.switch"; id: string }
   | { type: "config.get" }
   | { type: "config.set"; patch: ConfigPatch }
   | { type: "ping"; ts?: number };
@@ -222,10 +245,12 @@ export interface ToolEnd {
   outputPreview?: string;
   error?: string;
   truncated?: boolean;
+  denied?: boolean;
 }
 
 export type TranscriptEvent =
-  | { type: "user.message"; text: string }
+  | { type: "user.message"; text: string; id?: string; attachments?: MessageAttachment[] }
+  | { type: "user.retracted"; id: string }
   | { type: "thinking.delta"; text: string }
   | { type: "thinking.done"; durationMs: number }
   | { type: "text.delta"; text: string }
@@ -236,7 +261,8 @@ export type TranscriptEvent =
   | { type: "run.start"; runId?: string }
   | { type: "run.done" }
   | { type: "run.error"; message: string; phase?: "startup" | "run" }
-  | { type: "run.cancelled" };
+  | { type: "run.cancelled" }
+  | { type: "run.usage"; inputTokens?: number; outputTokens?: number };
 
 export type ServerMessage =
   | { type: "hello.ok"; protocolVersion: number }
@@ -244,7 +270,15 @@ export type ServerMessage =
   | { type: "auth.ok" }
   | { type: "auth.error"; message: string }
   | { type: "pong"; ts?: number }
-  | { type: "session"; profileId: string; agentId: string | null; busy: boolean }
+  | {
+      type: "session";
+      profileId: string;
+      agentId: string | null;
+      busy: boolean;
+      threadId?: string;
+      runStartedAt?: number;
+    }
+  | { type: "queue.snapshot"; items: QueueItem[] }
   | { type: "config"; config: RedactedConfig }
   | { type: "config.error"; message: string }
   | { type: "transcript.snapshot"; events: TranscriptEvent[] }
@@ -259,7 +293,11 @@ export function isClientMessage(value: unknown): value is ClientMessage {
     case "auth":
       return typeof rec.token === "string";
     case "user.message":
-      return typeof rec.text === "string";
+      return typeof rec.text === "string" && optionalAttachments(rec.attachments);
+    case "queue.cancel":
+    case "thread.switch":
+      return typeof rec.id === "string";
+    case "thread.new":
     case "run.cancel":
     case "config.get":
       return true;
@@ -314,7 +352,7 @@ export function defaultConfig(): GlassysConfig {
 
 export function isTranscriptEvent(value: ServerMessage): value is TranscriptEvent {
   return (
-    value.type === "user.message" ||
+    value.type.startsWith("user.") ||
     value.type.startsWith("thinking.") ||
     value.type.startsWith("text.") ||
     value.type.startsWith("tool.") ||
@@ -348,4 +386,14 @@ export function optionStringArray(
 
 export function optionRecord(options: Record<string, unknown> | undefined): Record<string, unknown> {
   return options && typeof options === "object" ? options : {};
+}
+
+export function isMessageAttachment(value: unknown): value is MessageAttachment {
+  if (!value || typeof value !== "object") return false;
+  const rec = value as Record<string, unknown>;
+  return typeof rec.id === "string" && typeof rec.mime === "string" && typeof rec.name === "string";
+}
+
+function optionalAttachments(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isMessageAttachment));
 }

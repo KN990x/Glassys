@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
@@ -81,6 +81,7 @@ export function mapAcpUpdate(params: unknown, tools = new Map<string, string>())
           kind: toolKindFromName(tools.get(id)),
           outputPreview: previewFromContent(update.content) || str(update.output),
           error: status === "failed" ? str(update.error) || "failed" : undefined,
+          denied: toolDenied(status, str(update.error)) || undefined,
           diff,
           stats,
           truncated,

@@ -1,6 +1,7 @@
 import { Agent, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
 import {
   AdapterError,
+  promptWithAttachments,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterEventHandler,
@@ -69,11 +70,17 @@ class CursorSession implements AdapterSession {
   async send(
     text: string,
     onEvent: AdapterEventHandler,
-    sendOpts?: { force?: boolean; model?: string; modelParams?: ModelParam[] },
+    sendOpts?: {
+      force?: boolean;
+      model?: string;
+      modelParams?: ModelParam[];
+      attachments?: { path: string; mime: string; name: string }[];
+    },
   ): Promise<AdapterRun> {
+    const prompt = promptWithAttachments(text, sendOpts?.attachments);
     let run: Awaited<ReturnType<typeof this.agent.send>>;
     try {
-      run = await this.agent.send(text, {
+      run = await this.agent.send(prompt, {
         model: sendOpts?.model
           ? {
               id: sendOpts.model,
@@ -100,6 +107,14 @@ class CursorSession implements AdapterSession {
       wait: async () => {
         try {
           const result = await run.wait();
+          const usage = result && typeof result === "object" ? (result as { usage?: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } }).usage : undefined;
+          if (usage) {
+            const inputTokens = usage.inputTokens ?? usage.promptTokens;
+            const outputTokens = usage.outputTokens ?? usage.completionTokens;
+            if (inputTokens || outputTokens) {
+              onEvent({ type: "run.usage", inputTokens, outputTokens });
+            }
+          }
           if (result.status === "cancelled") return "cancelled";
           if (result.status === "error") {
             onEvent({ type: "run.error", message: runResultErrorMessage(result), phase: "run" });
@@ -131,6 +146,7 @@ export const cursorAdapter: Adapter = {
     resume: true,
     discover: false,
     toolConfirmation: "auto-review-deny",
+    attachments: false,
     auth: { kind: "sdk-login", envNames: ["CURSOR_API_KEY"] },
     defaultModel: CURSOR_DEFAULT_MODEL,
     liveCatalog: true,

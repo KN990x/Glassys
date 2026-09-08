@@ -3,6 +3,7 @@ import {
   AdapterError,
   errorMessage,
   pendingRun,
+  promptWithAttachments,
   requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
@@ -142,10 +143,14 @@ class ClaudeSession implements AdapterSession {
     this.iterator = this.query[Symbol.asyncIterator]();
   }
 
-  async send(text: string, onEvent: Parameters<AdapterSession["send"]>[1], sendOpts?: { model?: string }) {
+  async send(
+    text: string,
+    onEvent: Parameters<AdapterSession["send"]>[1],
+    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+  ) {
     if (sendOpts?.model) await this.retarget(sendOpts.model);
     const id = randomUUID();
-    this.queue.push(text);
+    this.queue.push(promptWithAttachments(text, sendOpts?.attachments));
     const query = this.query;
     const iterator = this.iterator;
     const tools = this.tools;
@@ -234,6 +239,7 @@ export const claudeAdapter: Adapter = {
     resume: true,
     discover: false,
     toolConfirmation: "permission-mode",
+    attachments: false,
     auth: { kind: "api-key", envNames: ["ANTHROPIC_API_KEY"] },
     defaultModel: { id: "sonnet", params: [] },
     liveCatalog: true,

@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
@@ -45,6 +45,7 @@ function mapToolResults(content: unknown, tools: Map<string, string>): ServerMes
     const kind = toolKindFromName(name);
     const err = str(rec.error) || (rec.is_error === true ? "Tool failed" : undefined);
     const pulled = extractDiff(rec);
+    const denied = toolDenied(undefined, err);
     out.push({
       type: "tool.end",
       callId: id,
@@ -52,6 +53,7 @@ function mapToolResults(content: unknown, tools: Map<string, string>): ServerMes
       kind,
       outputPreview: typeof rec.content === "string" ? rec.content.slice(0, 4000) : undefined,
       error: err,
+      denied: denied || undefined,
       diff: pulled.diff,
       stats: pulled.stats,
       truncated: pulled.truncated,

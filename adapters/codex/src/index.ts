@@ -4,6 +4,7 @@ import {
   AdapterError,
   errorMessage,
   pendingRun,
+  promptWithAttachments,
   requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
@@ -48,12 +49,17 @@ class CodexSession implements AdapterSession {
     return new CodexSession(thread, initialId);
   }
 
-  async send(text: string, onEvent: Parameters<AdapterSession["send"]>[1], sendOpts?: { model?: string }) {
+  async send(
+    text: string,
+    onEvent: Parameters<AdapterSession["send"]>[1],
+    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+  ) {
+    const prompt = promptWithAttachments(text, sendOpts?.attachments);
     const runId = randomUUID();
     return pendingRun(runId, async ({ signal, isCancelled }) => {
       try {
         const extra = sendOpts?.model ? { model: sendOpts.model } : {};
-        const { events } = await this.thread.runStreamed(text, { signal, ...extra } as never);
+        const { events } = await this.thread.runStreamed(prompt, { signal, ...extra } as never);
         let status: "finished" | "error" | "cancelled" = "finished";
         for await (const event of events) {
           if (isCancelled()) return "cancelled";
@@ -94,6 +100,7 @@ export const codexAdapter: Adapter = {
     resume: true,
     discover: false,
     toolConfirmation: "none",
+    attachments: false,
     auth: { kind: "cli-binary", envNames: ["CODEX_API_KEY", "OPENAI_API_KEY"] },
     defaultModel: { id: "gpt-5-codex", params: [] },
     liveCatalog: false,

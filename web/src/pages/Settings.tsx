@@ -13,6 +13,8 @@ import { useT } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
+import { WorkspacePicker } from "../components/WorkspacePicker";
+import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../adapterOptions";
 
 export function Settings({
@@ -361,10 +363,10 @@ export function Settings({
               </p>
             )}
             {currentAdapter?.description && <p className="muted">{currentAdapter.description}</p>}
-            <label>
-              {t("wizard.workspace.path")}
-              <input value={draft.agent.cwd} onChange={(e) => setDraft({ ...draft, agent: { ...draft.agent, cwd: e.target.value } })} />
-            </label>
+            <WorkspacePicker
+              value={draft.agent.cwd}
+              onChange={(cwd) => setDraft({ ...draft, agent: { ...draft.agent, cwd } })}
+            />
             <CatalogFallbackNotice liveCatalog={caps?.liveCatalog} source={modelSource} error={modelError} />
             {caps?.models !== false && (
               <ModelPicker
@@ -557,6 +559,11 @@ export function Settings({
               {t("settings.password")}
               <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
+          </section>
+
+          <section className="settings-section">
+            <h3>{t("settings.phone")}</h3>
+            <ReachabilityCard />
           </section>
 
           {error && <p className="error-text">{error}</p>}

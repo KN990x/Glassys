@@ -1,4 +1,4 @@
-import type { TranscriptEvent, ToolKind } from "@glassys/protocol";
+import type { MessageAttachment, TranscriptEvent, ToolKind } from "@glassys/protocol";
 
 export type ToolBlock = {
   id: string;
@@ -8,7 +8,7 @@ export type ToolBlock = {
   title: string;
   path?: string;
   command?: string;
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "denied";
   chunk: string;
   diff?: string;
   stats?: { add: number; del: number };
@@ -18,10 +18,11 @@ export type ToolBlock = {
 };
 
 export type Block =
-  | { id: string; kind: "user"; text: string }
+  | { id: string; kind: "user"; text: string; messageId?: string; attachments?: MessageAttachment[]; pending?: boolean; retracted?: boolean }
   | { id: string; kind: "thinking"; text: string; durationMs?: number }
   | { id: string; kind: "text"; text: string }
   | ToolBlock
+  | { id: string; kind: "usage"; inputTokens?: number; outputTokens?: number }
   | { id: string; kind: "banner"; text: string; tone: "queue" | "error" | "info" };
 
 let generation = 0;
@@ -62,8 +63,21 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
 
   switch (event.type) {
     case "user.message":
-      next.push({ id: nid("u"), kind: "user", text: event.text });
+      next.push({
+        id: event.id ? `msg:${event.id}` : nid("u"),
+        kind: "user",
+        text: event.text,
+        messageId: event.id,
+        attachments: event.attachments,
+      });
       return next;
+    case "user.retracted": {
+      const idx = next.findIndex((b) => b.kind === "user" && b.messageId === event.id);
+      if (idx >= 0 && next[idx].kind === "user") {
+        next[idx] = { ...next[idx], retracted: true, pending: false };
+      }
+      return next;
+    }
     case "thinking.delta": {
       if (last?.kind === "thinking" && last.durationMs === undefined) {
         next[next.length - 1] = { ...last, text: last.text + event.text };
@@ -115,7 +129,7 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
     case "tool.end": {
       const idx = findTool(next, event.callId);
       const patch: Partial<ToolBlock> = {
-        status: event.ok ? "done" : "error",
+        status: event.denied ? "denied" : event.ok ? "done" : "error",
         toolKind: event.kind,
         diff: event.diff,
         stats: event.stats,
@@ -132,7 +146,7 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
           callId: event.callId,
           toolKind: event.kind,
           title: event.kind,
-          status: event.ok ? "done" : "error",
+          status: "error",
           chunk: "",
           ...patch,
         });
@@ -151,6 +165,9 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       return closeOpenWork(next);
     case "run.done":
       return closeOpenWork(next);
+    case "run.usage":
+      next.push({ id: nid("use"), kind: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens });
+      return next;
     default:
       return next;
   }

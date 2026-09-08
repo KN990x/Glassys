@@ -22,7 +22,13 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
           </span>
         )}
         <span className={`pill ${block.status}`}>
-          {block.status === "running" ? t("tool.running") : block.status === "error" ? t("tool.error") : t("tool.done")}
+          {block.status === "running"
+            ? t("tool.running")
+            : block.status === "denied"
+              ? t("tool.denied")
+              : block.status === "error"
+                ? t("tool.error")
+                : t("tool.done")}
         </span>
       </button>
       {open && (

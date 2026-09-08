@@ -86,3 +86,25 @@ export function extractDiff(value: unknown): { diff?: string; stats?: { add: num
   }
   return truncated ? { truncated: true } : {};
 }
+
+export function toolDenied(status?: string, error?: string): boolean {
+  const s = (status || "").toLowerCase();
+  const e = (error || "").toLowerCase();
+  return (
+    s === "denied" ||
+    s === "rejected" ||
+    e.includes("denied") ||
+    e.includes("auto-review") ||
+    e.includes("auto review")
+  );
+}
+
+export function promptWithAttachments(
+  text: string,
+  attachments?: { path: string; mime: string; name: string }[],
+): string {
+  if (!attachments?.length) return text;
+  const lines = attachments.map((a) => `- ${a.name} (${a.mime}): ${a.path}`);
+  const note = `The user attached ${attachments.length} image(s) at these absolute paths:\n${lines.join("\n")}`;
+  return text.trim() ? `${text.trim()}\n\n${note}` : note;
+}

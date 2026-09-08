@@ -4,6 +4,7 @@ import {
   asRecord,
   errorMessage,
   pendingRun,
+  promptWithAttachments,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -154,11 +155,16 @@ class AcpSession implements AdapterSession {
     return new AcpSession(rpc, sessionId, sessionId, cleanupHost);
   }
 
-  async send(text: string, onEvent: Parameters<AdapterSession["send"]>[1], sendOpts?: { model?: string }) {
+  async send(
+    text: string,
+    onEvent: Parameters<AdapterSession["send"]>[1],
+    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+  ) {
     if (sendOpts?.model && sendOpts.model !== "default") {
       await applySessionModel(this.rpc, this.sessionId, sendOpts.model);
     }
     const runId = randomUUID();
+    const promptText = promptWithAttachments(text, sendOpts?.attachments);
     return pendingRun(runId, async ({ isCancelled }) => {
       const onUpdate = (params: unknown) => {
         for (const ev of mapAcpUpdate(params, this.tools)) onEvent(ev);
@@ -166,7 +172,7 @@ class AcpSession implements AdapterSession {
       const off = this.rpc.onNotification("session/update", onUpdate);
       const prompt = this.rpc.request("session/prompt", {
         sessionId: this.sessionId,
-        prompt: [{ type: "text", text }],
+        prompt: [{ type: "text", text: promptText }],
       });
       let stop = false;
       let cancelledAt = 0;
@@ -228,6 +234,7 @@ export const acpAdapter: Adapter = {
     resume: false,
     discover: true,
     toolConfirmation: "auto-review-deny",
+    attachments: false,
     auth: { kind: "cli-binary", envNames: [] },
     defaultModel: { id: "default", params: [] },
     liveCatalog: false,

@@ -33,8 +33,11 @@ describe("protocol v1", () => {
     expect(isClientMessage({ type: "config.set", patch: {} })).toBe(true);
     expect(isClientMessage({ type: "config.set" })).toBe(false);
     expect(isClientMessage({ type: "ping" })).toBe(true);
-    expect(isClientMessage({ type: "run.cancel" })).toBe(true);
-    expect(isClientMessage({ type: "config.get" })).toBe(true);
+    expect(isClientMessage({ type: "queue.cancel", id: "q1" })).toBe(true);
+    expect(isClientMessage({ type: "queue.cancel" })).toBe(false);
+    expect(isClientMessage({ type: "thread.new" })).toBe(true);
+    expect(isClientMessage({ type: "thread.switch", id: "t1" })).toBe(true);
+    expect(isClientMessage({ type: "thread.switch" })).toBe(false);
     expect(isClientMessage({ type: "nope" })).toBe(false);
   });
 
@@ -51,6 +54,9 @@ describe("protocol v1", () => {
     expect(isPersistedTranscriptEvent({ type: "run.start", runId: "1" })).toBe(false);
     expect(isPersistedTranscriptEvent({ type: "run.done" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "user.message", text: "x" })).toBe(true);
+    expect(isPersistedTranscriptEvent({ type: "user.retracted", id: "m1" })).toBe(true);
+    expect(isPersistedTranscriptEvent({ type: "run.usage", inputTokens: 1 })).toBe(true);
+    expect(isTranscriptEvent({ type: "queue.snapshot", items: [] } as never)).toBe(false);
   });
 
   it("treats missing available as selectable and ok:false as not", async () => {

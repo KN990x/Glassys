@@ -38,6 +38,28 @@ describe("transcript reducer", () => {
     expect(closed.find((b) => b.kind === "tool")).toMatchObject({ status: "done" });
   });
 
+  it("marks retracted user messages, denied tools, and usage", () => {
+    const withUser = reduceTranscript([], {
+      type: "user.message",
+      id: "m1",
+      text: "pic",
+      attachments: [{ id: "u1", mime: "image/png", name: "a.png" }],
+    });
+    expect(withUser[0]).toMatchObject({ kind: "user", messageId: "m1", attachments: [{ id: "u1" }] });
+    const retracted = reduceTranscript(withUser, { type: "user.retracted", id: "m1" });
+    expect(retracted[0]).toMatchObject({ kind: "user", retracted: true });
+    const denied = reduceTranscript([], {
+      type: "tool.end",
+      callId: "c2",
+      ok: false,
+      denied: true,
+      kind: "write",
+    });
+    expect(denied[0]).toMatchObject({ kind: "tool", status: "denied" });
+    const usage = reduceTranscript([], { type: "run.usage", inputTokens: 3, outputTokens: 9 });
+    expect(usage[0]).toMatchObject({ kind: "usage", inputTokens: 3, outputTokens: 9 });
+  });
+
   it("closes open thinking on run.done without inventing a duration", () => {
     const open = reduceTranscript([], { type: "thinking.delta", text: "plan" });
     expect(open[0]).toMatchObject({ kind: "thinking", text: "plan" });

@@ -5,6 +5,7 @@ import {
   asRecord,
   errorMessage,
   pendingRun,
+  promptWithAttachments,
   requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
@@ -202,15 +203,20 @@ class OpencodeSession implements AdapterSession {
     }
   }
 
-  async send(text: string, onEvent: Parameters<AdapterSession["send"]>[1], sendOpts?: { model?: string }) {
+  async send(
+    text: string,
+    onEvent: Parameters<AdapterSession["send"]>[1],
+    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+  ) {
     if (sendOpts?.model) this.model = sendOpts.model;
     const runId = randomUUID();
     const model = parseModel(this.model);
+    const promptText = promptWithAttachments(text, sendOpts?.attachments);
     return pendingRun(runId, async ({ signal, isCancelled }) => {
       const prompt = this.client.session.prompt({
         path: { id: this.agentId },
         body: {
-          parts: [{ type: "text", text }],
+          parts: [{ type: "text", text: promptText }],
           ...(model ? { model } : {}),
         },
       } as never);
@@ -301,6 +307,7 @@ export const opencodeAdapter: Adapter = {
     resume: true,
     discover: false,
     toolConfirmation: "none",
+    attachments: false,
     auth: { kind: "cli-binary", envNames: ["OPENCODE_API_KEY"] },
     defaultModel: { id: "default", params: [] },
     liveCatalog: true,

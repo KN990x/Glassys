@@ -11,7 +11,12 @@ export const paths = {
   config: () => join(defaultDataDir(), "config.yaml"),
   secrets: () => join(defaultDataDir(), "secrets.json"),
   state: () => join(defaultDataDir(), "state.json"),
-  transcript: () => join(defaultDataDir(), "transcript.jsonl"),
+  legacyTranscript: () => join(defaultDataDir(), "transcript.jsonl"),
+  threads: () => join(defaultDataDir(), "threads"),
+  threadDir: (id: string) => join(defaultDataDir(), "threads", id),
+  threadMeta: (id: string) => join(defaultDataDir(), "threads", id, "meta.json"),
+  threadTranscript: (id: string) => join(defaultDataDir(), "threads", id, "transcript.jsonl"),
+  uploads: () => join(defaultDataDir(), "uploads"),
   adapterStore: (id: string) =>
     id === "cursor" ? join(defaultDataDir(), "cursor-store") : join(defaultDataDir(), `${id}-store`),
 };
