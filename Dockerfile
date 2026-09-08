@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22.13-bookworm-slim AS build
+FROM node:22.23-bookworm-slim AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -18,7 +18,7 @@ COPY . .
 RUN pnpm run build
 RUN pnpm --filter @glassys/gateway deploy --prod --legacy /out
 
-FROM node:22.13-bookworm-slim
+FROM node:22.23-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 ENV GLASSYS_DATA_DIR=/data
