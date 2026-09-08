@@ -18,8 +18,25 @@ import { SdkLoginControls } from "../components/SdkLogin";
 import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
+import { operatorError } from "../operatorError";
 
 type StepId = "adapter" | "workspace" | "phone" | "credential" | "model" | "rules" | "execution" | "acp";
+
+export function wizardStepIds(caps?: {
+  models?: boolean;
+  discover?: boolean;
+  settingSources?: boolean;
+  sandbox?: boolean;
+  autoRun?: boolean;
+  toolConfirmation?: string;
+}): StepId[] {
+  const s: StepId[] = ["adapter", "workspace", "phone", "credential"];
+  if (caps?.models !== false) s.push("model");
+  if (caps?.discover) s.push("acp");
+  if (caps?.settingSources) s.push("rules");
+  if (caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
+  return s;
+}
 
 export function wizardFinishPatch(input: {
   adapterId: string;
@@ -81,13 +98,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   const current = adapters.find((a) => a.id === adapterId) ?? adapters[0];
   const caps = current?.capabilities;
 
-  const steps = useMemo<StepId[]>(() => {
-    const s: StepId[] = ["adapter", "workspace", "phone", "credential", "model"];
-    if (caps?.discover) s.push("acp");
-    if (caps?.settingSources) s.push("rules");
-    if (caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
-    return s;
-  }, [adapterId, caps]);
+  const steps = useMemo<StepId[]>(() => wizardStepIds(caps), [adapterId, caps]);
 
   useEffect(() => {
     setStep((s) => Math.min(s, Math.max(0, steps.length - 1)));
@@ -314,7 +325,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
       }
       setStep((s) => Math.min(s + 1, steps.length - 1));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(operatorError(err instanceof Error ? err.message : String(err), t));
     } finally {
       setSubmitting(false);
     }
@@ -368,6 +379,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 >
                   <option value="dark">{t("settings.theme.dark")}</option>
                   <option value="light">{t("settings.theme.light")}</option>
+                  <option value="system">{t("settings.theme.system")}</option>
                 </select>
               </label>
             </div>
@@ -400,6 +412,8 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                       {t("wizard.adapter.unavailable")}
                       {a.available && !a.available.ok && a.available.error ? ` ${a.available.error}` : ""}
                     </span>
+                  ) : a.id === "acp" ? (
+                    <span className="muted"> — {t("wizard.acp.needsCommand")}</span>
                   ) : null}
                 </span>
               </label>
@@ -516,7 +530,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               <input
                 value={optionString(options, "command", "")}
                 onChange={(e) => setOptions(setOption(options, "command", e.target.value))}
-                placeholder="npx"
+                placeholder={t("wizard.acp.commandPlaceholder")}
               />
             </label>
             <label>
@@ -524,7 +538,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               <input
                 value={optionStringArray(options, "args", []).join(" ")}
                 onChange={(e) => setOptions(setOption(options, "args", e.target.value.split(/\s+/).filter(Boolean)))}
-                placeholder="-y @anthropic-ai/claude-code --acp"
+                placeholder={t("wizard.acp.argsPlaceholder")}
               />
             </label>
           </div>

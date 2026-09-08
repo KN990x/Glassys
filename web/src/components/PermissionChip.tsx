@@ -25,8 +25,15 @@ export function PermissionChip({
     function onDoc(e: MouseEvent) {
       if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   if (!caps || !visible) return null;
@@ -54,7 +61,7 @@ export function PermissionChip({
 
   return (
     <div className="chip-wrap" ref={wrap}>
-      <button type="button" className="ghost tiny" onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="ghost tiny" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {sandbox ? `${label} · ${t("wizard.exec.sandbox")}` : label}
       </button>
       {open && (

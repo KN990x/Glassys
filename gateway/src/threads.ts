@@ -20,6 +20,7 @@ export interface ThreadMeta {
   agentId: string | null;
   createdAt: string;
   updatedAt: string;
+  titleManual?: boolean;
 }
 
 const withThreads = createMutex();
@@ -238,6 +239,7 @@ export async function refreshLiveTitle(): Promise<void> {
     if (!id) return;
     const meta = await loadMeta(id);
     if (!meta) return;
+    if (meta.titleManual) return;
     const events = await readEvents(paths.threadTranscript(id));
     const next = titleFrom(meta.cwd, events);
     if (!next || next === meta.title) return;
@@ -253,4 +255,24 @@ export async function removeThread(id: string): Promise<void> {
     if (!meta) throw new Error("Thread not found");
     await rm(paths.threadDir(id), { recursive: true, force: true });
   });
+}
+
+export async function renameThread(id: string, title: string): Promise<ThreadMeta> {
+  return withThreads(async () => {
+    if (!id || id.includes("/") || id.includes("..")) throw new Error("invalid thread id");
+    const next = title.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!next) throw new Error("title required");
+    const meta = await loadMeta(id);
+    if (!meta) throw new Error("Thread not found");
+    const updated: ThreadMeta = { ...meta, title: next, titleManual: true, updatedAt: nowIso() };
+    await writeMeta(updated);
+    return updated;
+  });
+}
+
+export async function readThreadBundle(id: string): Promise<{ meta: ThreadMeta; events: TranscriptEvent[] } | null> {
+  if (!id || id.includes("/") || id.includes("..")) return null;
+  const meta = await loadMeta(id);
+  if (!meta) return null;
+  return { meta, events: await readEvents(paths.threadTranscript(id)) };
 }

@@ -4,10 +4,10 @@ import {
   errorMessage,
   pendingRun,
   promptWithAttachments,
-  requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
+  type PromptAttachment,
 } from "@glassys/adapter-contract";
 import { mergeModelCatalog, optionBool, optionString, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { claudeRunStatus, claudeSessionId, isClaudeResult, mapClaudeMessage } from "./mapper.js";
@@ -90,6 +90,27 @@ class PromptQueue {
   }
 }
 
+function waitUntil(pred: () => boolean, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setInterval(() => {
+      if (pred()) done();
+    }, 50);
+    if (signal.aborted || pred()) {
+      done();
+      return;
+    }
+    signal.addEventListener("abort", done);
+  });
+}
+
 function usableSessionId(id: string | undefined): id is string {
   return Boolean(id) && id !== "pending";
 }
@@ -160,7 +181,7 @@ class ClaudeSession implements AdapterSession {
   async send(
     text: string,
     onEvent: Parameters<AdapterSession["send"]>[1],
-    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+    sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
     if (sendOpts?.model) await this.retarget(sendOpts.model);
     const id = randomUUID();
@@ -185,17 +206,28 @@ class ClaudeSession implements AdapterSession {
         const mapState = { sawStreamEvent: false };
         while (!stop) {
           if (isCancelled() && cancelledAt && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS) {
+            try {
+              query.close?.();
+            } catch {
+              /* ignore */
+            }
             return "cancelled";
           }
+          const abortTick = new AbortController();
           const next = await Promise.race([
             iterator.next().then((v) => ({ kind: "msg" as const, v })),
-            new Promise<{ kind: "tick" }>((resolve) => {
-              setTimeout(() => resolve({ kind: "tick" }), 50);
-            }),
+            waitUntil(() => isCancelled() || stop, abortTick.signal).then(() => ({ kind: "tick" as const })),
           ]);
+          abortTick.abort();
           if (next.kind === "tick") {
-            if (isCancelled() && !cancelledAt) continue;
-            if (!isCancelled()) continue;
+            if (isCancelled() && cancelledAt && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS) {
+              try {
+                query.close?.();
+              } catch {
+                /* ignore */
+              }
+              return "cancelled";
+            }
             continue;
           }
           if (next.v.done) return isCancelled() ? "cancelled" : "finished";
@@ -310,7 +342,6 @@ export const claudeAdapter: Adapter = {
 
   async probe() {
     await loadSdk();
-    await requireHostCommand("claude", "Claude CLI is not on PATH. Install the Claude Code CLI on this host.");
   },
 
   async create(opts) {

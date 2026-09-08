@@ -131,9 +131,13 @@ export function attachWs(
           parsed = JSON.parse(String(raw));
         } catch {
           log("warn", "invalid ws json");
+          if (state.auth) hub.send(ws, { type: "config.error", message: "invalid json" });
           return;
         }
-        if (!isClientMessage(parsed)) return;
+        if (!isClientMessage(parsed)) {
+          if (state.auth) hub.send(ws, { type: "config.error", message: "unknown message" });
+          return;
+        }
         try {
           await handleClient(ws, state, parsed, req);
         } catch (err) {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer, type Server } from "node:http";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,6 +8,8 @@ import { defaultConfig, PROTOCOL_VERSION } from "@glassys/protocol";
 import { handleHttp } from "./http.js";
 import { hashPassword, loadSecrets, patchSecrets } from "./secrets.js";
 import { resetLiveThreadCache } from "./threads.js";
+import { setRestartHandler } from "./restart.js";
+import { setRuntimeBusyForTests } from "./runtime.js";
 
 async function listen(server: Server): Promise<string> {
   return new Promise((resolve) => {
@@ -45,6 +47,8 @@ describe("http api", () => {
 
   afterEach(async () => {
     resetLiveThreadCache();
+    setRuntimeBusyForTests(false);
+    setRestartHandler(async () => undefined);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
@@ -165,5 +169,70 @@ describe("http api", () => {
     const get = await fetch(`${base}/api/uploads/${att.id}`, { headers: auth });
     expect(get.status).toBe(200);
     expect(get.headers.get("content-type")).toContain("image/png");
+  });
+
+  it("renames, exports, and refuses thread mutations while busy", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const auth = { Authorization: `Bearer ${token}` };
+    const listed = (await (await fetch(`${base}/api/threads`, { headers: auth })).json()) as {
+      threads: Array<{ id: string; title: string }>;
+      currentId: string;
+    };
+    const id = listed.currentId;
+    const renamed = await fetch(`${base}/api/threads/${id}`, {
+      method: "PATCH",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Ops box" }),
+    });
+    expect(renamed.status).toBe(200);
+    const after = (await renamed.json()) as { threads: Array<{ id: string; title: string }> };
+    expect(after.threads.find((t) => t.id === id)?.title).toBe("Ops box");
+    const empty = await fetch(`${base}/api/threads/${id}`, {
+      method: "PATCH",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "  " }),
+    });
+    expect(empty.status).toBe(400);
+    const exported = await fetch(`${base}/api/threads/${id}/export`, { headers: auth });
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get("content-type")).toContain("text/markdown");
+    expect(await exported.text()).toContain("Ops box");
+    setRuntimeBusyForTests(true);
+    const created = await fetch(`${base}/api/threads`, { method: "POST", headers: auth });
+    expect(created.status).toBe(409);
+    const switched = await fetch(`${base}/api/threads/${id}/switch`, { method: "POST", headers: auth });
+    expect(switched.status).toBe(409);
+    setRuntimeBusyForTests(false);
+  });
+
+  it("does not clear the session cookie on logout without a session", async () => {
+    const res = await fetch(`${base}/api/auth/logout`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("accepts POST /api/admin/restart without exiting the process", async () => {
+    const restart = vi.fn(async () => undefined);
+    setRestartHandler(restart);
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const res = await fetch(`${base}/api/admin/restart`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(202);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(restart).toHaveBeenCalled();
   });
 });

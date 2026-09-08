@@ -87,7 +87,9 @@ export function registerHostHandlers(
     const id = String(rec.terminalId ?? "");
     const child = terminals.get(id);
     if (!child) return { exitCode: 0 };
-    const code = await new Promise<number>((resolveWait) => child.on("close", (c) => resolveWait(c ?? 0)));
+    if (child.exitCode != null) return { exitCode: child.exitCode };
+    if (child.signalCode) return { exitCode: 1 };
+    const code = await new Promise<number>((resolveWait) => child.once("close", (c) => resolveWait(c ?? 0)));
     return { exitCode: code };
   });
   rpc.handle("terminal/kill", (params) => {

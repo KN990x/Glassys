@@ -15,8 +15,15 @@
     <script>
       (function () {
         try {
-          var theme = localStorage.getItem("glassys_theme");
-          if (theme !== "light" && theme !== "dark") return;
+          var stored = localStorage.getItem("glassys_theme");
+          var theme = stored;
+          if (theme !== "light" && theme !== "dark") {
+            theme =
+              window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+            if (stored !== "system") return;
+          }
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;
           var meta = document.querySelector('meta[name="theme-color"]');

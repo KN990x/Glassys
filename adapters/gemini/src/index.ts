@@ -7,6 +7,7 @@ import {
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
+  type PromptAttachment,
 } from "@glassys/adapter-contract";
 import { type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { mapGeminiChunk } from "./mapper.js";
@@ -66,7 +67,7 @@ class GeminiSession implements AdapterSession {
   async send(
     text: string,
     onEvent: Parameters<AdapterSession["send"]>[1],
-    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+    sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
     if (sendOpts?.model) await this.retarget(sendOpts.model);
     const runId = randomUUID();

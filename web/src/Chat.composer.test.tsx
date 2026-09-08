@@ -63,6 +63,8 @@ vi.mock("./api", () => ({
     switchThread: vi.fn(async () => ({ threads: [], currentId: null })),
     deleteThread: vi.fn(async () => ({ threads: [], currentId: null })),
     restart: vi.fn(async () => ({ ok: true })),
+    renameThread: vi.fn(async () => ({ threads: [], currentId: null })),
+    exportThread: vi.fn(async () => ({ blob: new Blob(["# t"]), name: "t.md" })),
     upload: vi.fn(async (file: File) => ({ id: `up-${file.name}`, mime: file.type, name: file.name })),
     reachability: vi.fn(async () => ({
       bind: "127.0.0.1",
@@ -209,7 +211,7 @@ describe("Chat composer and layout", () => {
     const send = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
     await typeIn(textarea, "hello");
     expect(send().disabled).toBe(true);
-    expect(host.querySelector(".empty")).toBeNull();
+    expect(host.querySelector(".empty")?.textContent).toMatch(/connecting/i);
     await act(async () => {
       socket.emit({ type: "transcript.snapshot", events: [] });
     });
@@ -272,9 +274,9 @@ describe("Chat composer and layout", () => {
     await act(async () => {
       host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click();
     });
-    const row = host.querySelector(".thread-list")?.textContent ?? "";
-    expect(row).toContain("cursor");
-    expect(row).toContain("/tmp/ws");
+    const drawer = host.querySelector(".thread-drawer")?.textContent ?? "";
+    expect(drawer).toContain("cursor");
+    expect(drawer).toContain("/tmp/ws");
   });
 
   it("shows the host user and hostname in the topbar", async () => {
@@ -305,9 +307,9 @@ describe("Chat composer and layout", () => {
     await act(async () => {
       host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click();
     });
-    const row = host.querySelector(".thread-list")?.textContent ?? "";
-    expect(row).toContain("/opt/stack");
-    expect(row).toContain("ops");
+    const drawer = host.querySelector(".thread-drawer")?.textContent ?? "";
+    expect(drawer).toContain("/opt/stack");
+    expect(drawer).toContain("ops");
   });
 
   it("shows Working and queued together when a run and the FIFO both have work", async () => {

@@ -79,3 +79,18 @@ test("gatewayListenPort reads GLASSYS_PORT", () => {
   assert.equal(gatewayListenPort({ GLASSYS_PORT: "9000" }), 9000);
   assert.equal(gatewayListenPort({ GLASSYS_PORT: "nope" }), 8787);
 });
+
+test("unit and plist inject GLASSYS_PORT from listenEnv", () => {
+  const unit = renderSystemdUserUnit({
+    ...opts,
+    listenEnv: { GLASSYS_PORT: "9000", GLASSYS_BIND: "127.0.0.1" },
+  });
+  assert.match(unit, /Environment=GLASSYS_PORT=9000/);
+  assert.match(unit, /Environment=GLASSYS_BIND=127.0.0.1/);
+  const xml = renderLaunchdPlist({
+    ...opts,
+    listenEnv: { GLASSYS_PORT: "9000", GLASSYS_BIND: "127.0.0.1" },
+  });
+  assert.match(xml, /<key>GLASSYS_PORT<\/key>\s*<string>9000<\/string>/);
+  assert.match(xml, /<key>GLASSYS_BIND<\/key>\s*<string>127.0.0.1<\/string>/);
+});

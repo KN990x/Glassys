@@ -51,4 +51,24 @@ describe("uploads", () => {
     await gcUploads(Date.now() + 48 * 60 * 60 * 1000);
     expect(await loadUpload(att.id)).toBeNull();
   });
+
+  it("garbage-collects orphan copies in the workspace upload dir", async () => {
+    const { readdir, utimes, writeFile } = await import("node:fs/promises");
+    const YAML = (await import("yaml")).default;
+    const { defaultConfig } = await import("@glassys/protocol");
+    const cwd = await mkdtemp(join(tmpdir(), "glassys-cwdup-"));
+    const cfg = defaultConfig();
+    cfg.agent.cwd = cwd;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const att = await saveUpload(Buffer.from("png-bytes"), "image/png", "shot.png");
+    await materializeAttachments(cwd, [att]);
+    const copies = (await readdir(join(cwd, ".glassys-uploads"))).filter((n) => n !== ".gitignore");
+    expect(copies.length).toBeGreaterThan(0);
+    const dest = join(cwd, ".glassys-uploads", copies[0]!);
+    const old = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    await utimes(dest, old, old);
+    const { gcUploads } = await import("./uploads.js");
+    await gcUploads(Date.now());
+    expect(await readdir(join(cwd, ".glassys-uploads"))).not.toContain(copies[0]);
+  });
 });

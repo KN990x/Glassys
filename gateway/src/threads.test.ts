@@ -43,4 +43,17 @@ describe("threads store", () => {
     const { removeThread } = await import("./threads.js");
     await expect(removeThread("missing")).rejects.toThrow(/not found/);
   });
+
+  it("keeps a manual title when the first message would refresh it", async () => {
+    const id = await ensureLiveThread();
+    const { renameThread, refreshLiveTitle, listThreads } = await import("./threads.js");
+    await renameThread(id, "Ops box");
+    await writeFile(
+      paths.threadTranscript(id),
+      `${JSON.stringify({ type: "user.message", text: "hello from ops" })}\n`,
+      "utf8",
+    );
+    await refreshLiveTitle();
+    expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Ops box");
+  });
 });

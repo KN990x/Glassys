@@ -9,6 +9,7 @@ import {
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
+  type PromptAttachment,
 } from "@glassys/adapter-contract";
 import { type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { isCodexTurnDone, mapCodexJsonl, threadIdFromEvent } from "./mapper.js";
@@ -52,7 +53,7 @@ class CodexSession implements AdapterSession {
   async send(
     text: string,
     onEvent: Parameters<AdapterSession["send"]>[1],
-    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+    sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
     const prompt = promptWithAttachments(text, sendOpts?.attachments);
     const runId = randomUUID();
@@ -89,7 +90,7 @@ class CodexSession implements AdapterSession {
 
 export const codexAdapter: Adapter = {
   id: "codex",
-  displayName: "Codex CLI",
+  displayName: "Codex",
   description: "OpenAI Codex SDK (runStreamed / resumeThread). Not print-mode exec.",
   capabilities: {
     models: true,

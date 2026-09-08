@@ -50,6 +50,14 @@ export function gatewayListenPort(env = process.env) {
   return Number.isFinite(n) && n > 0 ? n : 8787;
 }
 
+export function listenEnvFrom(env = process.env) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  if (typeof env.GLASSYS_PORT === "string" && env.GLASSYS_PORT.trim()) out.GLASSYS_PORT = env.GLASSYS_PORT.trim();
+  if (typeof env.GLASSYS_BIND === "string" && env.GLASSYS_BIND.trim()) out.GLASSYS_BIND = env.GLASSYS_BIND.trim();
+  return out;
+}
+
 export function nodeMeetsMin(version = process.versions.node) {
   const parts = String(version)
     .split(".")
@@ -72,6 +80,8 @@ export function nodeMeetsMin(version = process.versions.node) {
  *   webDir: string;
  *   home: string;
  *   path: string;
+ *   graphical?: Record<string, string>;
+ *   listenEnv?: Record<string, string>;
  * }} opts
  */
 export function renderSystemdUserUnit(opts) {
@@ -83,6 +93,9 @@ export function renderSystemdUserUnit(opts) {
     `GLASSYS_WEB_DIR=${opts.webDir}`,
   ];
   for (const [key, value] of Object.entries(opts.graphical ?? {})) {
+    env.push(`${key}=${value}`);
+  }
+  for (const [key, value] of Object.entries(opts.listenEnv ?? {})) {
     env.push(`${key}=${value}`);
   }
   return `[Unit]
@@ -123,6 +136,7 @@ export function renderLaunchdPlist(opts) {
     GLASSYS_DATA_DIR: opts.dataDir,
     GLASSYS_WEB_DIR: opts.webDir,
     ...(opts.graphical ?? {}),
+    ...(opts.listenEnv ?? {}),
   };
   const envXml = Object.entries(env)
     .map(
@@ -188,6 +202,7 @@ export function resolveInstallPaths(env = process.env, root = repoRootFrom()) {
     logOut: join(dataDir, "glassys.log"),
     logErr: join(dataDir, "glassys.err"),
     graphical: graphicalEnvFrom(env),
+    listenEnv: listenEnvFrom(env),
     port: gatewayListenPort(env),
   };
 }
@@ -224,9 +239,31 @@ function printNextSteps(opts) {
   const port = opts.port || gatewayListenPort();
   console.log(`Open  http://127.0.0.1:${port}`);
   console.log(`Data  ${opts.dataDir}`);
+  if (waitForHealth(port)) console.log("Health  ok");
+  else console.warn(`Health  gateway did not answer GET http://127.0.0.1:${port}/health yet. Check service:status.`);
   console.log("");
   console.log("pnpm run service:status     # is it running?");
+  console.log("pnpm run service:upgrade    # git pull, rebuild, restart");
   console.log("pnpm run service:uninstall  # stop and remove (keeps data/)");
+}
+
+function waitForHealth(port, timeoutMs = 8000) {
+  const script = `
+    const port = ${Number(port)};
+    const deadline = Date.now() + ${Number(timeoutMs)};
+    (async () => {
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetch("http://127.0.0.1:" + port + "/health");
+          if (res.ok) process.exit(0);
+        } catch {}
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      process.exit(1);
+    })();
+  `;
+  const probe = spawnSync(process.execPath, ["-e", script], { encoding: "utf8" });
+  return probe.status === 0;
 }
 
 function enableLinger(username) {
@@ -315,9 +352,10 @@ function statusLinux() {
 export function main(argv = process.argv.slice(2), platform = process.platform) {
   const cmd = argv[0] || "install";
   if (cmd === "-h" || cmd === "--help" || cmd === "help") {
-    console.log(`Usage: node scripts/host-service.mjs <install|uninstall|status|print>
+    console.log(`Usage: node scripts/host-service.mjs <install|uninstall|status|upgrade|print>
 
 install     build if needed, then install and start a user service
+upgrade     git pull --ff-only, pnpm install, build, reinstall the user service
 uninstall   stop and remove the user service
 status      show whether the service is running
 print       write the unit/plist to stdout (no install)
@@ -352,12 +390,32 @@ print       write the unit/plist to stdout (no install)
     return;
   }
 
+  if (cmd === "upgrade") {
+    upgradeRepo(root);
+    mkdirSync(opts.dataDir, { recursive: true });
+    if (platform === "darwin") installDarwin(opts);
+    else installLinux(opts);
+    return;
+  }
+
   if (cmd !== "install") fail(`Unknown command: ${cmd}`);
 
   ensureBuilt(root);
   mkdirSync(opts.dataDir, { recursive: true });
   if (platform === "darwin") installDarwin(opts);
   else installLinux(opts);
+}
+
+function upgradeRepo(root) {
+  const pull = run("git", ["pull", "--ff-only"], { cwd: root });
+  if (pull.status !== 0) {
+    console.warn("git pull --ff-only failed; continuing with the current clone.");
+    if (pull.stderr) console.warn(pull.stderr.trim());
+  }
+  const inst = spawnSync("pnpm", ["install"], { cwd: root, stdio: "inherit" });
+  if (inst.status !== 0) fail("pnpm install failed.");
+  const built = spawnSync("pnpm", ["run", "build"], { cwd: root, stdio: "inherit" });
+  if (built.status !== 0) fail("pnpm run build failed.");
 }
 
 function isMainModule() {

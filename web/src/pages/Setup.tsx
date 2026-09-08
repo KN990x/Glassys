@@ -1,8 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { api, setToken } from "../api";
-import { useT } from "../i18n";
+import { useT, type Locale } from "../i18n";
+import { LocaleSwitch } from "../components/LocaleSwitch";
+import { operatorError } from "../operatorError";
 
-export function Setup({ onDone }: { onDone: () => void }) {
+export function Setup({
+  onDone,
+  locale,
+  onLocale,
+}: {
+  onDone: () => void;
+  locale: Locale;
+  onLocale: (locale: Locale) => void;
+}) {
   const t = useT();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -22,7 +32,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
       setToken(token);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const raw = err instanceof Error ? err.message : String(err);
+      const mapped = operatorError(raw, t);
+      setError(mapped === raw ? t("setup.error") : mapped);
     } finally {
       setSubmitting(false);
     }
@@ -38,6 +50,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             <p className="muted">{t("app.tagline")}</p>
           </div>
         </div>
+        <LocaleSwitch locale={locale} onChange={onLocale} />
         <h2>{t("setup.title")}</h2>
         <p className="muted">{t("setup.body")}</p>
         <form onSubmit={submit} className="stack">

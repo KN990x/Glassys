@@ -67,7 +67,7 @@ describe("PermissionChip", () => {
     expect(saveConfig).not.toHaveBeenCalled();
   });
 
-  it("closes the popover on a click outside", async () => {
+  it("closes the popover on Escape and click outside", async () => {
     host = document.createElement("div");
     document.body.append(host);
     await act(async () => {
@@ -78,6 +78,16 @@ describe("PermissionChip", () => {
         </I18nProvider>,
       );
     });
+    await act(async () => {
+      host.querySelector("button")?.click();
+    });
+    expect(host.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".chip-pop")).toBeTruthy();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(host.querySelector(".chip-pop")).toBeNull();
+    expect(host.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
     await act(async () => {
       host.querySelector("button")?.click();
     });

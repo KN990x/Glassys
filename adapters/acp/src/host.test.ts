@@ -74,4 +74,26 @@ describe("registerHostHandlers autoRun", () => {
       cleanup();
     }
   });
+
+  it("wait_for_exit returns when the child has already exited", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-term-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const rpc = {
+      handle(method: string, fn: (params: unknown) => Promise<unknown> | unknown) {
+        map.set(method, fn);
+      },
+    };
+    const cleanup = registerHostHandlers(rpc, dir, { autoRun: true });
+    try {
+      const created = map.get("terminal/create")?.({
+        command: process.execPath,
+        args: ["-e", "process.exit(7)"],
+      }) as { terminalId: string };
+      await new Promise((r) => setTimeout(r, 80));
+      const result = await map.get("terminal/wait_for_exit")?.({ terminalId: created.terminalId });
+      expect(result).toEqual({ exitCode: 7 });
+    } finally {
+      cleanup();
+    }
+  });
 });

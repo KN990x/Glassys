@@ -34,10 +34,13 @@ import {
   openEmptyThread,
   rememberCwd,
   removeThread,
+  renameThread,
+  readThreadBundle,
   resetLiveThreadCache,
   startNewThread,
 } from "./threads.js";
 import { gcUploads, materializeAttachments } from "./uploads.js";
+import { eventsToMarkdown } from "./transcript-export.js";
 
 export interface Runtime {
   busy: boolean;
@@ -52,6 +55,10 @@ const runtime: Runtime = {
   fingerprint: null,
   identityAgent: null,
 };
+
+export function setRuntimeBusyForTests(busy: boolean): void {
+  runtime.busy = busy;
+}
 
 type QueueJob = {
   id: string;
@@ -694,6 +701,26 @@ export async function deleteLiveThread(id: string): Promise<void> {
     await broadcastSession();
   }
   await broadcastThreads();
+}
+
+export async function renameLiveThread(id: string, title: string): Promise<void> {
+  if (!id || id.includes("/") || id.includes("..")) throw new HttpError(400, "invalid thread id");
+  try {
+    await renameThread(id, title);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Thread not found";
+    if (message === "title required") throw new HttpError(400, message);
+    throw new HttpError(404, message);
+  }
+  await broadcastThreads();
+}
+
+export async function exportLiveThread(id: string): Promise<{ filename: string; markdown: string }> {
+  if (!id || id.includes("/") || id.includes("..")) throw new HttpError(400, "invalid thread id");
+  const bundle = await readThreadBundle(id);
+  if (!bundle) throw new HttpError(404, "Thread not found");
+  const slug = bundle.meta.title.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 40) || "thread";
+  return { filename: `${slug}.md`, markdown: eventsToMarkdown(bundle.meta, bundle.events) };
 }
 
 export async function initRuntime(): Promise<void> {

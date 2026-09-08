@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { I18nProvider } from "../i18n";
@@ -28,6 +28,7 @@ describe("ToolCard", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    vi.unstubAllGlobals();
   });
 
   it("copies the shell command and expands truncated output", async () => {
@@ -52,5 +53,27 @@ describe("ToolCard", () => {
     });
     expect(host.querySelector(".shell-out")?.textContent).toContain("line 0");
     expect(host.textContent).toContain("Show less");
+  });
+
+  it("shows copyFailed when the clipboard is unavailable", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    const writeText = async () => {
+      throw new Error("denied");
+    };
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <ToolCard block={shellBlock()} shellLines={4} showDiff={false} />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "Copy command")?.click();
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain("Clipboard unavailable");
   });
 });

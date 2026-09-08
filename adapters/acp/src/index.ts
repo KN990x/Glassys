@@ -12,6 +12,7 @@ import {
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
+  type PromptAttachment,
 } from "@glassys/adapter-contract";
 import {
   optionBool,
@@ -205,7 +206,7 @@ class AcpSession implements AdapterSession {
   async send(
     text: string,
     onEvent: Parameters<AdapterSession["send"]>[1],
-    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+    sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
     if (sendOpts?.model && sendOpts.model !== "default") {
       await applySessionModel(this.rpc, this.sessionId, sendOpts.model);
