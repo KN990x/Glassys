@@ -2,8 +2,10 @@ import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
   ConfigPatch,
+  MessageAttachment,
   ModelListResponse,
   RedactedConfig,
+  ThreadSummary,
 } from "@glassys/protocol";
 
 const TOKEN_KEY = "glassys_token";
@@ -46,6 +48,33 @@ export const api = {
     req<ModelListResponse>(adapter ? `/api/models?adapter=${encodeURIComponent(adapter)}` : "/api/models"),
   adapters: () => req<{ adapters: AdapterPublicInfo[] }>("/api/adapters"),
   discover: (id: string) => req<{ agents: AdapterDiscoverItem[] }>(`/api/adapters/${id}/discover`),
+  threads: () => req<{ threads: ThreadSummary[]; currentId: string | null }>("/api/threads"),
+  newThread: () => req<{ threads: ThreadSummary[]; currentId: string | null }>("/api/threads", { method: "POST" }),
+  switchThread: (id: string) =>
+    req<{ threads: ThreadSummary[]; currentId: string | null }>(`/api/threads/${encodeURIComponent(id)}/switch`, {
+      method: "POST",
+    }),
+  reachability: () =>
+    req<{ bind: string; port: number; publicUrl: string; loopback: boolean }>("/api/reachability"),
+  workspaces: (root?: string) =>
+    req<{ recents: string[]; workspaces: { path: string; name: string }[] }>(
+      root ? `/api/workspaces?root=${encodeURIComponent(root)}` : "/api/workspaces",
+    ),
+  upload: async (file: File) => {
+    const token = getToken();
+    const res = await fetch(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": file.type || "image/png",
+      },
+      credentials: "include",
+      body: file,
+    });
+    const data = (await res.json().catch(() => ({}))) as MessageAttachment & { error?: string };
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data as MessageAttachment;
+  },
   adapterStatus: (adapter: string) =>
     req<{
       loggedIn: boolean;

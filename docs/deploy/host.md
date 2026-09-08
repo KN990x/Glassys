@@ -9,10 +9,16 @@ This is how Glassys is installed: the agent needs the real workspace, host `git`
 One line from an empty directory (Node.js **22.13+** and pnpm; Corepack: `corepack enable`):
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/KN990x/Glassys/main/scripts/install.sh | bash
+```
+
+That script clones if needed, runs `pnpm install`, builds if `gateway/dist` is missing, then `pnpm run service:install`. The clone+pnpm form still works:
+
+```bash
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Already inside the repo: `pnpm install && pnpm run service:install`. That builds if needed and leaves the gateway running when you close the terminal.
+Already inside the repo: `bash scripts/install.sh` or `pnpm install && pnpm run service:install`. That builds if needed and leaves the gateway running when you close the terminal.
 
 ```bash
 cd glassys && pnpm run service:status

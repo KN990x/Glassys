@@ -15,9 +15,11 @@ import { useT } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
+import { WorkspacePicker } from "../components/WorkspacePicker";
+import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 
-type StepId = "adapter" | "workspace" | "credential" | "model" | "rules" | "execution" | "acp";
+type StepId = "adapter" | "workspace" | "phone" | "credential" | "model" | "rules" | "execution" | "acp";
 
 export function wizardFinishPatch(input: {
   adapterId: string;
@@ -80,7 +82,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   const caps = current?.capabilities;
 
   const steps = useMemo<StepId[]>(() => {
-    const s: StepId[] = ["adapter", "workspace", "credential", "model"];
+    const s: StepId[] = ["adapter", "workspace", "phone", "credential", "model"];
     if (caps?.discover) s.push("acp");
     if (caps?.settingSources) s.push("rules");
     if (caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
@@ -409,12 +411,11 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         {id === "workspace" && (
           <div className="stack">
             <p>{t("wizard.workspace.body")}</p>
-            <label>
-              {t("wizard.workspace.path")}
-              <input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder="/home/you/src/project" />
-            </label>
+            <WorkspacePicker value={cwd} onChange={setCwd} />
           </div>
         )}
+
+        {id === "phone" && <ReachabilityCard />}
 
         {id === "credential" && (
           <div className="stack">

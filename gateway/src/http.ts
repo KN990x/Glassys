@@ -28,8 +28,15 @@ import {
   cwdErrorInPatch,
   discoverAdapter,
   listAdapterInfo,
+  listLiveThreads,
   listModels,
+  startNewLiveThread,
+  switchLiveThread,
 } from "./runtime.js";
+import { loadState } from "./state.js";
+import { listWorkspaces } from "./workspaces.js";
+import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
+import { liveThreadId } from "./threads.js";
 
 const GATEWAY_VERSION = (() => {
   try {
@@ -47,7 +54,7 @@ class PayloadTooLargeError extends HttpError {
   }
 }
 
-async function readJson(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
+async function readBuffer(req: IncomingMessage, limit: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -55,9 +62,14 @@ async function readJson(req: IncomingMessage, limit = 1_000_000): Promise<unknow
     if (size > limit) throw new PayloadTooLargeError();
     chunks.push(chunk as Buffer);
   }
-  if (!size) return {};
+  return Buffer.concat(chunks);
+}
+
+async function readJson(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
+  const buf = await readBuffer(req, limit);
+  if (!buf.length) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(buf.toString("utf8"));
   } catch {
     throw new HttpError(400, "invalid json");
   }
@@ -333,6 +345,110 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     send(res, 202, { ok: true, restarting: true });
     setTimeout(() => void requestRestart(), 50);
+    return true;
+  }
+
+  if (method === "GET" && path === "/api/threads") {
+    if (!(await requireAuth(req, res))) return true;
+    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/threads") {
+    if (!(await requireAuth(req, res))) return true;
+    try {
+      await startNewLiveThread();
+      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "POST" && path.startsWith("/api/threads/") && path.endsWith("/switch")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/threads/".length, -"/switch".length));
+    try {
+      await switchLiveThread(id);
+      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "GET" && path === "/api/reachability") {
+    if (!(await requireAuth(req, res))) return true;
+    const cfg = await loadConfig();
+    const bind = cfg.network.bind;
+    send(res, 200, {
+      bind,
+      port: cfg.network.port,
+      publicUrl: cfg.network.publicUrl,
+      loopback: bind === "127.0.0.1" || bind === "::1" || bind === "localhost",
+    });
+    return true;
+  }
+
+  if (method === "GET" && path === "/api/workspaces") {
+    if (!(await requireAuth(req, res))) return true;
+    const state = await loadState();
+    const root = url.searchParams.get("root");
+    try {
+      send(res, 200, {
+        recents: state.recentCwds || [],
+        workspaces: root ? await listWorkspaces(root) : [],
+      });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/uploads") {
+    if (!(await requireAuth(req, res))) return true;
+    const mime = String(req.headers["content-type"] || "").split(";")[0]?.trim() || "";
+    const name =
+      (typeof url.searchParams.get("name") === "string" && url.searchParams.get("name")) || "image";
+    try {
+      const body = await readBuffer(req, MAX_UPLOAD_BYTES + 1);
+      send(res, 200, await saveUpload(body, mime, name));
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "GET" && path.startsWith("/api/uploads/")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/uploads/".length));
+    const file = await readUploadBody(id);
+    if (!file) {
+      send(res, 404, { error: "not found" });
+      return true;
+    }
+    res.writeHead(200, {
+      "Content-Type": file.mime,
+      "Cache-Control": "private, max-age=3600",
+      "Content-Disposition": `inline; filename="${file.name}"`,
+    });
+    res.end(file.body);
     return true;
   }
 

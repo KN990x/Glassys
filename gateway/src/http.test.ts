@@ -7,6 +7,7 @@ import YAML from "yaml";
 import { defaultConfig, PROTOCOL_VERSION } from "@glassys/protocol";
 import { handleHttp } from "./http.js";
 import { hashPassword, loadSecrets, patchSecrets } from "./secrets.js";
+import { resetLiveThreadCache } from "./threads.js";
 
 async function listen(server: Server): Promise<string> {
   return new Promise((resolve) => {
@@ -26,6 +27,7 @@ describe("http api", () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "glassys-http-"));
     process.env.GLASSYS_DATA_DIR = dir;
+    resetLiveThreadCache();
     delete process.env.GLASSYS_JWT_SECRET;
     const cfg = defaultConfig();
     cfg.agent.cwd = "";
@@ -42,6 +44,7 @@ describe("http api", () => {
   });
 
   afterEach(async () => {
+    resetLiveThreadCache();
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
@@ -118,5 +121,42 @@ describe("http api", () => {
     const body = (await claude.json()) as { models: Array<{ id: string }>; source: string };
     expect(body.models.some((m) => m.id === "grok-4.6")).toBe(false);
     expect(body.models.length).toBeGreaterThan(0);
+  });
+
+  it("lists threads, reachability, and image uploads for an operator", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const auth = { Authorization: `Bearer ${token}` };
+    const threads = await fetch(`${base}/api/threads`, { headers: auth });
+    expect(threads.status).toBe(200);
+    const listed = (await threads.json()) as { threads: unknown[]; currentId: string | null };
+    expect(listed.currentId).toBeTruthy();
+    const reach = await fetch(`${base}/api/reachability`, { headers: auth });
+    expect(reach.status).toBe(200);
+    const reachBody = (await reach.json()) as { bind: string; loopback: boolean; port: number };
+    expect(reachBody.bind).toBe("127.0.0.1");
+    expect(reachBody.loopback).toBe(true);
+    const ws = await fetch(`${base}/api/workspaces`, { headers: auth });
+    expect(ws.status).toBe(200);
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const up = await fetch(`${base}/api/uploads?name=a.png`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "image/png" },
+      body: png,
+    });
+    expect(up.status).toBe(200);
+    const att = (await up.json()) as { id: string; mime: string };
+    expect(att.mime).toBe("image/png");
+    const get = await fetch(`${base}/api/uploads/${att.id}`, { headers: auth });
+    expect(get.status).toBe(200);
+    expect(get.headers.get("content-type")).toContain("image/png");
   });
 });

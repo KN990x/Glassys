@@ -12,7 +12,7 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 
 - Self-hosted only. Every operator runs their own instance. Not a Glassys SaaS.
 - Product language: English default, UI i18n-ready (`en` + `es`). Public `README.md` is bilingual (English then Spanish). `AGENTS.md`, code comments, and UI message keys: English.
-- v1: **one profile / one agent / one thread / one run at a time** (FIFO queue).
+- v1: **one profile / one live thread / one run at a time** (FIFO queue). Archived threads are frozen transcripts (`data/threads/<id>/`). Changing adapter / cwd / options archives the current thread and opens an empty one. An explicit new thread with the same cwd also creates a new agent. Switching restores that thread’s config and `agentId` (resume if the adapter allows).
 
 ## What it is not (non-negotiable)
 
@@ -35,7 +35,7 @@ Anything that changes between operators lives in:
 
 Default bind is `127.0.0.1`. Binding `0.0.0.0` is an explicit operator choice in `config.yaml` / `GLASSYS_BIND`. Auto-run + host cwd is operator-level access to that machine — keep sandbox / auto-run visible in Settings when the adapter supports them.
 
-`agent.options` is opaque per adapter. Cursor: `settingSources`, `sandbox`, `autoRun`. Claude: `permissionMode`, `autoRun`. ACP: `command`, `args`, `registryId`. Changing adapter / cwd / options starts a new thread. Changing model is sticky on the next `send`.
+`agent.options` is opaque per adapter. Cursor: `settingSources`, `sandbox`, `autoRun`. Claude: `permissionMode`, `autoRun`. ACP: `command`, `args`, `registryId`. Changing adapter / cwd / options archives the live thread and starts a new one. Changing model is sticky on the next `send`.
 
 ## Layout
 
@@ -59,8 +59,8 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 
 - Contract: `protocolVersion` major `1`. Client rejects incompatible majors.
 - Runs go over **WebSocket with keepalive** (ping 15–30s, default 25). No SSE / long HTTP. Proxies and Cloudflare cut idle HTTP around ~100s; agent runs last minutes.
-- Client: `hello`, `auth`, `user.message`, `run.cancel`, `config.get` / `config.set`, `ping`.
-- Server: `thinking.*`, `text.delta`, `tool.*`, `run.*`, `session`, redacted `config`, `config.error`, plus `hello.ok` / `hello.incompatible`, `auth.ok` / `auth.error`, and `transcript.snapshot` for reconnect.
+- Client: `hello`, `auth`, `user.message` (optional `id`, `attachments`), `run.cancel`, `queue.cancel`, `thread.new` / `thread.switch`, `config.get` / `config.set`, `ping`.
+- Server: `thinking.*`, `text.delta`, `tool.*` (`tool.end.denied` when Auto-review or auto-run off blocked a call), `run.*` (including optional `run.usage`), `user.retracted`, `session` (`threadId`, `runStartedAt`), `queue.snapshot` (live, not persisted), redacted `config`, `config.error`, plus `hello.ok` / `hello.incompatible`, `auth.ok` / `auth.error`, and `transcript.snapshot` for reconnect.
 - Paint text from the first token. Never wait for `run.done` to start rendering.
 - `GET /api/models?adapter=` returns `{ models, source: "live" | "fallback", error? }`. Never silently swap in Cursor’s static catalog for another adapter.
 - Runtime must not call `adapter.resume` when `capabilities.resume` is false (keep the Glassys transcript; create on the next send).
@@ -76,13 +76,13 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 - Persist Glassys `agentId` and resume with the same optional `apiKey` (omit when empty so the SDK can use `CURSOR_API_KEY` or `~/.cursor/sdk/auth.json`), `model`, `model.params`, `cwd`, `settingSources`, sandbox, and store. Inline MCP does not survive resume; v1 uses workspace/user files + `settingSources` (default `project` + `user`).
 - Model is required for local. List via `Cursor.models.list()` without requiring a Glassys-stored key. Default selection is Cursor’s flagship `grok-4.6` with effort `xhigh` (Extra high). Live catalog supplies other models and variants. Empty/failed list → Cursor static fallback (Grok first, then Composer, Auto) **and** surface `source: "fallback"` in the PWA.
 - Cursor credentials: do **not** require an API key. Resolution is explicit `apiKey` → `CURSOR_API_KEY` → `Cursor.auth.login()` store. Cursor IDE app login is a different store.
-- Changing model is a sticky next `send`. Changing cwd / sandbox / `settingSources` / adapter creates a new agent (new thread). Warn in the UI.
+- Changing model is a sticky next `send`. Changing cwd / sandbox / `settingSources` / adapter archives the live Glassys transcript and creates a new agent (new thread). Warn in the UI. An explicit new thread with the same cwd does the same.
 - Do not single-file-bundle `@cursor/sdk` on Node. Keep `node_modules`. Node `>=22.13`.
-- Store: `JsonlLocalAgentStore` under `$GLASSYS_DATA_DIR/cursor-store`. Other adapters use `$GLASSYS_DATA_DIR/<id>-store`. Glassys transcript (`transcript.jsonl`) is what the PWA replays; the SDK store is for model resume.
+- Store: `JsonlLocalAgentStore` under `$GLASSYS_DATA_DIR/cursor-store`. Other adapters use `$GLASSYS_DATA_DIR/<id>-store`. The live Glassys transcript is `$GLASSYS_DATA_DIR/threads/<threadId>/transcript.jsonl` (legacy `transcript.jsonl` is migrated on first run). The PWA replays that file; the SDK store is for model resume.
 
 ## Deploy
 
-Host gateway only. The documented one-liner `git clone … && cd glassys && pnpm install && pnpm run service:install` writes a user systemd unit or LaunchAgent; PWA served by the gateway; operator's proxy. Uninstall: `cd glassys && pnpm run service:uninstall`. Foreground `pnpm start` is for debugging.
+Host gateway only. The documented installer (`scripts/install.sh` or `git clone … && cd glassys && pnpm install && pnpm run service:install`) writes a user systemd unit or LaunchAgent; PWA served by the gateway; operator's proxy. Uninstall: `cd glassys && pnpm run service:uninstall`. Foreground `pnpm start` is for debugging.
 
 Recipes (Caddy, Cloudflare Tunnel + Access) are appendices. Glassys does not depend on Cloudflare.
 

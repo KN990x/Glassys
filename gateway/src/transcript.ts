@@ -1,15 +1,22 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { TranscriptEvent } from "@glassys/protocol";
-import { paths } from "./paths.js";
+import { ensureLiveThread, liveTranscriptPath } from "./threads.js";
+
+async function filePath(): Promise<string> {
+  await ensureLiveThread();
+  return liveTranscriptPath();
+}
 
 export async function appendTranscript(event: TranscriptEvent): Promise<void> {
-  await mkdir(paths.data(), { recursive: true });
-  await appendFile(paths.transcript(), `${JSON.stringify(event)}\n`, "utf8");
+  const path = await filePath();
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(event)}\n`, { encoding: "utf8", flag: "a" });
 }
 
 export async function readTranscript(): Promise<TranscriptEvent[]> {
   try {
-    const raw = await readFile(paths.transcript(), "utf8");
+    const raw = await readFile(await filePath(), "utf8");
     const events: TranscriptEvent[] = [];
     for (const line of raw.split("\n")) {
       if (!line.trim()) continue;
@@ -26,6 +33,7 @@ export async function readTranscript(): Promise<TranscriptEvent[]> {
 }
 
 export async function clearTranscript(): Promise<void> {
-  await mkdir(paths.data(), { recursive: true });
-  await writeFile(paths.transcript(), "", "utf8");
+  const path = await filePath();
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, "", "utf8");
 }

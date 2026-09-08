@@ -1,5 +1,5 @@
 import type { ServerMessage, ToolKind, ToolEnd } from "@glassys/protocol";
-import { asRecord, diffStats, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, diffStats, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
 export { toolKindFromName, diffStats };
 
@@ -139,6 +139,7 @@ function mapOneToolCall(
     outputPreview: outputPreview?.slice(0, 4000),
     error,
     truncated: truncated || undefined,
+    denied: toolDenied(str(toolCall.status) || str(asRecord(toolCall.result)?.status), error) || undefined,
   };
   return end;
 }

@@ -42,7 +42,12 @@ export interface AdapterSession {
   send(
     text: string,
     onEvent: AdapterEventHandler,
-    opts?: { force?: boolean; model?: string; modelParams?: ModelParam[] },
+    opts?: {
+      force?: boolean;
+      model?: string;
+      modelParams?: ModelParam[];
+      attachments?: { path: string; mime: string; name: string }[];
+    },
   ): Promise<AdapterRun>;
   dispose(): Promise<void>;
 }

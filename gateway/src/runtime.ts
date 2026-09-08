@@ -7,7 +7,9 @@ import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
   ConfigPatch,
+  MessageAttachment,
   ModelListResponse,
+  QueueItem,
   ServerMessage,
   TranscriptEvent,
 } from "@glassys/protocol";
@@ -19,25 +21,49 @@ import { cancelLoginJob, snapshotLoginJob, startLoginJob } from "./adapter-login
 import { hub } from "./hub.js";
 import { log, paths } from "./paths.js";
 import { loadState, saveState } from "./state.js";
-import { appendTranscript, clearTranscript, readTranscript } from "./transcript.js";
-import { isActiveRunError } from "./errors.js";
+import { appendTranscript, readTranscript } from "./transcript.js";
+import { HttpError, isActiveRunError } from "./errors.js";
 import { createMutex } from "./lock.js";
+import {
+  activateThread,
+  archiveLiveThread,
+  ensureLiveThread,
+  listThreads,
+  liveThreadId,
+  loadThread,
+  openEmptyThread,
+  rememberCwd,
+  resetLiveThreadCache,
+  startNewThread,
+} from "./threads.js";
+import { resolveAttachments } from "./uploads.js";
 
 export interface Runtime {
   busy: boolean;
   agentId: string | null;
   fingerprint: string | null;
+  identityAgent: import("@glassys/protocol").AgentConfig | null;
 }
 
 const runtime: Runtime = {
   busy: false,
   agentId: null,
   fingerprint: null,
+  identityAgent: null,
+};
+
+type QueueJob = {
+  id: string;
+  text: string;
+  generation: number;
+  attachments?: MessageAttachment[];
 };
 
 let session: AdapterSession | null = null;
 let currentRun: AdapterRun | null = null;
-let queue: Array<{ text: string; generation: number }> = [];
+let currentJobId: string | null = null;
+let runStartedAt: number | undefined;
+let queue: QueueJob[] = [];
 let processing = false;
 let cancelGeneration = 0;
 let identityGeneration = 0;
@@ -70,8 +96,28 @@ export async function drainEmit(): Promise<void> {
   await emitChain;
 }
 
-export function snapshotRuntime(): { profileId: string; agentId: string | null; busy: boolean } {
-  return { profileId: PROFILE_ID, agentId: runtime.agentId, busy: runtime.busy };
+export function snapshotRuntime(): {
+  profileId: string;
+  agentId: string | null;
+  busy: boolean;
+  threadId?: string;
+  runStartedAt?: number;
+} {
+  return {
+    profileId: PROFILE_ID,
+    agentId: runtime.agentId,
+    busy: runtime.busy,
+    threadId: liveThreadId() ?? undefined,
+    runStartedAt: runtime.busy ? runStartedAt : undefined,
+  };
+}
+
+export function snapshotQueue(): QueueItem[] {
+  return queue.filter((j) => j.generation === identityGeneration).map((j) => ({ id: j.id, text: j.text }));
+}
+
+async function broadcastQueue(): Promise<void> {
+  hub.broadcast({ type: "queue.snapshot", items: snapshotQueue() });
 }
 
 async function broadcastSession(): Promise<void> {
@@ -117,7 +163,7 @@ async function persistAgentId(agentId: string): Promise<void> {
   if (!usableAgentId(agentId)) return;
   if (runtime.agentId === agentId) return;
   runtime.agentId = agentId;
-  await saveState({ profileId: PROFILE_ID, agentId });
+  await saveState({ agentId });
 }
 
 async function createOpts() {
@@ -157,17 +203,30 @@ async function shutdownAdapters(): Promise<void> {
   }
 }
 
-async function restoreQueuedUserMessages(extra: string[] = []): Promise<void> {
-  const queued = await withQueueLock(async () =>
-    queue.filter((j) => j.generation === identityGeneration).map((j) => j.text),
-  );
-  for (const text of [...extra, ...queued]) {
-    await appendTranscript({ type: "user.message", text });
+async function restoreQueuedUserMessages(current?: QueueJob): Promise<void> {
+  const queued = await withQueueLock(async () => queue.filter((j) => j.generation === identityGeneration));
+  const jobs =
+    current && current.generation === identityGeneration && !queued.some((j) => j.id === current.id)
+      ? [current, ...queued]
+      : queued;
+  for (const job of jobs) {
+    await appendTranscript({ type: "user.message", text: job.text, id: job.id, attachments: job.attachments });
   }
   hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+  await broadcastQueue();
 }
 
-async function ensureSession(currentText?: string): Promise<AdapterSession> {
+async function rotateToNewThread(previousAgentId: string | null): Promise<void> {
+  await ensureLiveThread();
+  await archiveLiveThread(previousAgentId, runtime.identityAgent ?? undefined);
+  await openEmptyThread();
+  runtime.agentId = null;
+  runtime.fingerprint = null;
+  runtime.identityAgent = null;
+  await saveState({ agentId: null });
+}
+
+async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
   const cfg = await loadConfig();
   const adapter = getAdapter(cfg.agent.adapter);
   const fp = agentFingerprint(cfg);
@@ -178,14 +237,12 @@ async function ensureSession(currentText?: string): Promise<AdapterSession> {
   if (session && runtime.fingerprint === fp) return session;
 
   const identityChanged = runtime.fingerprint !== null && runtime.fingerprint !== fp;
+  const previousAgentId = runtime.agentId;
   await disposeSession();
 
   if (identityChanged) {
-    runtime.agentId = null;
-    runtime.fingerprint = null;
-    await saveState({ profileId: PROFILE_ID, agentId: null });
-    await clearTranscript();
-    await restoreQueuedUserMessages(currentText ? [currentText] : []);
+    await rotateToNewThread(previousAgentId);
+    await restoreQueuedUserMessages(current);
   }
 
   const state = await loadState();
@@ -198,6 +255,7 @@ async function ensureSession(currentText?: string): Promise<AdapterSession> {
     try {
       session = await adapter.resume(state.agentId, opts);
       runtime.fingerprint = fp;
+      runtime.identityAgent = cfg.agent;
       await persistAgentId(session.agentId);
       log("info", "resumed agent", { adapter: adapter.id, agentId: session.agentId });
       return session;
@@ -210,8 +268,9 @@ async function ensureSession(currentText?: string): Promise<AdapterSession> {
         throw createErr;
       }
       runtime.agentId = null;
-      await saveState({ profileId: PROFILE_ID, agentId: null });
+      await saveState({ agentId: null });
       runtime.fingerprint = fp;
+      runtime.identityAgent = cfg.agent;
       await persistAgentId(session.agentId);
       log("info", "created agent", { adapter: adapter.id, agentId: session.agentId });
       return session;
@@ -220,6 +279,7 @@ async function ensureSession(currentText?: string): Promise<AdapterSession> {
 
   session = await adapter.create(opts);
   runtime.fingerprint = fp;
+  runtime.identityAgent = cfg.agent;
   await persistAgentId(session.agentId);
   log("info", "created agent", { adapter: adapter.id, agentId: session.agentId });
   return session;
@@ -232,11 +292,9 @@ async function performIdentityReset(): Promise<void> {
     return true;
   });
   if (!go) return;
+  const previousAgentId = runtime.agentId;
   await disposeSession();
-  runtime.agentId = null;
-  runtime.fingerprint = null;
-  await saveState({ profileId: PROFILE_ID, agentId: null });
-  await clearTranscript();
+  await rotateToNewThread(previousAgentId);
   await restoreQueuedUserMessages();
 }
 
@@ -283,6 +341,7 @@ async function processQueue(): Promise<void> {
           }
           const job = queue[idx];
           queue.splice(idx, 1);
+          currentJobId = job.id;
           return { kind: "job" as const, job };
         });
         if (item.kind === "reset") {
@@ -290,6 +349,7 @@ async function processQueue(): Promise<void> {
           continue;
         }
         if (item.kind === "empty") break;
+        await broadcastQueue();
 
         const stillCurrent = await withQueueLock(async () => {
           if (pendingIdentityReset || item.job.generation !== identityGeneration) {
@@ -302,8 +362,9 @@ async function processQueue(): Promise<void> {
 
         try {
           runtime.busy = true;
+          runStartedAt = Date.now();
           await broadcastSession();
-          await runOnce(item.job.text);
+          await runOnce(item.job);
         } catch (err) {
           log("error", "runOnce failed", { error: String(err) });
           try {
@@ -323,10 +384,13 @@ async function processQueue(): Promise<void> {
         if (queue.some((j) => j.generation === identityGeneration)) return true;
         processing = false;
         runtime.busy = false;
+        currentJobId = null;
+        runStartedAt = undefined;
         return false;
       });
       if (!more) {
         await broadcastSession();
+        await broadcastQueue();
         return;
       }
     }
@@ -334,16 +398,18 @@ async function processQueue(): Promise<void> {
     await withQueueLock(async () => {
       processing = false;
       runtime.busy = false;
+      currentJobId = null;
+      runStartedAt = undefined;
     });
     throw err;
   }
 }
 
-async function runOnce(text: string): Promise<void> {
+async function runOnce(job: QueueJob): Promise<void> {
   const gen = cancelGeneration;
   let handle: AdapterSession;
   try {
-    handle = await ensureSession(text);
+    handle = await ensureSession(job);
   } catch (err) {
     await emit({ type: "run.error", message: err instanceof Error ? err.message : String(err), phase: "startup" });
     return;
@@ -375,24 +441,29 @@ async function runOnce(text: string): Promise<void> {
 
   const cfg = await loadConfig();
   const runId = randomUUID();
+  runStartedAt = Date.now();
   await emit({ type: "run.start", runId });
+  await broadcastSession();
 
   if (cancelGeneration !== gen) {
     await emit({ type: "run.cancelled" });
     return;
   }
 
+  const files = await resolveAttachments(job.attachments);
+  const sendOpts = {
+    model: cfg.agent.model,
+    modelParams: cfg.agent.modelParams,
+    attachments: files.length ? files : undefined,
+  };
+
   try {
     let run: AdapterRun;
     try {
-      run = await handle.send(text, onEvent, { model: cfg.agent.model, modelParams: cfg.agent.modelParams });
+      run = await handle.send(job.text, onEvent, sendOpts);
     } catch (err) {
       if (isActiveRunError(err)) {
-        run = await handle.send(text, onEvent, {
-          force: true,
-          model: cfg.agent.model,
-          modelParams: cfg.agent.modelParams,
-        });
+        run = await handle.send(job.text, onEvent, { ...sendOpts, force: true });
       } else {
         throw err;
       }
@@ -432,24 +503,44 @@ async function runOnce(text: string): Promise<void> {
     }
   } finally {
     currentRun = null;
+    currentJobId = null;
   }
 }
 
-export async function enqueueMessage(text: string): Promise<void> {
+export async function enqueueMessage(text: string, attachments?: MessageAttachment[]): Promise<void> {
   const trimmed = text.trim();
-  if (!trimmed) return;
+  if (!trimmed && !attachments?.length) return;
   const cfg = await loadConfig();
   if (!cfg.onboarding.completed) {
     await emit({ type: "run.error", message: "Onboarding is not complete", phase: "startup" });
     return;
   }
   return withQueueLock(async () => {
-    await emit({ type: "user.message", text: trimmed });
+    const id = randomUUID();
+    await emit({ type: "user.message", text: trimmed, id, attachments: attachments?.length ? attachments : undefined });
     const busy = runtime.busy || processing || queue.length > 0;
-    queue.push({ text: trimmed, generation: identityGeneration });
+    queue.push({ id, text: trimmed, attachments, generation: identityGeneration });
     if (busy) await emit({ type: "run.queued" });
+    await broadcastQueue();
     void processQueue().catch((err) => log("error", "processQueue", { error: String(err) }));
   });
+}
+
+export async function cancelQueued(id: string): Promise<void> {
+  if (!id) return;
+  if (currentJobId === id) {
+    await cancelRun();
+    return;
+  }
+  const removed = await withQueueLock(async () => {
+    const idx = queue.findIndex((j) => j.id === id);
+    if (idx < 0) return false;
+    queue.splice(idx, 1);
+    return true;
+  });
+  if (!removed) return;
+  await emit({ type: "user.retracted", id });
+  await broadcastQueue();
 }
 
 export async function cancelRun(): Promise<void> {
@@ -463,33 +554,89 @@ export async function cancelRun(): Promise<void> {
   }
 }
 
-export async function applyConfigPatch(patch: ConfigPatch): Promise<{ restart: boolean }> {
+export async function applyConfigPatch(
+  patch: ConfigPatch,
+  opts?: { identity?: "auto" | "preserve" },
+): Promise<{ restart: boolean }> {
   const before = await loadConfig();
   const { config, restart } = await applyPatch(patch);
-  const fp = agentFingerprint(config);
-  const identityChanged = agentFingerprint(before) !== fp;
-  if (identityChanged) {
-    await withQueueLock(async () => {
-      cancelGeneration += 1;
-      identityGeneration += 1;
-      queue = [];
-      pendingIdentityReset = true;
-    });
-    if (currentRun) {
-      try {
-        await currentRun.cancel();
-      } catch {
-        /* ignore */
+  if (config.agent.cwd) await rememberCwd(config.agent.cwd);
+  if (opts?.identity !== "preserve") {
+    const identityChanged = agentFingerprint(before) !== agentFingerprint(config);
+    if (identityChanged) {
+      await withQueueLock(async () => {
+        cancelGeneration += 1;
+        identityGeneration += 1;
+        queue = [];
+        pendingIdentityReset = true;
+      });
+      if (currentRun) {
+        try {
+          await currentRun.cancel();
+        } catch {
+          /* ignore */
+        }
       }
+      await finishIdentityResetIfIdle();
     }
-    await finishIdentityResetIfIdle();
   }
   await broadcastConfig(restart);
   await broadcastSession();
   return { restart };
 }
 
+function assertIdle(): void {
+  if (runtime.busy || processing || currentRun) throw new HttpError(409, "busy");
+}
+
+export async function listLiveThreads() {
+  await ensureLiveThread();
+  return listThreads();
+}
+
+export async function startNewLiveThread(): Promise<void> {
+  assertIdle();
+  await withQueueLock(async () => {
+    queue = [];
+    identityGeneration += 1;
+  });
+  const previous = runtime.agentId;
+  await disposeSession();
+  runtime.fingerprint = null;
+  await startNewThread(previous);
+  runtime.agentId = null;
+  runtime.fingerprint = null;
+  runtime.identityAgent = null;
+  await saveState({ agentId: null });
+  hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+  await broadcastConfig();
+  await broadcastSession();
+  await broadcastQueue();
+}
+
+export async function switchLiveThread(id: string): Promise<void> {
+  assertIdle();
+  await ensureLiveThread();
+  if (liveThreadId() === id) return;
+  const loaded = await loadThread(id);
+  if (!loaded) throw new HttpError(404, "Thread not found");
+  await withQueueLock(async () => {
+    queue = [];
+    identityGeneration += 1;
+  });
+  await archiveLiveThread(runtime.agentId);
+  await disposeSession();
+  runtime.fingerprint = null;
+  await applyConfigPatch({ agent: loaded.agent }, { identity: "preserve" });
+  await activateThread(id, loaded.meta.agentId);
+  runtime.agentId = loaded.meta.agentId;
+  hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+  await broadcastSession();
+  await broadcastQueue();
+}
+
 export async function initRuntime(): Promise<void> {
+  await ensureLiveThread();
   const state = await loadState();
   runtime.agentId = usableAgentId(state.agentId) ? state.agentId : null;
   const cfg = await loadConfig();
@@ -519,6 +666,8 @@ export async function shutdownRuntime(): Promise<void> {
   await disposeSession();
   runtime.agentId = null;
   runtime.fingerprint = null;
+  runtime.identityAgent = null;
+  resetLiveThreadCache();
   await shutdownAdapters();
 }
 

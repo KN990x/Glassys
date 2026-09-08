@@ -3,6 +3,7 @@ import {
   AdapterError,
   errorMessage,
   pendingRun,
+  promptWithAttachments,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -62,12 +63,17 @@ class GeminiSession implements AdapterSession {
     this.model = model;
   }
 
-  async send(text: string, onEvent: Parameters<AdapterSession["send"]>[1], sendOpts?: { model?: string }) {
+  async send(
+    text: string,
+    onEvent: Parameters<AdapterSession["send"]>[1],
+    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+  ) {
     if (sendOpts?.model) await this.retarget(sendOpts.model);
     const runId = randomUUID();
+    const prompt = promptWithAttachments(text, sendOpts?.attachments);
     return pendingRun(runId, async ({ signal, isCancelled }) => {
       try {
-        for await (const chunk of this.handle.sendStream(text, signal)) {
+        for await (const chunk of this.handle.sendStream(prompt, signal)) {
           if (isCancelled()) return "cancelled";
           for (const ev of mapGeminiChunk(chunk, this.tools)) onEvent(ev);
         }
@@ -114,6 +120,7 @@ export const geminiAdapter: Adapter = {
     resume: false,
     discover: false,
     toolConfirmation: "none",
+    attachments: false,
     auth: { kind: "api-key", envNames: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
     defaultModel: { id: "gemini-2.5-pro", params: [] },
     liveCatalog: false,

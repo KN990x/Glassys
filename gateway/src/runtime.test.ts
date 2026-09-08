@@ -175,6 +175,27 @@ describe("runtime queue", () => {
     expect(events.some((e) => e.type === "run.cancelled")).toBe(true);
   });
 
+  it("retracts a queued follow-up without cancelling the in-flight run", async () => {
+    control.hold();
+    const { enqueueMessage, cancelQueued, snapshotQueue, readTranscript, drainEmit } = await import("./runtime.js");
+    void enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
+    await enqueueMessage("two");
+    const queued = snapshotQueue();
+    const id = queued[0]?.id;
+    expect(id).toBeTruthy();
+    await cancelQueued(id!);
+    expect(snapshotQueue()).toEqual([]);
+    expect((await readTranscript()).some((e) => e.type === "user.retracted" && "id" in e && e.id === id)).toBe(true);
+    control.go();
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+    await drainEmit();
+    expect((await readTranscript()).some((e) => e.type === "user.message" && "text" in e && e.text === "two")).toBe(true);
+    expect((await readTranscript()).some((e) => e.type === "text.delta" && "text" in e && e.text === "echo:two")).toBe(
+      false,
+    );
+  });
+
   it("does not send the follow-up until the cancelled run's wait() resolves", async () => {
     let waitFinished = 0;
     let cancelled = false;
@@ -283,8 +304,8 @@ describe("runtime queue", () => {
     }
   });
 
-  it("clears the transcript when adapter identity changes", async () => {
-    const { enqueueMessage, applyConfigPatch, readTranscript, drainEmit } = await import("./runtime.js");
+  it("archives the transcript when adapter identity changes", async () => {
+    const { enqueueMessage, applyConfigPatch, readTranscript, drainEmit, listLiveThreads } = await import("./runtime.js");
     await enqueueMessage("one");
     await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
     await drainEmit();
@@ -292,6 +313,9 @@ describe("runtime queue", () => {
     const other = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
     await applyConfigPatch({ agent: { cwd: other } });
     expect(await readTranscript()).toEqual([]);
+    const listed = await listLiveThreads();
+    expect(listed.length).toBeGreaterThanOrEqual(2);
+    expect(listed.some((t) => t.cwd === dir || t.title.includes("one"))).toBe(true);
   });
 
   it("does not wipe a new thread that starts after an identity change", async () => {
