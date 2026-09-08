@@ -37,7 +37,7 @@ import {
   resetLiveThreadCache,
   startNewThread,
 } from "./threads.js";
-import { gcUploads, resolveAttachments } from "./uploads.js";
+import { gcUploads, materializeAttachments } from "./uploads.js";
 
 export interface Runtime {
   busy: boolean;
@@ -126,6 +126,10 @@ async function broadcastQueue(): Promise<void> {
 
 async function broadcastSession(): Promise<void> {
   hub.broadcast({ type: "session", ...snapshotRuntime() });
+}
+
+async function broadcastThreads(): Promise<void> {
+  hub.broadcast({ type: "threads.snapshot", threads: await listThreads(), currentId: liveThreadId() });
 }
 
 async function broadcastConfig(restart?: boolean): Promise<void> {
@@ -218,6 +222,7 @@ async function restoreQueuedUserMessages(current?: QueueJob): Promise<void> {
   }
   hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
   await broadcastQueue();
+  await broadcastThreads();
 }
 
 async function rotateToNewThread(previousAgentId: string | null): Promise<void> {
@@ -256,7 +261,7 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
     (Boolean(adapter.shouldResume) && usableAgentId(state.agentId)
       ? await adapter.shouldResume!(state.agentId, opts)
       : false);
-  if (cfg.session.resumeOnStart && canResume && usableAgentId(state.agentId) && runtime.fingerprint === null) {
+  if (canResume && usableAgentId(state.agentId) && runtime.fingerprint === null) {
     try {
       session = await adapter.resume(state.agentId, opts);
       runtime.fingerprint = fp;
@@ -457,7 +462,21 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
     return;
   }
 
-  const files = await resolveAttachments(job.attachments);
+  let files: Awaited<ReturnType<typeof materializeAttachments>> = [];
+  try {
+    files = await materializeAttachments(cfg.agent.cwd, job.attachments);
+  } catch (err) {
+    await emit({
+      type: "run.error",
+      message: err instanceof Error ? err.message : String(err),
+      phase: "startup",
+    });
+    return;
+  }
+  if (job.attachments?.length && files.length === 0) {
+    await emit({ type: "run.error", message: "Attachments could not be read", phase: "startup" });
+    return;
+  }
   const sendOpts = {
     model: cfg.agent.model,
     modelParams: cfg.agent.modelParams,
@@ -601,6 +620,7 @@ export async function applyConfigPatch(
   }
   await broadcastConfig(restart);
   await broadcastSession();
+  await broadcastThreads();
   return { restart };
 }
 
@@ -631,6 +651,7 @@ export async function startNewLiveThread(): Promise<void> {
   await broadcastConfig();
   await broadcastSession();
   await broadcastQueue();
+  await broadcastThreads();
   await gcUploads();
 }
 
@@ -653,6 +674,7 @@ export async function switchLiveThread(id: string): Promise<void> {
   hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
   await broadcastSession();
   await broadcastQueue();
+  await broadcastThreads();
 }
 
 export async function deleteLiveThread(id: string): Promise<void> {
@@ -671,6 +693,7 @@ export async function deleteLiveThread(id: string): Promise<void> {
     hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
     await broadcastSession();
   }
+  await broadcastThreads();
 }
 
 export async function initRuntime(): Promise<void> {
@@ -773,6 +796,7 @@ export async function listAdapterInfo(): Promise<AdapterPublicInfo[]> {
 export async function adapterLogin(adapterId: string): Promise<{ url?: string }> {
   const adapter = getAdapter(adapterId);
   if (!adapter.loginInteractive) throw new Error("Interactive login is not available for this adapter");
+  invalidateAdapterInfoCache();
   return startLoginJob(adapterId, (opts) => adapter.loginInteractive!(opts));
 }
 
@@ -797,6 +821,7 @@ export async function adapterAuthStatus(adapterId: string): Promise<{
     log("warn", "adapter authStatus failed", { adapter: adapterId, error: String(err) });
   }
   const login = snapshotLoginJob(adapterId);
+  if (status.loggedIn) invalidateAdapterInfoCache();
   return {
     loggedIn: status.loggedIn,
     email: status.email,

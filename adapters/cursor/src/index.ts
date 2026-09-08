@@ -1,6 +1,7 @@
 import { Agent, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
 import {
   AdapterError,
+  imagePartsFromAttachments,
   promptWithAttachments,
   type Adapter,
   type AdapterCreateOptions,
@@ -74,10 +75,15 @@ class CursorSession implements AdapterSession {
       force?: boolean;
       model?: string;
       modelParams?: ModelParam[];
-      attachments?: { path: string; mime: string; name: string }[];
+      attachments?: { path: string; mime: string; name: string; body?: Buffer }[];
     },
   ): Promise<AdapterRun> {
-    const prompt = promptWithAttachments(text, sendOpts?.attachments);
+    const promptText = promptWithAttachments(text, sendOpts?.attachments);
+    const images = imagePartsFromAttachments(sendOpts?.attachments).map((p) => ({
+      data: p.data,
+      mimeType: p.mime,
+    }));
+    const prompt = images.length ? { text: promptText, images } : promptText;
     let run: Awaited<ReturnType<typeof this.agent.send>>;
     try {
       run = await this.agent.send(prompt, {
@@ -146,7 +152,7 @@ export const cursorAdapter: Adapter = {
     resume: true,
     discover: false,
     toolConfirmation: "auto-review-deny",
-    attachments: false,
+    attachments: true,
     auth: { kind: "sdk-login", envNames: ["CURSOR_API_KEY"] },
     defaultModel: CURSOR_DEFAULT_MODEL,
     liveCatalog: true,

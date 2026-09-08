@@ -57,4 +57,10 @@ describe("mapCodexJsonl", () => {
     })[0];
     expect(end).toMatchObject({ type: "tool.end", diff, stats: { add: 1, del: 1 } });
   });
+
+  it("maps turn.completed usage when the runtime provides tokens", () => {
+    expect(
+      mapCodexJsonl({ type: "turn.completed", usage: { input_tokens: 4, output_tokens: 9 } }),
+    ).toEqual([{ type: "run.usage", inputTokens: 4, outputTokens: 9 }]);
+  });
 });

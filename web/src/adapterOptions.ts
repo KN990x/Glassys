@@ -56,6 +56,17 @@ export function setPermissionMode(
   return setOption(next, "autoRun", mode === "bypassPermissions");
 }
 
+export function archivesLiveThread(
+  before: { adapter: string; cwd: string; options?: Record<string, unknown> },
+  after: { adapter: string; cwd: string; options?: Record<string, unknown> },
+): boolean {
+  return (
+    before.adapter !== after.adapter ||
+    before.cwd !== after.cwd ||
+    JSON.stringify(before.options ?? {}) !== JSON.stringify(after.options ?? {})
+  );
+}
+
 export function adapterKeyConfigured(
   secrets: { adapters?: Record<string, { apiKey?: { configured?: boolean } }>; cursorApiKey?: { configured?: boolean } },
   adapterId: string,

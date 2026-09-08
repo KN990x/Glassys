@@ -7,8 +7,9 @@ export type {
   AdapterModel,
   AdapterRun,
   AdapterSession,
+  PromptAttachment,
 } from "./types.js";
 export { extractListedModels, asRecord, errorMessage } from "./list.js";
 export { requireHostCommand } from "./probe.js";
-export { toolKindFromName, diffStats, extractDiff, looksLikeDiff, unifiedFromReplacement, toolDenied, promptWithAttachments } from "./tools.js";
+export { toolKindFromName, diffStats, extractDiff, looksLikeDiff, unifiedFromReplacement, toolDenied, promptWithAttachments, imagePartsFromAttachments } from "./tools.js";
 export { pendingRun } from "./run.js";

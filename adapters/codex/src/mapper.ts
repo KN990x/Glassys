@@ -108,6 +108,24 @@ export function mapCodexJsonl(
     const err = asRecord(rec.error);
     return [{ type: "run.error", message: str(err?.message) || "Turn failed", phase: "run" }];
   }
+  if (rec.type === "turn.completed") {
+    const usage = asRecord(rec.usage);
+    if (!usage) return [];
+    const inputTokens =
+      typeof usage.input_tokens === "number"
+        ? usage.input_tokens
+        : typeof usage.inputTokens === "number"
+          ? usage.inputTokens
+          : undefined;
+    const outputTokens =
+      typeof usage.output_tokens === "number"
+        ? usage.output_tokens
+        : typeof usage.outputTokens === "number"
+          ? usage.outputTokens
+          : undefined;
+    if (inputTokens == null && outputTokens == null) return [];
+    return [{ type: "run.usage", inputTokens, outputTokens }];
+  }
   return [];
 }
 

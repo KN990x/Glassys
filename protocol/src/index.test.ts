@@ -58,6 +58,7 @@ describe("protocol v1", () => {
     expect(isPersistedTranscriptEvent({ type: "run.usage", inputTokens: 1 })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "tool.progress", callId: "c1", chunk: "x" })).toBe(false);
     expect(isTranscriptEvent({ type: "queue.snapshot", items: [] } as never)).toBe(false);
+    expect(isTranscriptEvent({ type: "threads.snapshot", threads: [], currentId: null } as never)).toBe(false);
   });
 
   it("treats missing available as selectable and ok:false as not", async () => {

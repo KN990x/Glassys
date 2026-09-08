@@ -539,4 +539,123 @@ describe("runtime queue", () => {
       hub.broadcast = orig;
     }
   });
+
+  it("resumes after switchLiveThread even when resumeOnStart is false", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    cfg.session.resumeOnStart = false;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+
+    let creates = 0;
+    let resumes = 0;
+    const origCreate = fakeAdapter.create;
+    const origResume = fakeAdapter.resume;
+    fakeAdapter.create = async (opts) => {
+      creates += 1;
+      return origCreate(opts);
+    };
+    fakeAdapter.resume = async (id, opts) => {
+      resumes += 1;
+      return origResume.call(fakeAdapter, id, opts);
+    };
+    try {
+      const { enqueueMessage, startNewLiveThread, switchLiveThread, listLiveThreads, readTranscript, drainEmit } =
+        await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+      await drainEmit();
+      expect(creates).toBeGreaterThan(0);
+      await startNewLiveThread();
+      const listed = await listLiveThreads();
+      const archived = listed.find((t) => t.title.includes("one"));
+      expect(archived).toBeTruthy();
+      await switchLiveThread(archived!.id);
+      const before = resumes;
+      await enqueueMessage("two");
+      await waitUntil(async () =>
+        (await readTranscript()).some((e) => e.type === "text.delta" && "text" in e && e.text === "echo:two"),
+      );
+      await drainEmit();
+      expect(resumes).toBeGreaterThan(before);
+    } finally {
+      fakeAdapter.create = origCreate;
+      fakeAdapter.resume = origResume;
+    }
+  });
+
+  it("creates after switchLiveThread when resume fails", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    cfg.session.resumeOnStart = false;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+
+    const origCreate = fakeAdapter.create;
+    const origResume = fakeAdapter.resume;
+    let creates = 0;
+    fakeAdapter.create = async (opts) => {
+      creates += 1;
+      return origCreate(opts);
+    };
+    fakeAdapter.resume = async () => {
+      throw new Error("vendor session gone");
+    };
+    try {
+      const { enqueueMessage, startNewLiveThread, switchLiveThread, listLiveThreads, readTranscript, drainEmit } =
+        await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+      await drainEmit();
+      const afterFirst = creates;
+      await startNewLiveThread();
+      const listed = await listLiveThreads();
+      const archived = listed.find((t) => t.title.includes("one"));
+      expect(archived).toBeTruthy();
+      await switchLiveThread(archived!.id);
+      await enqueueMessage("two");
+      await waitUntil(async () =>
+        (await readTranscript()).some((e) => e.type === "text.delta" && "text" in e && e.text === "echo:two"),
+      );
+      await drainEmit();
+      expect(creates).toBeGreaterThan(afterFirst);
+    } finally {
+      fakeAdapter.create = origCreate;
+      fakeAdapter.resume = origResume;
+    }
+  });
+
+  it("errors when none of the attachment ids can be resolved", async () => {
+    const { enqueueMessage, readTranscript, drainEmit } = await import("./runtime.js");
+    await enqueueMessage("see this", [{ id: "missing", mime: "image/png", name: "x.png" }]);
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.error"));
+    await drainEmit();
+    const events = await readTranscript();
+    expect(events.some((e) => e.type === "run.error" && "message" in e && /Attachments/.test(String(e.message)))).toBe(
+      true,
+    );
+  });
+
+  it("broadcasts threads.snapshot when identity archives the live thread", async () => {
+    const { hub } = await import("./hub.js");
+    const types: string[] = [];
+    const orig = hub.broadcast.bind(hub);
+    hub.broadcast = (msg) => {
+      types.push(msg.type);
+      orig(msg);
+    };
+    try {
+      const { enqueueMessage, applyConfigPatch, readTranscript, drainEmit } = await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+      await drainEmit();
+      const other = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
+      await applyConfigPatch({ agent: { cwd: other } });
+      expect(types).toContain("threads.snapshot");
+    } finally {
+      hub.broadcast = orig;
+    }
+  });
 });

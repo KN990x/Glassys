@@ -64,6 +64,22 @@ export async function listWorkspaces(root: string): Promise<WorkspaceHit[]> {
     hits.push({ path: abs, name: basename(abs) });
   }
   await walk(abs, 0, hits);
+  try {
+    const entries = await readdir(abs);
+    for (const name of entries) {
+      if (hits.length >= MAX_HITS) break;
+      if (name.startsWith(".")) continue;
+      const next = join(abs, name);
+      try {
+        const s = await stat(next);
+        if (s.isDirectory()) hits.push({ path: next, name });
+      } catch {
+        /* skip */
+      }
+    }
+  } catch {
+    /* skip */
+  }
   const seen = new Set<string>();
   const unique: WorkspaceHit[] = [];
   for (const hit of hits) {

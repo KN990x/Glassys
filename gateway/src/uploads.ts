@@ -1,6 +1,8 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import type { MessageAttachment, TranscriptEvent } from "@glassys/protocol";
+import type { PromptAttachment } from "@glassys/adapter-contract";
 import { paths } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { parseJsonl } from "./jsonl.js";
@@ -73,6 +75,33 @@ export async function resolveAttachments(
   for (const item of attachments) {
     const stored = await loadUpload(item.id);
     if (stored) out.push({ path: stored.path, mime: stored.mime, name: stored.name });
+  }
+  return out;
+}
+
+const UPLOAD_DIR = ".glassys-uploads";
+
+function safeUploadName(id: string, name: string): string {
+  const base = name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || "image";
+  return `${id.slice(0, 8)}-${base}`;
+}
+
+/** Copy uploads into `$cwd/.glassys-uploads` so sandboxed agents can read them. */
+export async function materializeAttachments(
+  cwd: string,
+  attachments?: MessageAttachment[],
+): Promise<PromptAttachment[]> {
+  if (!attachments?.length) return [];
+  const destDir = join(cwd, UPLOAD_DIR);
+  await mkdir(destDir, { recursive: true });
+  await writeFile(join(destDir, ".gitignore"), "*\n", "utf8").catch(() => undefined);
+  const out: PromptAttachment[] = [];
+  for (const item of attachments) {
+    const file = await readUploadBody(item.id);
+    if (!file) continue;
+    const dest = join(destDir, safeUploadName(item.id, file.name));
+    await copyFile(join(paths.uploads(), item.id), dest);
+    out.push({ path: dest, mime: file.mime, name: file.name, body: file.body });
   }
   return out;
 }

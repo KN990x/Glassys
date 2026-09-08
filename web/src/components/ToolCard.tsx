@@ -5,37 +5,65 @@ import type { ToolBlock } from "../transcript";
 export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; shellLines: number; showDiff: boolean }) {
   const t = useT();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const open = userOpen ?? (block.status === "running" || block.toolKind !== "shell");
   const hunks = useMemo(() => (showDiff && block.diff ? splitHunks(block.diff) : []), [block.diff, showDiff]);
+  const chunkLines = block.chunk ? block.chunk.split("\n").length : 0;
+  const canExpand = chunkLines > shellLines;
+
+  async function copyCommand(e: { stopPropagation: () => void }) {
+    e.stopPropagation();
+    if (!block.command) return;
+    try {
+      await navigator.clipboard.writeText(block.command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <article className={`tool ${block.status}`}>
-      <button className="tool-head" type="button" aria-expanded={open} onClick={() => setUserOpen((v) => !(v ?? open))}>
-        <span className="kind">{label(block.toolKind, t)}</span>
-        <span className="title">
-          <span>{block.title}</span>
-          {block.path && block.path !== block.title ? <span className="tool-path">{block.path}</span> : null}
-        </span>
-        {block.stats && (
-          <span className="stats">
-            +{block.stats.add} −{block.stats.del}
+      <div className="tool-head-row">
+        <button className="tool-head" type="button" aria-expanded={open} onClick={() => setUserOpen((v) => !(v ?? open))}>
+          <span className="kind">{label(block.toolKind, t)}</span>
+          <span className="title">
+            <span>{block.title}</span>
+            {block.path && block.path !== block.title ? <span className="tool-path">{block.path}</span> : null}
           </span>
+          {block.stats && (
+            <span className="stats">
+              +{block.stats.add} −{block.stats.del}
+            </span>
+          )}
+          <span className={`pill ${block.status}`}>
+            {block.status === "running"
+              ? t("tool.running")
+              : block.status === "denied"
+                ? t("tool.denied")
+                : block.status === "error"
+                  ? t("tool.error")
+                  : t("tool.done")}
+          </span>
+        </button>
+        {block.command && (
+          <button type="button" className="ghost tiny tool-copy" onClick={(e) => void copyCommand(e)}>
+            {copied ? t("chat.copied") : t("tool.copyCommand")}
+          </button>
         )}
-        <span className={`pill ${block.status}`}>
-          {block.status === "running"
-            ? t("tool.running")
-            : block.status === "denied"
-              ? t("tool.denied")
-              : block.status === "error"
-                ? t("tool.error")
-                : t("tool.done")}
-        </span>
-      </button>
+      </div>
       {open && (
         <div className="tool-body">
           {block.command && block.toolKind === "shell" && <pre className="shell-cmd">{block.command}</pre>}
           {block.chunk && (
-            <pre className="shell-out">{tail(block.chunk, shellLines)}</pre>
+            <pre className="shell-out">{expanded ? block.chunk : tail(block.chunk, shellLines)}</pre>
+          )}
+          {canExpand && (
+            <button type="button" className="ghost tiny" onClick={() => setExpanded((v) => !v)}>
+              {expanded ? t("tool.showLess") : t("tool.showMore")}
+            </button>
           )}
           {block.outputPreview && block.toolKind !== "shell" && <pre className="preview">{block.outputPreview}</pre>}
           {block.error && <p className="error-text">{block.error}</p>}

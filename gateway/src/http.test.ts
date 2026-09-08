@@ -143,9 +143,11 @@ describe("http api", () => {
     expect(after.currentId).not.toBe(listed.currentId);
     const reach = await fetch(`${base}/api/reachability`, { headers: auth });
     expect(reach.status).toBe(200);
-    const reachBody = (await reach.json()) as { bind: string; loopback: boolean; port: number };
+    const reachBody = (await reach.json()) as { bind: string; loopback: boolean; port: number; hostname: string; user: string };
     expect(reachBody.bind).toBe("127.0.0.1");
     expect(reachBody.loopback).toBe(true);
+    expect(reachBody.hostname).toBeTruthy();
+    expect(reachBody.user).toBeTruthy();
     const ws = await fetch(`${base}/api/workspaces`, { headers: auth });
     expect(ws.status).toBe(200);
     const png = Buffer.from(

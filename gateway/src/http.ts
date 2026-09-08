@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { hostname, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -418,6 +419,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       port: cfg.network.port,
       publicUrl: cfg.network.publicUrl,
       loopback: bind === "127.0.0.1" || bind === "::1" || bind === "localhost",
+      hostname: hostname(),
+      user: userInfo().username,
     });
     return true;
   }

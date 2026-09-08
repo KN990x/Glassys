@@ -15,7 +15,8 @@ import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
 import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
-import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../adapterOptions";
+import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode, archivesLiveThread } from "../adapterOptions";
+import { operatorError } from "../operatorError";
 
 export function Settings({
   config,
@@ -161,6 +162,13 @@ export function Settings({
       setError(t("wizard.adapter.unavailable"));
       return;
     }
+    if (draft.agent.adapter === "acp" && !optionString(draft.agent.options, "command", "").trim()) {
+      setError(t("wizard.acp.commandRequired"));
+      return;
+    }
+    if (archivesLiveThread(config.agent, draft.agent) && !window.confirm(t("settings.archiveConfirm"))) {
+      return;
+    }
     if (password && password.length < 8) {
       setError(t("setup.short"));
       return;
@@ -200,7 +208,7 @@ export function Settings({
         onLogout();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(operatorError(err instanceof Error ? err.message : String(err), t));
     } finally {
       setSubmitting(false);
     }

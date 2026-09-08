@@ -47,10 +47,22 @@ class PromptQueue {
   private waiters: Array<(v: IteratorResult<Record<string, unknown>>) => void> = [];
   private closed = false;
 
-  push(text: string) {
+  push(text: string, attachments?: { path: string; mime: string; name: string; body?: Buffer }[]) {
+    const note = promptWithAttachments(text, attachments);
+    const images = (attachments ?? []).filter((a) => a.body && a.body.length);
+    const content =
+      images.length > 0
+        ? [
+            { type: "text", text: note },
+            ...images.map((a) => ({
+              type: "image",
+              source: { type: "base64", media_type: a.mime, data: a.body!.toString("base64") },
+            })),
+          ]
+        : note;
     const msg = {
       type: "user",
-      message: { role: "user", content: text },
+      message: { role: "user", content },
       parent_tool_use_id: null,
     };
     const waiter = this.waiters.shift();
@@ -152,7 +164,7 @@ class ClaudeSession implements AdapterSession {
   ) {
     if (sendOpts?.model) await this.retarget(sendOpts.model);
     const id = randomUUID();
-    this.queue.push(promptWithAttachments(text, sendOpts?.attachments));
+    this.queue.push(text, sendOpts?.attachments);
     const query = this.query;
     const iterator = this.iterator;
     const tools = this.tools;
@@ -257,7 +269,7 @@ export const claudeAdapter: Adapter = {
     resume: true,
     discover: false,
     toolConfirmation: "permission-mode",
-    attachments: false,
+    attachments: true,
     auth: { kind: "api-key", envNames: ["ANTHROPIC_API_KEY"] },
     defaultModel: { id: "sonnet", params: [] },
     liveCatalog: true,

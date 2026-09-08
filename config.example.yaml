@@ -52,5 +52,6 @@ display:
   shellLinesVisible: 12
 
 session:
+  # Gateway process start only. Switching threads / the next send still resume when the adapter can.
   resumeOnStart: true
   queue: fifo

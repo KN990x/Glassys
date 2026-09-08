@@ -22,6 +22,7 @@ import {
   cwdErrorInPatch,
   drainEmit,
   enqueueMessage,
+  listLiveThreads,
   readTranscript,
   snapshotQueue,
   snapshotRuntime,
@@ -219,9 +220,17 @@ async function handleClient(
     for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), extra)) {
       hub.send(ws, buffered);
     }
-    hub.release(ws);
     hub.send(ws, { type: "session", ...snapshotRuntime() });
     hub.send(ws, { type: "queue.snapshot", items: snapshotQueue() });
+    hub.send(ws, {
+      type: "threads.snapshot",
+      threads: await listLiveThreads(),
+      currentId: snapshotRuntime().threadId ?? null,
+    });
+    for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), [])) {
+      hub.send(ws, leftover);
+    }
+    hub.release(ws);
     return;
   }
 
