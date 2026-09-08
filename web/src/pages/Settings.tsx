@@ -10,10 +10,10 @@ import type {
 import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api, clearToken } from "../api";
 import { useT } from "../i18n";
-import { ModelPicker } from "../components/ModelPicker";
+import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
-import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption } from "../adapterOptions";
+import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../adapterOptions";
 
 export function Settings({
   config,
@@ -114,6 +114,9 @@ export function Settings({
 
   useEffect(() => {
     let cancelled = false;
+    setModels([]);
+    setModelSource("live");
+    setModelError("");
     void (async () => {
       const listed = await loadModels(draft.agent.adapter);
       if (cancelled) return;
@@ -128,12 +131,13 @@ export function Settings({
         if (!listed.length) return d;
         if (listed.some((m) => m.id === d.agent.model)) return d;
         const sel = pickDefaultSelection(listed, def?.id);
+        const item = listed.find((m) => m.id === (def?.id || sel.id));
         return {
           ...d,
           agent: {
             ...d.agent,
             model: def?.id || sel.id,
-            modelParams: def?.params ?? sel.params,
+            modelParams: paramsForSelection(item, def),
           },
         };
       });
@@ -204,6 +208,9 @@ export function Settings({
     const next = adapters.find((a) => a.id === id);
     if (!next || !adapterSelectable(next)) return;
     const def = next.capabilities.defaultModel;
+    setModels([]);
+    setModelSource("live");
+    setModelError("");
     setDraft({
       ...draft,
       agent: {
@@ -397,7 +404,7 @@ export function Settings({
                   type="checkbox"
                   checked={optionBool(draft.agent.options, "autoRun", true)}
                   onChange={(e) =>
-                    setDraft({ ...draft, agent: { ...draft.agent, options: setOption(draft.agent.options, "autoRun", e.target.checked) } })
+                    setDraft({ ...draft, agent: { ...draft.agent, options: setAutoRun(draft.agent.options, e.target.checked, caps?.toolConfirmation) } })
                   }
                 />
                 {t("wizard.exec.autoRun")}
@@ -414,7 +421,7 @@ export function Settings({
                     onChange={(e) =>
                       setDraft({
                         ...draft,
-                        agent: { ...draft.agent, options: setOption(draft.agent.options, "permissionMode", e.target.value) },
+                        agent: { ...draft.agent, options: setPermissionMode(draft.agent.options, e.target.value) },
                       })
                     }
                   >

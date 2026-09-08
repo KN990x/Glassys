@@ -4,12 +4,13 @@ import type { ToolBlock } from "../transcript";
 
 export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; shellLines: number; showDiff: boolean }) {
   const t = useT();
-  const [open, setOpen] = useState(block.status === "running" || block.toolKind !== "shell");
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? (block.status === "running" || block.toolKind !== "shell");
   const hunks = useMemo(() => (showDiff && block.diff ? splitHunks(block.diff) : []), [block.diff, showDiff]);
 
   return (
     <article className={`tool ${block.status}`}>
-      <button className="tool-head" type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button className="tool-head" type="button" aria-expanded={open} onClick={() => setUserOpen((v) => !(v ?? open))}>
         <span className="kind">{label(block.toolKind, t)}</span>
         <span className="title">
           <span>{block.title}</span>

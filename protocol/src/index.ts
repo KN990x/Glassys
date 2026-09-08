@@ -16,6 +16,11 @@ export {
   pickDefaultSelection,
   matchingVariant,
   mergeModelCatalog,
+  normalizeCatalogItem,
+  labelFromParams,
+  variantOptionLabel,
+  modelOptionLabel,
+  variantsHaveUsefulNames,
 } from "./models.js";
 export type {
   ModelParam,

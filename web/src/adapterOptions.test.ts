@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured } from "./adapterOptions";
+import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode } from "./adapterOptions";
 
 const cursor: AdapterPublicInfo = {
   id: "cursor",
@@ -53,6 +53,23 @@ describe("optionsForAdapter", () => {
     const saved = { adapter: "acp", options: { command: "npx" } };
     expect(optionsForAdapter(cursor, saved)).toEqual(defaultOptionsFor(cursor));
     expect(optionsForAdapter(cursor, saved).settingSources).toEqual(["project", "user"]);
+  });
+});
+
+describe("setAutoRun", () => {
+  it("maps Claude auto-run onto permissionMode", () => {
+    expect(
+      setAutoRun({ permissionMode: "bypassPermissions", autoRun: true }, false, "permission-mode"),
+    ).toMatchObject({
+      autoRun: false,
+      permissionMode: "dontAsk",
+    });
+    expect(setPermissionMode({ autoRun: true, permissionMode: "bypassPermissions" }, "dontAsk")).toMatchObject({
+      autoRun: false,
+      permissionMode: "dontAsk",
+    });
+    expect(setAutoRun({ autoRun: true }, false, "auto-review-deny")).toMatchObject({ autoRun: false });
+    expect(setAutoRun({ autoRun: true }, false, "auto-review-deny").permissionMode).toBeUndefined();
   });
 });
 

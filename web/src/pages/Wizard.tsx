@@ -15,7 +15,7 @@ import { useT } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
-import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, adapterKeyConfigured } from "../adapterOptions";
+import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 
 type StepId = "adapter" | "workspace" | "credential" | "model" | "rules" | "execution" | "acp";
 
@@ -86,6 +86,10 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
     if (caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
     return s;
   }, [adapterId, caps]);
+
+  useEffect(() => {
+    setStep((s) => Math.min(s, Math.max(0, steps.length - 1)));
+  }, [steps.length]);
 
   const id = steps[Math.min(step, steps.length - 1)] ?? "adapter";
 
@@ -562,7 +566,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 <input
                   type="checkbox"
                   checked={optionBool(options, "autoRun", true)}
-                  onChange={(e) => setOptions(setOption(options, "autoRun", e.target.checked))}
+                  onChange={(e) => setOptions(setAutoRun(options, e.target.checked, caps?.toolConfirmation))}
                 />
                 {t("wizard.exec.autoRun")}
               </label>
@@ -572,7 +576,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 {t("wizard.exec.permissionMode")}
                 <select
                   value={optionString(options, "permissionMode", "bypassPermissions")}
-                  onChange={(e) => setOptions(setOption(options, "permissionMode", e.target.value))}
+                  onChange={(e) => setOptions(setPermissionMode(options, e.target.value))}
                 >
                   <option value="bypassPermissions">{t("wizard.exec.permission.bypass")}</option>
                   <option value="dontAsk">{t("wizard.exec.permission.dontAsk")}</option>

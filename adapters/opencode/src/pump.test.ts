@@ -48,4 +48,28 @@ describe("EventPump", () => {
     expect(pump.drain()).toEqual([]);
     pump.abort();
   });
+
+  it("drops further stream events after abort", async () => {
+    let push!: (value: unknown) => void;
+    const stream = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            return new Promise<IteratorResult<unknown>>((resolve) => {
+              push = (value: unknown) => resolve({ value, done: false });
+            });
+          },
+          return() {
+            return Promise.resolve({ value: undefined, done: true as const });
+          },
+        };
+      },
+    };
+    const pump = new EventPump(stream);
+    await new Promise((r) => setTimeout(r, 10));
+    pump.abort();
+    push({ type: "late" });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(pump.drain()).toEqual([]);
+  });
 });

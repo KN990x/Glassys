@@ -313,7 +313,7 @@ describe("runtime queue", () => {
     expect(events.some((e) => e.type === "user.message" && "text" in e && e.text === "one")).toBe(false);
   });
 
-  it("wipes the transcript when resume fails so the UI does not keep an amnesiac thread", async () => {
+  it("keeps the Glassys transcript when resume fails and create succeeds", async () => {
     const { PROFILE_ID } = await import("@glassys/protocol");
     const { saveState } = await import("./state.js");
     const { appendTranscript } = await import("./transcript.js");
@@ -330,12 +330,37 @@ describe("runtime queue", () => {
       await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
       await drainEmit();
       const events = await readTranscript();
-      expect(events.some((e) => e.type === "user.message" && "text" in e && e.text === "stale")).toBe(false);
-      expect(events.some((e) => e.type === "text.delta" && "text" in e && e.text === "old reply")).toBe(false);
+      expect(events.some((e) => e.type === "user.message" && "text" in e && e.text === "stale")).toBe(true);
+      expect(events.some((e) => e.type === "text.delta" && "text" in e && e.text === "old reply")).toBe(true);
       expect(events.some((e) => e.type === "user.message" && "text" in e && e.text === "fresh")).toBe(true);
     } finally {
       fakeAdapter.resume = origResume;
     }
+  });
+
+  it("resets identity when config.yaml cwd changes without applyConfigPatch", async () => {
+    const { enqueueMessage, readTranscript, drainEmit } = await import("./runtime.js");
+    await enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+    await drainEmit();
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.adapter = "cursor";
+    const other = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
+    cfg.agent.cwd = other;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    await enqueueMessage("two");
+    await waitUntil(async () => {
+      const events = await readTranscript();
+      return (
+        events.some((e) => e.type === "user.message" && "text" in e && e.text === "two") &&
+        !events.some((e) => e.type === "user.message" && "text" in e && e.text === "one")
+      );
+    });
+    await drainEmit();
+    const events = await readTranscript();
+    expect(events.some((e) => e.type === "user.message" && "text" in e && e.text === "one")).toBe(false);
+    expect(events.some((e) => e.type === "user.message" && "text" in e && e.text === "two")).toBe(true);
   });
 
   it("does not call resume or wipe the transcript when the adapter declares resume: false", async () => {

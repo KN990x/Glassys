@@ -177,7 +177,16 @@ async function ensureSession(currentText?: string): Promise<AdapterSession> {
 
   if (session && runtime.fingerprint === fp) return session;
 
+  const identityChanged = runtime.fingerprint !== null && runtime.fingerprint !== fp;
   await disposeSession();
+
+  if (identityChanged) {
+    runtime.agentId = null;
+    runtime.fingerprint = null;
+    await saveState({ profileId: PROFILE_ID, agentId: null });
+    await clearTranscript();
+    await restoreQueuedUserMessages(currentText ? [currentText] : []);
+  }
 
   const state = await loadState();
   if (
@@ -202,8 +211,6 @@ async function ensureSession(currentText?: string): Promise<AdapterSession> {
       }
       runtime.agentId = null;
       await saveState({ profileId: PROFILE_ID, agentId: null });
-      await clearTranscript();
-      await restoreQueuedUserMessages(currentText ? [currentText] : []);
       runtime.fingerprint = fp;
       await persistAgentId(session.agentId);
       log("info", "created agent", { adapter: adapter.id, agentId: session.agentId });

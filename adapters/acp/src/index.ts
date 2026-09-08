@@ -225,7 +225,7 @@ export const acpAdapter: Adapter = {
     settingSources: false,
     autoRun: true,
     cancel: true,
-    resume: true,
+    resume: false,
     discover: true,
     toolConfirmation: "auto-review-deny",
     auth: { kind: "cli-binary", envNames: [] },
@@ -278,6 +278,10 @@ export const acpAdapter: Adapter = {
     } catch (err) {
       throw new AdapterError(`ACP registry unavailable: ${errorMessage(err)}`, "startup");
     }
+  },
+
+  async probe() {
+    /* Generic host; agent.options.command is required at create and when completing onboarding. */
   },
 
   async create(opts) {

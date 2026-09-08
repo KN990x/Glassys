@@ -1,8 +1,8 @@
-# Mode A — host gateway
+# Host gateway
 
 Run the Glassys gateway as a normal process on the machine the agent should operate. The PWA is served by the same process. You bring the reverse proxy.
 
-This is the recommended mode when the agent needs the real workspace, host `git`, and often the host Docker CLI.
+This is how Glassys is installed: the agent needs the real workspace, host `git`, and the operator’s files.
 
 ## Run as a user service (recommended)
 

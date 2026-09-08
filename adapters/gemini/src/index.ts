@@ -140,10 +140,12 @@ export const geminiAdapter: Adapter = {
   },
 
   async create(opts) {
+    await loadSdk();
     return GeminiSession.start(opts);
   },
 
   async resume(agentId, opts) {
+    await loadSdk();
     return GeminiSession.start(opts, agentId);
   },
 };

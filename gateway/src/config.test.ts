@@ -75,6 +75,30 @@ describe("config patch", () => {
     await expect(applyPatch({ operatorPassword: "x".repeat(257) })).rejects.toThrow(/at most 256/);
   });
 
+  it("does not persist a locale patch when the password is invalid", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = dir;
+    const originalLocale = cfg.space.locale;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { applyPatch, loadConfig } = await import("./config.js");
+    await expect(applyPatch({ space: { locale: "es" }, operatorPassword: "x".repeat(257) })).rejects.toThrow(/at most 256/);
+    expect((await loadConfig()).space.locale).toBe(originalLocale);
+  });
+
+  it("rejects completing onboarding for ACP without a command", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "acp";
+    cfg.agent.options = { command: "" };
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { applyPatch } = await import("./config.js");
+    await expect(applyPatch({ onboarding: { completed: true } })).rejects.toThrow(/command/);
+  });
+
   it("rejects switching adapter when probe fails", async () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
     process.env.GLASSYS_DATA_DIR = dir;

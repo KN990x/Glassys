@@ -3,13 +3,17 @@ export class EventPump {
   private waiters: Array<() => void> = [];
   private ended = false;
   private readonly abortCtl = new AbortController();
+  private readonly iterator: AsyncIterator<unknown>;
 
   constructor(stream: AsyncIterable<unknown>) {
+    const iterator = stream[Symbol.asyncIterator]();
+    this.iterator = iterator;
     void (async () => {
       try {
-        for await (const ev of stream) {
-          if (this.abortCtl.signal.aborted) break;
-          this.buf.push(ev);
+        while (!this.abortCtl.signal.aborted) {
+          const next = await iterator.next();
+          if (next.done || this.abortCtl.signal.aborted) break;
+          this.buf.push(next.value);
           this.waiters.shift()?.();
         }
       } catch {
@@ -22,10 +26,12 @@ export class EventPump {
   }
 
   abort(): void {
+    if (this.abortCtl.signal.aborted) return;
     this.abortCtl.abort();
     this.ended = true;
     this.buf = [];
     while (this.waiters.length) this.waiters.shift()?.();
+    void this.iterator.return?.();
   }
 
   drain(): unknown[] {

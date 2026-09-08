@@ -39,7 +39,7 @@ Default bind is `127.0.0.1`. Binding `0.0.0.0` is an explicit operator choice in
 | Path | Role |
 | --- | --- |
 | `protocol/` | Versioned UI protocol. Gateway and web import this. **Never** SDK/CLI types or vendor catalogs. |
-| `adapters/contract/` | `Adapter` interface: `create`, `resume`, `send`, `cancel`, `listModels`, `capabilities`. |
+| `adapters/contract/` | `Adapter` interface: `create`, `resume`, `listModels`, `capabilities`. `send` lives on the session; `cancel` on the run. |
 | `adapters/cursor/` | Only package that imports `@cursor/sdk`. Owns the Cursor fallback catalog. |
 | `adapters/claude/` | Claude Agent SDK. |
 | `adapters/opencode/` | OpenCode local server. |
@@ -79,13 +79,10 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 
 ## Deploy
 
-Document two modes; the operator chooses:
+Host gateway only. The documented one-liner `git clone … && cd glassys && pnpm install && pnpm run service:install` writes a user systemd unit or LaunchAgent; PWA served by the gateway; operator's proxy. Uninstall: `cd glassys && pnpm run service:uninstall`. Foreground `pnpm start` is for debugging.
 
-- **A — host gateway** (recommended if the agent must operate the machine): documented one-liner `git clone … && cd glassys && pnpm install && pnpm run service:install` writes a user systemd unit or LaunchAgent; PWA served by the gateway; operator's proxy. Uninstall: `cd glassys && pnpm run service:uninstall`. Foreground `pnpm start` is for debugging.
-- **B — Compose**: mounted workspace + data. Warn about UID, Docker socket, DinD. Host `127.0.0.1` is **not** reachable from a sidecar; use host-gateway, host network, or a shared network.
-
-Recipes (Caddy, Cloudflare Tunnel + Access) are appendices. Glassys does not depend on Cloudflare. Do not pretend A and B are equivalent.
+Recipes (Caddy, Cloudflare Tunnel + Access) are appendices. Glassys does not depend on Cloudflare.
 
 ## Out of scope until asked
 
-Marketing site, Glassys cloud accounts, multi-tenant, billing, plugin store, native iOS/Android (PWA is the client), PTY as UI, polishing Windows first (do not block it).
+Marketing site, Glassys cloud accounts, multi-tenant, billing, plugin store, native iOS/Android (PWA is the client), PTY as UI, Docker / Compose, polishing Windows first (do not block it).

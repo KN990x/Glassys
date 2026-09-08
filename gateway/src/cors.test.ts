@@ -80,11 +80,11 @@ describe("setupOriginAllowed", () => {
     );
   });
 
-  it("allows a loopback Origin from a Docker-style remote address", () => {
+  it("allows a loopback Origin from a non-loopback remote address", () => {
     expect(
       setupOriginAllowed({
         origin: "http://127.0.0.1:8787",
-        remoteAddress: "172.17.0.1",
+        remoteAddress: "10.0.0.1",
         publicUrl: "",
         allowedOrigins: [],
       }),

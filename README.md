@@ -38,8 +38,6 @@
   <img src="https://img.shields.io/badge/backend-Node.js-339933?logo=nodedotjs&logoColor=white" alt="Node.js"/>
   &nbsp;
   <img src="https://img.shields.io/badge/pkg-pnpm-F69220?logo=pnpm&logoColor=white" alt="pnpm"/>
-  &nbsp;
-  <img src="https://img.shields.io/badge/infra-Docker-2496ED?logo=docker&logoColor=white" alt="Docker"/>
 </p>
 
 <p align="center">
@@ -72,7 +70,7 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor CLI, Claude Code, Ope
 - Node.js **22.13+** (`.nvmrc`)
 - **pnpm** 11.14+ (this repo is a pnpm workspace; do not use npm)
 - A git workspace on the machine that will run the agent
-- Cursor SDK login on that host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **or** optional `CURSOR_API_KEY` for Docker/CI. **cursor-cli, cursor-agent, and Cursor IDE login are a different store** and do not authenticate Glassys. The wizard shows a login URL if the host has no display (Linux systemd, SSH, phone).
+- Cursor SDK login on that host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **or** optional `CURSOR_API_KEY` for CI or an override. **cursor-cli, cursor-agent, and Cursor IDE login are a different store** and do not authenticate Glassys. The wizard shows a login URL if the host has no display (Linux systemd, SSH, phone).
 - Other adapters: the matching CLI/SDK on the host (`claude`, `opencode`, `gemini`, `codex`) and optional `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. The Gemini adapter talks to `@google/gemini-cli-sdk` when it is installed or linked; that package is not on npm yet, so Gemini stays visible in the wizard but **not selectable** until it is.
 
 ### Cursor credentials vs cursor-cli
@@ -86,16 +84,15 @@ Glassys talks to `@cursor/sdk` (`Agent.create` / `resume` / `send`). Credential 
 | `systemd --user` (`pnpm run service:install`) | The unit has `HOME` but often no `DISPLAY`. Use the URL in the PWA, or set `CURSOR_API_KEY` on the service. Linger does not give a display. |
 | SSH / headless / PWA on a phone | Open the URL in the browser you are looking at. Do not wait for a browser on the server. |
 | Existing `~/.cursor/sdk/auth.json` | Works if the service `HOME` is that user and no bad `CURSOR_API_KEY` overrides it. |
-| Docker Compose | Prefer `CURSOR_API_KEY` or mount the host SDK store (`docs/deploy/compose.md`). Sign-in inside the container almost never has a browser. |
 | systemd `User=glassys` | That account’s `$HOME` is a different `auth.json`. Log in as that user or use env/secrets. |
 | SDK key expired (~90 days) | Sign in with the SDK again or rotate the dashboard key. |
 | CLI and Glassys on the same `cwd` | Independent credentials. Do not run two auto-run agents on the same files at once. |
 
 `settingSources` (default project + user) can load **rules** from `~/.cursor`; it does not copy IDE tokens.
 
-## Quick start (host gateway — mode A)
+## Quick start
 
-Recommended if the agent should operate the real machine (Docker, git, your files).
+Install on the machine the agent should operate (git, your files).
 
 ```bash
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
@@ -114,18 +111,6 @@ cd glassys && pnpm run service:uninstall
 ```
 
 Foreground (blocks the terminal): `pnpm run build && pnpm start`. Default bind is **localhost**. Put Caddy, Traefik, Nginx Proxy Manager, or Cloudflare Tunnel in front if you need a public URL. See [docs/deploy/host.md](docs/deploy/host.md).
-
-## Compose (mode B)
-
-For trying Glassys or a mounted workspace. This is **not** the same as mode A: Docker-in-Docker, UID mapping, and the Docker socket are your problem to understand. Host `127.0.0.1` is not reachable from a sidecar container. v1 builds the image locally (no published GHCR image yet).
-
-```bash
-cp .env.example .env
-# set GLASSYS_WORKSPACE (absolute host path). CURSOR_API_KEY is optional; see docs/deploy/compose.md to mount a host SDK login store.
-docker compose up --build
-```
-
-Details: [docs/deploy/compose.md](docs/deploy/compose.md).
 
 ## Development
 
@@ -175,7 +160,7 @@ Glassys with auto-run and a host workspace is **operator access to that machine*
 | `adapters/codex/` | Codex CLI |
 | `adapters/acp/` | Generic ACP host |
 | `web/` | Dumb PWA |
-| `docs/deploy/` | Mode A, mode B, Caddy, Cloudflare appendix |
+| `docs/deploy/` | Host, Caddy, Cloudflare appendix |
 
 ## License
 
@@ -209,7 +194,7 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor CLI, Claude Code, O
 - Node.js **22.13+** (`.nvmrc`)
 - **pnpm** 11.14+ (este repo es un workspace pnpm; no uses npm)
 - Un workspace git en la máquina que ejecutará el agente
-- Login del SDK de Cursor en ese host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **o** `CURSOR_API_KEY` opcional para Docker/CI. **cursor-cli, cursor-agent y el login del IDE son otro almacén** y no autentican Glassys. El asistente muestra una URL de login si el host no tiene display (systemd en Linux, SSH, teléfono).
+- Login del SDK de Cursor en ese host (`Sign in with Cursor SDK` / `Cursor.auth.login()`), **o** `CURSOR_API_KEY` opcional para CI o un override. **cursor-cli, cursor-agent y el login del IDE son otro almacén** y no autentican Glassys. El asistente muestra una URL de login si el host no tiene display (systemd en Linux, SSH, teléfono).
 - Otros adaptadores: el CLI/SDK correspondiente en el host (`claude`, `opencode`, `gemini`, `codex`) y opcionalmente `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CODEX_API_KEY`. El adaptador Gemini habla con `@google/gemini-cli-sdk` cuando está instalado o enlazado; ese paquete aún no está en npm, así que Gemini se ve en el asistente pero **no se puede elegir** hasta entonces.
 
 ### Credenciales de Cursor vs cursor-cli
@@ -223,16 +208,15 @@ Glassys habla con `@cursor/sdk` (`Agent.create` / `resume` / `send`). Orden: API
 | `systemd --user` (`pnpm run service:install`) | La unidad tiene `HOME` pero a menudo no `DISPLAY`. Usa la URL en la PWA, o `CURSOR_API_KEY` en el servicio. Linger no da un display. |
 | SSH / headless / PWA en el teléfono | Abre la URL en el navegador que estás mirando. No esperes un navegador en el servidor. |
 | Ya existe `~/.cursor/sdk/auth.json` | Vale si el `HOME` del servicio es ese usuario y no hay un `CURSOR_API_KEY` malo que lo pise. |
-| Docker Compose | Prefiere `CURSOR_API_KEY` o monta el store del host (`docs/deploy/compose.md`). El sign-in dentro del contenedor casi nunca tiene navegador. |
 | systemd `User=glassys` | Otro `$HOME` → otro `auth.json`. Entra como ese usuario o usa env/secrets. |
 | Key del SDK caducada (~90 días) | Vuelve a iniciar sesión con el SDK o rota la key del dashboard. |
 | CLI y Glassys sobre el mismo `cwd` | Credenciales independientes. No lances dos agentes auto-run a la vez sobre los mismos archivos. |
 
 `settingSources` (por defecto project + user) puede cargar **reglas** de `~/.cursor`; no copia tokens del IDE.
 
-## Arranque rápido (gateway en el host — modo A)
+## Arranque rápido
 
-Recomendado si el agente debe operar la máquina real (Docker, git, tus archivos).
+Instálalo en la máquina que el agente debe operar (git, tus archivos).
 
 ```bash
 git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
@@ -251,18 +235,6 @@ cd glassys && pnpm run service:uninstall
 ```
 
 En primer plano (bloquea la terminal): `pnpm run build && pnpm start`. El bind por defecto es **localhost**. Pon Caddy, Traefik, Nginx Proxy Manager o Cloudflare Tunnel delante si necesitas una URL pública. Véase [docs/deploy/host.md](docs/deploy/host.md).
-
-## Compose (modo B)
-
-Para probar Glassys o un workspace montado. **No** es lo mismo que el modo A: Docker-in-Docker, mapeo de UID y el socket de Docker son tu problema. El `127.0.0.1` del host no es alcanzable desde un sidecar. En v1 la imagen se construye en local (aún no hay imagen en GHCR).
-
-```bash
-cp .env.example .env
-# define GLASSYS_WORKSPACE (ruta absoluta en el host). CURSOR_API_KEY es opcional; véase docs/deploy/compose.md para montar el login del SDK del host.
-docker compose up --build
-```
-
-Detalles: [docs/deploy/compose.md](docs/deploy/compose.md).
 
 ## Desarrollo
 
@@ -312,7 +284,7 @@ Glassys con auto-run y un workspace del host es **acceso de operador a esa máqu
 | `adapters/codex/` | Codex CLI |
 | `adapters/acp/` | Host ACP genérico |
 | `web/` | PWA tonta |
-| `docs/deploy/` | Modo A, modo B, Caddy, apéndice Cloudflare |
+| `docs/deploy/` | Host, Caddy, apéndice Cloudflare |
 
 ## Licencia
 

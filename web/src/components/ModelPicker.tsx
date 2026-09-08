@@ -1,5 +1,5 @@
 import type { ModelCatalogItem, ModelParam, ModelParamDef } from "@glassys/protocol";
-import { defaultParamsFor, matchingVariant } from "@glassys/protocol";
+import { defaultParamsFor, matchingVariant, modelOptionLabel, variantOptionLabel } from "@glassys/protocol";
 import { useT } from "../i18n";
 
 function boolParam(def: ModelParamDef): boolean {
@@ -43,17 +43,23 @@ function extraDefaults(model: ModelCatalogItem, preferred?: ModelParam[]): Model
   }).filter((p) => p.value);
 }
 
+function flagshipVariantParams(model: ModelCatalogItem): ModelParam[] {
+  const extra = model.variants?.find(
+    (v) => /extra\s*high|xhigh/i.test(v.displayName) || v.params.some((p) => p.value === "xhigh"),
+  );
+  return extra?.params ?? defaultParamsFor(model);
+}
+
 export function paramsForSelection(
   model: ModelCatalogItem | undefined,
   preferred?: { id: string; params: ModelParam[] },
 ): ModelParam[] {
   if (!model) return preferred?.params ?? [];
-  if (preferred && preferred.id === model.id && preferred.params.length) return preferred.params;
-  const extra = model.variants?.find(
-    (v) => /extra\s*high|xhigh/i.test(v.displayName) || v.params.some((p) => p.value === "xhigh"),
-  );
-  const variantParams = extra?.params ?? defaultParamsFor(model);
-  return applyVariant(model, variantParams, extraDefaults(model, preferred?.id === model.id ? preferred.params : undefined));
+  const preferredForModel = preferred?.id === model.id ? preferred.params : undefined;
+  const used = variantParamIds(model);
+  const fromPreferred = preferredForModel?.filter((p) => used.has(p.id)) ?? [];
+  const variantParams = fromPreferred.length ? fromPreferred : flagshipVariantParams(model);
+  return applyVariant(model, variantParams, extraDefaults(model, preferredForModel));
 }
 
 export function ModelPicker({
@@ -101,7 +107,7 @@ export function ModelPicker({
         <select value={selected?.id ?? modelId} onChange={(e) => pickModel(e.target.value)}>
           {catalog.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.displayName}
+              {modelOptionLabel(m, catalog)}
             </option>
           ))}
         </select>
@@ -109,7 +115,7 @@ export function ModelPicker({
       {!compact && selected?.description && <p className="muted">{selected.description}</p>}
       {selected?.variants && selected.variants.length > 0 && (
         <label>
-          {compact ? t("wizard.model.variant") : t("wizard.model.variant")}
+          {t("wizard.model.variant")}
           <select
             value={variant ? String(selected.variants.indexOf(variant)) : ""}
             onChange={(e) => pickVariant(e.target.value)}
@@ -117,7 +123,7 @@ export function ModelPicker({
             {!variant && <option value="">{t("wizard.model.custom")}</option>}
             {selected.variants.map((v, i) => (
               <option key={`${v.displayName}-${i}`} value={String(i)}>
-                {v.displayName}
+                {variantOptionLabel(selected, v, i, selected.variants!)}
               </option>
             ))}
           </select>

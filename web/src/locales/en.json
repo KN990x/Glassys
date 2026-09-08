@@ -41,7 +41,7 @@
   "wizard.workspace.required": "Enter an absolute workspace path on this host.",
   "wizard.acp.commandRequired": "ACP needs a command (or a registry pick) before you can enter chat.",
   "wizard.workspace.path": "Workspace path",
-  "wizard.cred.body": "Use this host’s CLI or SDK login when possible. An API key is optional (Docker, CI, or an override).",
+  "wizard.cred.body": "Use this host’s CLI or SDK login when possible. An API key is optional (CI, or an override).",
   "wizard.cred.key": "API key (optional)",
   "wizard.cred.login": "Sign in with Cursor SDK",
   "wizard.cred.loginBusy": "Waiting for browser login…",
