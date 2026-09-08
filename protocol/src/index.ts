@@ -198,6 +198,7 @@ export interface MessageAttachment {
 export interface QueueItem {
   id: string;
   text: string;
+  hasAttachments?: boolean;
 }
 
 export interface ThreadSummary {
@@ -362,7 +363,20 @@ export function isTranscriptEvent(value: ServerMessage): value is TranscriptEven
 
 /** Live UI events that must not be replayed from transcript.jsonl. */
 export function isPersistedTranscriptEvent(value: ServerMessage): value is TranscriptEvent {
-  return isTranscriptEvent(value) && value.type !== "run.queued" && value.type !== "run.start";
+  return (
+    isTranscriptEvent(value) &&
+    value.type !== "run.queued" &&
+    value.type !== "run.start" &&
+    value.type !== "tool.progress"
+  );
+}
+
+const MESSAGE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Client-supplied `user.message.id` must be a UUID so the gateway can honor it. */
+export function isMessageId(value: unknown): value is string {
+  return typeof value === "string" && MESSAGE_ID_RE.test(value);
 }
 
 export function optionBool(options: Record<string, unknown> | undefined, key: string, fallback: boolean): boolean {

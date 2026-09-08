@@ -13,7 +13,7 @@ import type {
   ServerMessage,
   TranscriptEvent,
 } from "@glassys/protocol";
-import { PROFILE_ID, isPersistedTranscriptEvent } from "@glassys/protocol";
+import { PROFILE_ID, isMessageId, isPersistedTranscriptEvent } from "@glassys/protocol";
 import { agentFingerprint, applyPatch, loadConfig, redacted } from "./config.js";
 import { adapterApiKey, loadSecrets, secretsFlags } from "./secrets.js";
 import { getAdapter, listAdapters, probeAdapter } from "./adapters.js";
@@ -33,10 +33,11 @@ import {
   loadThread,
   openEmptyThread,
   rememberCwd,
+  removeThread,
   resetLiveThreadCache,
   startNewThread,
 } from "./threads.js";
-import { resolveAttachments } from "./uploads.js";
+import { gcUploads, resolveAttachments } from "./uploads.js";
 
 export interface Runtime {
   busy: boolean;
@@ -73,9 +74,6 @@ const withQueueLock = createMutex();
 
 function persistable(event: ServerMessage): TranscriptEvent | null {
   if (!isPersistedTranscriptEvent(event)) return null;
-  if (event.type === "tool.progress" && event.chunk && event.chunk.length > 16_384) {
-    return { ...event, chunk: event.chunk.slice(-16_384) };
-  }
   return event;
 }
 
@@ -113,7 +111,13 @@ export function snapshotRuntime(): {
 }
 
 export function snapshotQueue(): QueueItem[] {
-  return queue.filter((j) => j.generation === identityGeneration).map((j) => ({ id: j.id, text: j.text }));
+  return queue
+    .filter((j) => j.generation === identityGeneration)
+    .map((j) => ({
+      id: j.id,
+      text: j.text,
+      hasAttachments: j.attachments?.length ? true : undefined,
+    }));
 }
 
 async function broadcastQueue(): Promise<void> {
@@ -224,6 +228,7 @@ async function rotateToNewThread(previousAgentId: string | null): Promise<void> 
   runtime.fingerprint = null;
   runtime.identityAgent = null;
   await saveState({ agentId: null });
+  await gcUploads();
 }
 
 async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
@@ -246,12 +251,12 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
   }
 
   const state = await loadState();
-  if (
-    cfg.session.resumeOnStart &&
-    adapter.capabilities.resume &&
-    usableAgentId(state.agentId) &&
-    runtime.fingerprint === null
-  ) {
+  const canResume =
+    adapter.capabilities.resume ||
+    (Boolean(adapter.shouldResume) && usableAgentId(state.agentId)
+      ? await adapter.shouldResume!(state.agentId, opts)
+      : false);
+  if (cfg.session.resumeOnStart && canResume && usableAgentId(state.agentId) && runtime.fingerprint === null) {
     try {
       session = await adapter.resume(state.agentId, opts);
       runtime.fingerprint = fp;
@@ -361,10 +366,13 @@ async function processQueue(): Promise<void> {
         if (!stillCurrent) continue;
 
         try {
-          runtime.busy = true;
-          runStartedAt = Date.now();
+          const gen = await withQueueLock(async () => {
+            runtime.busy = true;
+            runStartedAt = Date.now();
+            return cancelGeneration;
+          });
           await broadcastSession();
-          await runOnce(item.job);
+          await runOnce(item.job, gen);
         } catch (err) {
           log("error", "runOnce failed", { error: String(err) });
           try {
@@ -405,8 +413,7 @@ async function processQueue(): Promise<void> {
   }
 }
 
-async function runOnce(job: QueueJob): Promise<void> {
-  const gen = cancelGeneration;
+async function runOnce(job: QueueJob, gen: number): Promise<void> {
   let handle: AdapterSession;
   try {
     handle = await ensureSession(job);
@@ -507,7 +514,11 @@ async function runOnce(job: QueueJob): Promise<void> {
   }
 }
 
-export async function enqueueMessage(text: string, attachments?: MessageAttachment[]): Promise<void> {
+export async function enqueueMessage(
+  text: string,
+  attachments?: MessageAttachment[],
+  clientId?: string,
+): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed && !attachments?.length) return;
   const cfg = await loadConfig();
@@ -516,7 +527,8 @@ export async function enqueueMessage(text: string, attachments?: MessageAttachme
     return;
   }
   return withQueueLock(async () => {
-    const id = randomUUID();
+    const id = isMessageId(clientId) ? clientId : randomUUID();
+    if (currentJobId === id || queue.some((j) => j.id === id)) return;
     await emit({ type: "user.message", text: trimmed, id, attachments: attachments?.length ? attachments : undefined });
     const busy = runtime.busy || processing || queue.length > 0;
     queue.push({ id, text: trimmed, attachments, generation: identityGeneration });
@@ -560,16 +572,23 @@ export async function applyConfigPatch(
 ): Promise<{ restart: boolean }> {
   const before = await loadConfig();
   const { config, restart } = await applyPatch(patch);
+  invalidateAdapterInfoCache();
   if (config.agent.cwd) await rememberCwd(config.agent.cwd);
   if (opts?.identity !== "preserve") {
     const identityChanged = agentFingerprint(before) !== agentFingerprint(config);
     if (identityChanged) {
-      await withQueueLock(async () => {
+      const dropped = await withQueueLock(async () => {
         cancelGeneration += 1;
         identityGeneration += 1;
+        const jobs = queue;
         queue = [];
         pendingIdentityReset = true;
+        return jobs;
       });
+      for (const job of dropped) {
+        await emit({ type: "user.retracted", id: job.id });
+      }
+      await broadcastQueue();
       if (currentRun) {
         try {
           await currentRun.cancel();
@@ -612,6 +631,7 @@ export async function startNewLiveThread(): Promise<void> {
   await broadcastConfig();
   await broadcastSession();
   await broadcastQueue();
+  await gcUploads();
 }
 
 export async function switchLiveThread(id: string): Promise<void> {
@@ -635,15 +655,37 @@ export async function switchLiveThread(id: string): Promise<void> {
   await broadcastQueue();
 }
 
+export async function deleteLiveThread(id: string): Promise<void> {
+  if (!id || id.includes("/") || id.includes("..")) throw new HttpError(400, "invalid thread id");
+  assertIdle();
+  const wasLive = liveThreadId() === id;
+  if (wasLive) await startNewLiveThread();
+  try {
+    await removeThread(id);
+  } catch (err) {
+    if (wasLive) throw err;
+    throw new HttpError(404, err instanceof Error ? err.message : "Thread not found");
+  }
+  await gcUploads();
+  if (wasLive) {
+    hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+    await broadcastSession();
+  }
+}
+
 export async function initRuntime(): Promise<void> {
   await ensureLiveThread();
   const state = await loadState();
   runtime.agentId = usableAgentId(state.agentId) ? state.agentId : null;
   const cfg = await loadConfig();
   const adapter = getAdapter(cfg.agent.adapter);
-  if (cfg.session.resumeOnStart && adapter.capabilities.resume && usableAgentId(state.agentId)) {
+  if (cfg.session.resumeOnStart && usableAgentId(state.agentId)) {
     try {
-      await ensureSession();
+      const opts = await createOpts();
+      const canResume =
+        adapter.capabilities.resume ||
+        (adapter.shouldResume ? await adapter.shouldResume(state.agentId, opts) : false);
+      if (canResume) await ensureSession();
     } catch (err) {
       log("warn", "startup resume skipped", { error: String(err) });
     }
@@ -687,30 +729,44 @@ export async function listModels(adapterId?: string): Promise<ModelListResponse>
   return result;
 }
 
+const ADAPTER_INFO_TTL_MS = 30_000;
+let adapterInfoCache: { at: number; value: AdapterPublicInfo[] } | null = null;
+
+export function invalidateAdapterInfoCache(): void {
+  adapterInfoCache = null;
+}
+
 export async function listAdapterInfo(): Promise<AdapterPublicInfo[]> {
+  if (adapterInfoCache && Date.now() - adapterInfoCache.at < ADAPTER_INFO_TTL_MS) {
+    return adapterInfoCache.value;
+  }
   const secrets = await loadSecrets();
   const flags = secretsFlags(secrets);
-  const out: AdapterPublicInfo[] = [];
-  for (const adapter of listAdapters()) {
-    let status: { loggedIn: boolean; email?: string } = { loggedIn: false };
-    try {
-      status = adapter.authStatus ? await adapter.authStatus() : { loggedIn: false };
-    } catch (err) {
-      log("warn", "adapter authStatus failed", { adapter: adapter.id, error: String(err) });
-    }
-    out.push({
-      id: adapter.id,
-      displayName: adapter.displayName,
-      description: adapter.description,
-      capabilities: adapter.capabilities,
-      available: await probeAdapter(adapter),
-      auth: {
-        loggedIn: status.loggedIn,
-        email: status.email,
-        apiKeyConfigured: Boolean(flags.adapters[adapter.id]?.apiKey || adapterApiKey(secrets, adapter.id)),
-      },
-    });
-  }
+  const cfg = await loadConfig();
+  const out = await Promise.all(
+    listAdapters().map(async (adapter) => {
+      let status: { loggedIn: boolean; email?: string } = { loggedIn: false };
+      try {
+        status = adapter.authStatus ? await adapter.authStatus() : { loggedIn: false };
+      } catch (err) {
+        log("warn", "adapter authStatus failed", { adapter: adapter.id, error: String(err) });
+      }
+      const probeOpts = adapter.id === cfg.agent.adapter ? cfg.agent.options : undefined;
+      return {
+        id: adapter.id,
+        displayName: adapter.displayName,
+        description: adapter.description,
+        capabilities: adapter.capabilities,
+        available: await probeAdapter(adapter, probeOpts),
+        auth: {
+          loggedIn: status.loggedIn,
+          email: status.email,
+          apiKeyConfigured: Boolean(flags.adapters[adapter.id]?.apiKey || adapterApiKey(secrets, adapter.id)),
+        },
+      } satisfies AdapterPublicInfo;
+    }),
+  );
+  adapterInfoCache = { at: Date.now(), value: out };
   return out;
 }
 

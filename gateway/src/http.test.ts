@@ -136,6 +136,11 @@ describe("http api", () => {
     expect(threads.status).toBe(200);
     const listed = (await threads.json()) as { threads: unknown[]; currentId: string | null };
     expect(listed.currentId).toBeTruthy();
+    const del = await fetch(`${base}/api/threads/${listed.currentId}`, { method: "DELETE", headers: auth });
+    expect(del.status).toBe(200);
+    const after = (await del.json()) as { currentId: string | null };
+    expect(after.currentId).toBeTruthy();
+    expect(after.currentId).not.toBe(listed.currentId);
     const reach = await fetch(`${base}/api/reachability`, { headers: auth });
     expect(reach.status).toBe(200);
     const reachBody = (await reach.json()) as { bind: string; loopback: boolean; port: number };

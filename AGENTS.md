@@ -59,8 +59,8 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 
 - Contract: `protocolVersion` major `1`. Client rejects incompatible majors.
 - Runs go over **WebSocket with keepalive** (ping 15–30s, default 25). No SSE / long HTTP. Proxies and Cloudflare cut idle HTTP around ~100s; agent runs last minutes.
-- Client: `hello`, `auth`, `user.message` (optional `id`, `attachments`), `run.cancel`, `queue.cancel`, `thread.new` / `thread.switch`, `config.get` / `config.set`, `ping`.
-- Server: `thinking.*`, `text.delta`, `tool.*` (`tool.end.denied` when Auto-review or auto-run off blocked a call), `run.*` (including optional `run.usage`), `user.retracted`, `session` (`threadId`, `runStartedAt`), `queue.snapshot` (live, not persisted), redacted `config`, `config.error`, plus `hello.ok` / `hello.incompatible`, `auth.ok` / `auth.error`, and `transcript.snapshot` for reconnect.
+- Client: `hello`, `auth`, `user.message` (optional `id`, `attachments`), `run.cancel`, `queue.cancel`, `thread.new` / `thread.switch`, `config.get` / `config.set`, `ping`. The PWA creates and switches threads over HTTP (`POST /api/threads`, `POST /api/threads/:id/switch`, `DELETE /api/threads/:id`). WS `thread.new` / `thread.switch` stay for non-PWA clients; both paths hit the same runtime and broadcast `transcript.snapshot`.
+- Server: `thinking.*`, `text.delta`, `tool.*` (`tool.end` with `denied: true` when Auto-review or auto-run off blocked a call), `run.*` (including optional `run.usage`), `user.retracted`, `session` (`threadId`, `runStartedAt`), `queue.snapshot` (live, not persisted), redacted `config`, `config.error`, plus `hello.ok` / `hello.incompatible`, `auth.ok` / `auth.error`, and `transcript.snapshot` for reconnect.
 - Paint text from the first token. Never wait for `run.done` to start rendering.
 - `GET /api/models?adapter=` returns `{ models, source: "live" | "fallback", error? }`. Never silently swap in Cursor’s static catalog for another adapter.
 - Runtime must not call `adapter.resume` when `capabilities.resume` is false (keep the Glassys transcript; create on the next send).

@@ -56,6 +56,7 @@ describe("protocol v1", () => {
     expect(isPersistedTranscriptEvent({ type: "user.message", text: "x" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "user.retracted", id: "m1" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "run.usage", inputTokens: 1 })).toBe(true);
+    expect(isPersistedTranscriptEvent({ type: "tool.progress", callId: "c1", chunk: "x" })).toBe(false);
     expect(isTranscriptEvent({ type: "queue.snapshot", items: [] } as never)).toBe(false);
   });
 
@@ -98,5 +99,12 @@ describe("protocol v1", () => {
         auth: { loggedIn: false, apiKeyConfigured: false },
       }),
     ).toBe(false);
+  });
+
+  it("accepts UUID user.message ids", async () => {
+    const { isMessageId } = await import("../src/index.js");
+    expect(isMessageId("11111111-1111-4111-8111-111111111111")).toBe(true);
+    expect(isMessageId("not-a-uuid")).toBe(false);
+    expect(isMessageId(undefined)).toBe(false);
   });
 });

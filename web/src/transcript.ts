@@ -105,7 +105,19 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       next.push({ id: nid("tx"), kind: "text", text: event.text });
       return next;
     }
-    case "tool.start":
+    case "tool.start": {
+      const idx = findTool(next, event.callId);
+      if (idx >= 0 && next[idx].kind === "tool") {
+        const cur = next[idx];
+        next[idx] = {
+          ...cur,
+          title: event.title || cur.title,
+          path: event.path ?? cur.path,
+          command: event.command ?? cur.command,
+          toolKind: event.kind || cur.toolKind,
+        };
+        return next;
+      }
       next.push({
         id: `tool:${event.callId}`,
         kind: "tool",
@@ -118,6 +130,7 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
         chunk: "",
       });
       return next;
+    }
     case "tool.progress": {
       const idx = findTool(next, event.callId);
       if (idx >= 0 && next[idx].kind === "tool") {

@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
@@ -40,24 +40,48 @@ function mapPart(partRaw: unknown, tools: Map<string, string>, snapshots: Map<st
     if (type === "tool" || type === "tool_call" || type === "tool-call") {
     const id = str(part.callID) || str(part.callId) || str(part.id) || "tool";
     const name = str(part.tool) || str(part.name) || "tool";
-    const state = str(asRecord(part.state)?.status) || str(part.status) || str(asRecord(part.state)?.type);
-    const ended = state === "completed" || state === "error" || state === "failed";
+    const recState = asRecord(part.state);
+    const state = str(recState?.status) || str(part.status) || str(recState?.type);
+    const ended = state === "completed" || state === "error" || state === "failed" || state === "cancelled";
+    const input = asRecord(part.input) ?? asRecord(recState?.input) ?? recState ?? part;
+    const path = str(input?.path) || str(input?.file_path) || str(input?.filePath) || str(part.path);
+    const command = str(input?.command) || str(part.command);
     const out: ServerMessage[] = [];
-    if (!tools.has(id) || state === "pending" || state === "running" || state === "start") {
+    if (!tools.has(id)) {
       tools.set(id, name);
-      out.push({ type: "tool.start", callId: id, kind: toolKindFromName(name), title: name });
+      out.push({
+        type: "tool.start",
+        callId: id,
+        kind: toolKindFromName(name),
+        title: name,
+        path,
+        command,
+      });
+    }
+    const output = str(recState?.output) || str(part.output);
+    if (output && !ended) {
+      const key = `tool:${id}`;
+      const prev = snapshots.get(key) ?? "";
+      if (output !== prev) {
+        const delta = output.startsWith(prev) ? output.slice(prev.length) : output;
+        snapshots.set(key, output);
+        if (delta) out.push({ type: "tool.progress", callId: id, chunk: delta });
+      }
     }
     if (ended) {
       const kind = toolKindFromName(tools.get(id) || name);
-      const err = state === "error" || state === "failed" ? str(asRecord(part.state)?.error) || "Tool failed" : undefined;
+      const err =
+        state === "error" || state === "failed" ? str(recState?.error) || "Tool failed" : undefined;
+      const denied = toolDenied(state, err) || undefined;
       const { diff, stats, truncated } = extractDiff(part.state ?? part);
       out.push({
         type: "tool.end",
         callId: id,
-        ok: !err,
+        ok: !err && state !== "cancelled",
         kind,
-        outputPreview: str(asRecord(part.state)?.output)?.slice(0, 4000),
+        outputPreview: output?.slice(0, 4000),
         error: err,
+        denied,
         diff,
         stats,
         truncated,

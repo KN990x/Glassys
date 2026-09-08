@@ -26,6 +26,7 @@ import {
   cursorAuthStatus,
   cursorLogin,
   cwdErrorInPatch,
+  deleteLiveThread,
   discoverAdapter,
   listAdapterInfo,
   listLiveThreads,
@@ -101,7 +102,7 @@ async function requireAuth(req: IncomingMessage, res: ServerResponse): Promise<b
 }
 
 let setupLock: Promise<void> = Promise.resolve();
-let failedLogins = 0;
+const failedLoginsByIp = new Map<string, number>();
 
 async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
   let release: () => void = () => undefined;
@@ -117,9 +118,15 @@ async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-async function loginBackoff(): Promise<void> {
-  if (failedLogins <= 0) return;
-  const ms = Math.min(2000, 150 * 2 ** Math.min(failedLogins - 1, 4));
+function clientIp(req: IncomingMessage): string {
+  const addr = req.socket.remoteAddress || "unknown";
+  return addr.replace(/^::ffff:/, "");
+}
+
+async function loginBackoff(ip: string): Promise<void> {
+  const failed = failedLoginsByIp.get(ip) ?? 0;
+  if (failed <= 0) return;
+  const ms = Math.min(2000, 150 * 2 ** Math.min(failed - 1, 4));
   await new Promise((r) => setTimeout(r, ms));
 }
 
@@ -192,15 +199,16 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/auth/login") {
     if (!(await requireEdge(req, res))) return true;
-    await loginBackoff();
+    const ip = clientIp(req);
+    await loginBackoff(ip);
     const body = (await readJson(req)) as { password?: string };
     const token = await loginWithPassword(body.password || "");
     if (!token) {
-      failedLogins += 1;
+      failedLoginsByIp.set(ip, (failedLoginsByIp.get(ip) ?? 0) + 1);
       send(res, 401, { error: "invalid password" });
       return true;
     }
-    failedLogins = 0;
+    failedLoginsByIp.delete(ip);
     res.setHeader("Set-Cookie", await buildSessionCookie(token, req));
     send(res, 200, { token });
     return true;
@@ -374,6 +382,22 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     const id = decodeURIComponent(path.slice("/api/threads/".length, -"/switch".length));
     try {
       await switchLiveThread(id);
+      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "DELETE" && path.startsWith("/api/threads/")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/threads/".length));
+    try {
+      await deleteLiveThread(id);
       send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
     } catch (err) {
       if (err instanceof HttpError) {

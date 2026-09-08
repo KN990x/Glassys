@@ -5,6 +5,14 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
+function toolLoc(block: Record<string, unknown>): { path?: string; command?: string } {
+  const input = asRecord(block.input) ?? block;
+  return {
+    path: str(input.path) || str(input.file_path) || str(input.filePath) || str(input.target_file) || str(block.path),
+    command: str(input.command) || str(input.cmd) || str(block.command),
+  };
+}
+
 function mapStreamEvent(event: unknown, tools: Map<string, string>): ServerMessage[] {
   const rec = asRecord(event);
   if (!rec || typeof rec.type !== "string") return [];
@@ -15,7 +23,8 @@ function mapStreamEvent(event: unknown, tools: Map<string, string>): ServerMessa
       const name = str(block.name) ?? "tool";
       tools.set(id, name);
       const kind = toolKindFromName(name);
-      return [{ type: "tool.start", callId: id, kind, title: name }];
+      const loc = toolLoc(block);
+      return [{ type: "tool.start", callId: id, kind, title: name, path: loc.path, command: loc.command }];
     }
     return [];
   }
@@ -82,7 +91,8 @@ function mapAssistantFallback(rec: Record<string, unknown>, tools: Map<string, s
       const name = str(item.name) ?? "tool";
       if (!tools.has(id)) {
         tools.set(id, name);
-        out.push({ type: "tool.start", callId: id, kind: toolKindFromName(name), title: name });
+        const loc = toolLoc(item);
+        out.push({ type: "tool.start", callId: id, kind: toolKindFromName(name), title: name, path: loc.path, command: loc.command });
       }
     }
   }
@@ -111,10 +121,29 @@ export function mapClaudeMessage(
     return mapToolResults(inner.content, tools);
   }
   if (rec.type === "result") {
+    const out: ServerMessage[] = [];
     if (rec.subtype === "error" || rec.is_error === true) {
-      return [{ type: "run.error", message: str(rec.error) || str(rec.result) || "Run failed", phase: "run" }];
+      out.push({ type: "run.error", message: str(rec.error) || str(rec.result) || "Run failed", phase: "run" });
     }
-    return [];
+    const usage = asRecord(rec.usage);
+    if (usage) {
+      const inputTokens =
+        typeof usage.input_tokens === "number"
+          ? usage.input_tokens
+          : typeof usage.inputTokens === "number"
+            ? usage.inputTokens
+            : undefined;
+      const outputTokens =
+        typeof usage.output_tokens === "number"
+          ? usage.output_tokens
+          : typeof usage.outputTokens === "number"
+            ? usage.outputTokens
+            : undefined;
+      if (inputTokens != null || outputTokens != null) {
+        out.push({ type: "run.usage", inputTokens, outputTokens });
+      }
+    }
+    return out;
   }
   return [];
 }

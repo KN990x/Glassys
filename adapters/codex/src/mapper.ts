@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
@@ -62,6 +62,7 @@ export function mapCodexJsonl(
       const ok = str(item.status) !== "failed";
       const kind = toolKindFromName(type === "command_execution" ? "shell" : tools.get(id) || type);
       const { diff, stats, truncated } = extractDiff(item);
+      const err = ok ? undefined : str(item.error) || "failed";
       return [
         {
           type: "tool.end",
@@ -69,7 +70,8 @@ export function mapCodexJsonl(
           ok,
           kind,
           outputPreview: str(item.output) || str(item.aggregated_output),
-          error: ok ? undefined : str(item.error) || "failed",
+          error: err,
+          denied: toolDenied(str(item.status), err) || undefined,
           diff,
           stats,
           truncated,
@@ -80,11 +82,22 @@ export function mapCodexJsonl(
   }
   if (rec.type === "item.updated" && item) {
     const id = str(item.id) ?? "item";
-    if (str(item.type) === "agent_message" && str(item.text)) {
+    const type = str(item.type);
+    if (type === "agent_message" && str(item.text)) {
       return snapshotDelta(snapshots, id, String(item.text), "text");
     }
-    if (str(item.type) === "reasoning" && str(item.text)) {
+    if (type === "reasoning" && str(item.text)) {
       return snapshotDelta(snapshots, `${id}:think`, String(item.text), "thinking");
+    }
+    if (type === "command_execution" || type === "mcp_tool_call") {
+      const text = str(item.aggregated_output) || str(item.output);
+      if (!text) return [];
+      const key = `tool:${id}`;
+      const prev = snapshots.get(key) ?? "";
+      if (text === prev) return [];
+      const delta = text.startsWith(prev) ? text.slice(prev.length) : text;
+      snapshots.set(key, text);
+      return delta ? [{ type: "tool.progress", callId: id, chunk: delta }] : [];
     }
     return [];
   }

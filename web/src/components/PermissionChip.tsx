@@ -30,6 +30,7 @@ export function PermissionChip({
       : t("chip.unattended");
 
   async function patch(options: Record<string, unknown>) {
+    if (!window.confirm(t("chip.archiveConfirm"))) return;
     try {
       setError("");
       onConfig(await api.saveConfig({ agent: { options } }));

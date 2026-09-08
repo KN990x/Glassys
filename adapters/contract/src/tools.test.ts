@@ -40,6 +40,7 @@ describe("extractDiff", () => {
   it("detects denied tool results", () => {
     expect(toolDenied("denied")).toBe(true);
     expect(toolDenied("completed", "Glassys denied this write")).toBe(true);
+    expect(toolDenied("cancelled")).toBe(true);
     expect(toolDenied("completed")).toBe(false);
   });
 

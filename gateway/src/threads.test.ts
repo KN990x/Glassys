@@ -37,4 +37,10 @@ describe("threads store", () => {
     expect(listed[0]?.id).toBe(id);
     expect(listed[0]?.title).toContain("hello from legacy");
   });
+
+  it("refuses to delete a missing thread id", async () => {
+    await ensureLiveThread();
+    const { removeThread } = await import("./threads.js");
+    await expect(removeThread("missing")).rejects.toThrow(/not found/);
+  });
 });

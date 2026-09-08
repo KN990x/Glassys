@@ -1,4 +1,6 @@
-import type { AdapterPublicInfo } from "@glassys/protocol";
+import { optionBool, optionString, optionStringArray, type AdapterPublicInfo } from "@glassys/protocol";
+
+export { optionBool, optionString, optionStringArray };
 
 export function defaultOptionsFor(adapter: AdapterPublicInfo): Record<string, unknown> {
   const o: Record<string, unknown> = {};
@@ -22,25 +24,6 @@ export function optionsForAdapter(
   const defaults = defaultOptionsFor(adapter);
   if (saved?.adapter === adapter.id) return { ...defaults, ...(saved.options ?? {}) };
   return defaults;
-}
-
-export function optionBool(options: Record<string, unknown> | undefined, key: string, fallback: boolean): boolean {
-  const v = options?.[key];
-  return typeof v === "boolean" ? v : fallback;
-}
-
-export function optionString(options: Record<string, unknown> | undefined, key: string, fallback = ""): string {
-  const v = options?.[key];
-  return typeof v === "string" ? v : fallback;
-}
-
-export function optionStringArray(
-  options: Record<string, unknown> | undefined,
-  key: string,
-  fallback: string[] = [],
-): string[] {
-  const v = options?.[key];
-  return Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : fallback;
 }
 
 export function setOption(

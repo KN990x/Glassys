@@ -22,8 +22,10 @@ describe("acpResumeUnsupported", () => {
 
 describe("acp adapter capabilities", () => {
   it("does not advertise resume until the child agent is known to support it", async () => {
-    const { acpAdapter } = await import("./index.js");
+    const { acpAdapter, acpChildSupportsResume } = await import("./index.js");
     expect(acpAdapter.capabilities.resume).toBe(false);
+    expect(acpChildSupportsResume(undefined)).toBe(false);
+    expect(acpChildSupportsResume({ session: { loadSession: true } })).toBe(true);
     await expect(acpAdapter.probe?.()).resolves.toBeUndefined();
   });
 });

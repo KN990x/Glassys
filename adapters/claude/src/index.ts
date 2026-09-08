@@ -40,6 +40,8 @@ async function loadSdk(): Promise<{
   }
 }
 
+export const CLAUDE_CANCEL_TIMEOUT_MS = 20_000;
+
 class PromptQueue {
   private items: Array<Record<string, unknown>> = [];
   private waiters: Array<(v: IteratorResult<Record<string, unknown>>) => void> = [];
@@ -156,9 +158,11 @@ class ClaudeSession implements AdapterSession {
     const tools = this.tools;
     return pendingRun(id, async ({ isCancelled }) => {
       let stop = false;
+      let cancelledAt = 0;
       const watch = (async () => {
         while (!isCancelled() && !stop) await new Promise((r) => setTimeout(r, 50));
         if (!isCancelled()) return;
+        cancelledAt = Date.now();
         try {
           await query.interrupt?.();
         } catch {
@@ -167,15 +171,29 @@ class ClaudeSession implements AdapterSession {
       })();
       try {
         const mapState = { sawStreamEvent: false };
-        while (!isCancelled()) {
-          const next = await iterator.next();
-          if (next.done) return "finished";
-          const sid = claudeSessionId(next.value);
+        while (!stop) {
+          if (isCancelled() && cancelledAt && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS) {
+            return "cancelled";
+          }
+          const next = await Promise.race([
+            iterator.next().then((v) => ({ kind: "msg" as const, v })),
+            new Promise<{ kind: "tick" }>((resolve) => {
+              setTimeout(() => resolve({ kind: "tick" }), 50);
+            }),
+          ]);
+          if (next.kind === "tick") {
+            if (isCancelled() && !cancelledAt) continue;
+            if (!isCancelled()) continue;
+            continue;
+          }
+          if (next.v.done) return isCancelled() ? "cancelled" : "finished";
+          const sid = claudeSessionId(next.v.value);
           if (sid) this.agentId = sid;
-          for (const event of mapClaudeMessage(next.value, tools, mapState)) onEvent(event);
-          if (isClaudeResult(next.value)) return claudeRunStatus(isCancelled(), next.value);
+          for (const event of mapClaudeMessage(next.v.value, tools, mapState)) onEvent(event);
+          if (isClaudeResult(next.v.value)) return claudeRunStatus(isCancelled(), next.v.value);
+          if (isCancelled()) return "cancelled";
         }
-        return "cancelled";
+        return isCancelled() ? "cancelled" : "finished";
       } finally {
         stop = true;
         void watch;

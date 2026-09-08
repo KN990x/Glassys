@@ -54,6 +54,10 @@ export const api = {
     req<{ threads: ThreadSummary[]; currentId: string | null }>(`/api/threads/${encodeURIComponent(id)}/switch`, {
       method: "POST",
     }),
+  deleteThread: (id: string) =>
+    req<{ threads: ThreadSummary[]; currentId: string | null }>(`/api/threads/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
   reachability: () =>
     req<{ bind: string; port: number; publicUrl: string; loopback: boolean }>("/api/reachability"),
   workspaces: (root?: string) =>

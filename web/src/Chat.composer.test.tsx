@@ -61,10 +61,22 @@ vi.mock("./api", () => ({
     threads: vi.fn(async () => ({ threads: [], currentId: null })),
     newThread: vi.fn(async () => ({ threads: [], currentId: null })),
     switchThread: vi.fn(async () => ({ threads: [], currentId: null })),
+    deleteThread: vi.fn(async () => ({ threads: [], currentId: null })),
+    restart: vi.fn(async () => ({ ok: true })),
     upload: vi.fn(),
   },
   clearToken: vi.fn(),
   getToken: () => "tok",
+}));
+
+vi.mock("./pages/Settings", () => ({
+  Settings: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="settings-stub">
+      <button type="button" onClick={onClose}>
+        Close settings
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("./socket", () => ({
@@ -214,5 +226,45 @@ describe("Chat composer and layout", () => {
     expect(meta?.querySelector(".composer-hint")).toBeNull();
     expect(warn?.previousElementSibling?.classList.contains("model-picker")).toBe(true);
     expect(meta?.querySelector("p.warn")?.parentElement).toBe(meta);
+  });
+
+  it("does not refetch adapters when Settings opens and closes", async () => {
+    const { api } = await import("./api");
+    vi.mocked(api.adapters).mockClear();
+    await renderChat();
+    expect(api.adapters).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "Settings")?.click();
+    });
+    expect(host.querySelector('[data-testid="settings-stub"]')).toBeTruthy();
+    expect(api.adapters).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "Close settings")?.click();
+    });
+    expect(host.querySelector('[data-testid="settings-stub"]')).toBeNull();
+    expect(api.adapters).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows adapter and cwd in the thread drawer", async () => {
+    const { api } = await import("./api");
+    vi.mocked(api.threads).mockResolvedValueOnce({
+      threads: [
+        {
+          id: "t1",
+          title: "ws",
+          adapter: "cursor",
+          cwd: "/tmp/ws",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      currentId: "t1",
+    });
+    await renderChat();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click();
+    });
+    const row = host.querySelector(".thread-list")?.textContent ?? "";
+    expect(row).toContain("cursor");
+    expect(row).toContain("/tmp/ws");
   });
 });

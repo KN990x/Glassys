@@ -55,24 +55,33 @@ export function mapAcpUpdate(params: unknown, tools = new Map<string, string>())
   }
   if (sessionUpdate === "tool_call") {
     const id = str(update.toolCallId) || str(update.toolCallID) || "tool";
-    const name = str(update.title) || str(update.kind) || str(update.toolName) || "tool";
-    tools.set(id, name);
+    const kindName = str(update.kind) || str(update.toolName) || str(update.title) || "tool";
+    const title = str(update.title) || str(update.toolName) || str(update.kind) || "tool";
+    tools.set(id, kindName);
     const loc = Array.isArray(update.locations) ? asRecord(update.locations[0]) : asRecord(update.locations);
     return [
       {
         type: "tool.start",
         callId: id,
-        kind: toolKindFromName(name),
-        title: name,
+        kind: toolKindFromName(kindName),
+        title,
         path: str(update.path) || str(loc?.path),
+        command: str(update.command),
       },
     ];
   }
   if (sessionUpdate === "tool_call_update") {
     const id = str(update.toolCallId) || str(update.toolCallID) || "tool";
     const status = str(update.status);
-    if (status === "completed" || status === "failed") {
+    if (status === "completed" || status === "failed" || status === "cancelled") {
       const { diff, stats, truncated } = extractDiff(update);
+      const err =
+        status === "failed"
+          ? str(update.error) || "failed"
+          : status === "cancelled"
+            ? str(update.error) || "denied"
+            : undefined;
+      const denied = status === "cancelled" || toolDenied(status, err) || undefined;
       return [
         {
           type: "tool.end",
@@ -80,8 +89,8 @@ export function mapAcpUpdate(params: unknown, tools = new Map<string, string>())
           ok: status === "completed",
           kind: toolKindFromName(tools.get(id)),
           outputPreview: previewFromContent(update.content) || str(update.output),
-          error: status === "failed" ? str(update.error) || "failed" : undefined,
-          denied: toolDenied(status, str(update.error)) || undefined,
+          error: err,
+          denied: denied || undefined,
           diff,
           stats,
           truncated,

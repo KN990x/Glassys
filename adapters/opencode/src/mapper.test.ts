@@ -18,11 +18,39 @@ describe("mapOpencodeEvent", () => {
       tools,
     );
     expect(start[0]).toMatchObject({ type: "tool.start", callId: "c1", kind: "shell" });
+    const withLoc = mapOpencodeEvent(
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            type: "tool",
+            callID: "c-loc",
+            tool: "bash",
+            state: { status: "running", input: { command: "ls /etc" } },
+          },
+        },
+      },
+      tools,
+    );
+    expect(withLoc[0]).toMatchObject({ type: "tool.start", command: "ls /etc" });
+    const denied = mapOpencodeEvent(
+      {
+        type: "message.part.updated",
+        properties: { part: { type: "tool", callID: "c-deny", tool: "write", state: { status: "cancelled" } } },
+      },
+      tools,
+    );
+    expect(denied.some((e) => e.type === "tool.end" && "denied" in e && e.denied)).toBe(true);
     const end = mapOpencodeEvent(
       { type: "message.part.updated", properties: { part: { type: "tool", callID: "c1", tool: "bash", state: { status: "completed", output: "ok" } } } },
       tools,
     );
     expect(end[0]).toMatchObject({ type: "tool.end", callId: "c1", ok: true });
+    const again = mapOpencodeEvent(
+      { type: "message.part.updated", properties: { part: { type: "tool", callID: "c1", tool: "bash", state: { status: "running" } } } },
+      tools,
+    );
+    expect(again.filter((e) => e.type === "tool.start")).toEqual([]);
   });
 
   it("emits start and end when the first tool event is already completed", () => {

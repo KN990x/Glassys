@@ -257,6 +257,14 @@ export function Settings({
           </button>
         </header>
         <div className="settings-body">
+          {config.restartRequired && (
+            <p className="warn">
+              {t("settings.restartRequired")}{" "}
+              <button type="button" className="ghost tiny" onClick={() => void api.restart()}>
+                {t("settings.restart")}
+              </button>
+            </p>
+          )}
           <section className="settings-section">
             <h3>{t("settings.appearance")}</h3>
             <label>

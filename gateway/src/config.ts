@@ -160,7 +160,7 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
       const passwordErr = operatorPasswordError(operatorPassword);
       if (passwordErr) throw new HttpError(400, passwordErr);
     }
-    if (completing && adapter?.id === "acp" && !optionString(after.agent.options, "command", "").trim()) {
+    if (adapter?.id === "acp" && !optionString(after.agent.options, "command", "").trim()) {
       throw new HttpError(400, "ACP adapter needs agent.options.command (or a registry pick)");
     }
     await saveConfig(after);
@@ -208,10 +208,24 @@ export async function redacted(cfg?: GlassysConfig, restart?: boolean): Promise<
   };
 }
 
+export function identityOptions(adapter: string, options: Record<string, unknown> | undefined): Record<string, unknown> {
+  const o = options ?? {};
+  switch (adapter) {
+    case "cursor":
+      return { settingSources: o.settingSources, sandbox: o.sandbox, autoRun: o.autoRun };
+    case "claude":
+      return { permissionMode: o.permissionMode, autoRun: o.autoRun };
+    case "acp":
+      return { command: o.command, args: o.args, registryId: o.registryId, autoRun: o.autoRun };
+    default:
+      return {};
+  }
+}
+
 export function agentFingerprint(cfg: GlassysConfig): string {
   return JSON.stringify({
     cwd: cfg.agent.cwd,
     adapter: cfg.agent.adapter,
-    options: cfg.agent.options ?? {},
+    options: identityOptions(cfg.agent.adapter, cfg.agent.options),
   });
 }

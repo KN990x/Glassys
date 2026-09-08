@@ -93,9 +93,11 @@ export function toolDenied(status?: string, error?: string): boolean {
   return (
     s === "denied" ||
     s === "rejected" ||
+    s === "cancelled" ||
     e.includes("denied") ||
     e.includes("auto-review") ||
-    e.includes("auto review")
+    e.includes("auto review") ||
+    e.includes("cancelled")
   );
 }
 

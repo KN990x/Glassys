@@ -1,8 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import type { MessageAttachment } from "@glassys/protocol";
+import type { MessageAttachment, TranscriptEvent } from "@glassys/protocol";
 import { paths } from "./paths.js";
 import { HttpError } from "./errors.js";
+import { parseJsonl } from "./jsonl.js";
 
 export const MAX_UPLOAD_BYTES = 4_000_000;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -74,4 +75,55 @@ export async function resolveAttachments(
     if (stored) out.push({ path: stored.path, mime: stored.mime, name: stored.name });
   }
   return out;
+}
+
+const UNREFERENCED_TTL_MS = 24 * 60 * 60 * 1000;
+
+export async function gcUploads(now = Date.now()): Promise<void> {
+  let files: string[] = [];
+  try {
+    files = await readdir(paths.uploads());
+  } catch {
+    return;
+  }
+  const referenced = new Set<string>();
+  let threadIds: string[] = [];
+  try {
+    threadIds = await readdir(paths.threads());
+  } catch {
+    threadIds = [];
+  }
+  for (const tid of threadIds) {
+    try {
+      const events = parseJsonl<TranscriptEvent>(await readFile(paths.threadTranscript(tid), "utf8"));
+      for (const ev of events) {
+        if (ev.type !== "user.message" || !ev.attachments) continue;
+        for (const att of ev.attachments) referenced.add(att.id);
+      }
+    } catch {
+      /* skip unreadable thread */
+    }
+  }
+  const seen = new Set<string>();
+  for (const name of files) {
+    const id = name.endsWith(".json") ? name.slice(0, -".json".length) : name;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (referenced.has(id)) continue;
+    const data = dataPath(id);
+    const meta = metaPath(id);
+    let mtime = now;
+    try {
+      mtime = (await stat(data)).mtimeMs;
+    } catch {
+      try {
+        mtime = (await stat(meta)).mtimeMs;
+      } catch {
+        continue;
+      }
+    }
+    if (now - mtime < UNREFERENCED_TTL_MS) continue;
+    await rm(data, { force: true });
+    await rm(meta, { force: true });
+  }
 }

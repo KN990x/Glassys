@@ -22,11 +22,25 @@ describe("mapClaudeMessage", () => {
     const start = mapClaudeMessage(
       {
         type: "stream_event",
-        event: { type: "content_block_start", content_block: { type: "tool_use", id: "t1", name: "Read" } },
+        event: {
+          type: "content_block_start",
+          content_block: { type: "tool_use", id: "t1", name: "Read", input: { file_path: "a.ts" } },
+        },
       },
       tools,
     );
-    expect(start[0]).toMatchObject({ type: "tool.start", callId: "t1", kind: "read" });
+    expect(start[0]).toMatchObject({ type: "tool.start", callId: "t1", kind: "read", path: "a.ts" });
+    const bash = mapClaudeMessage(
+      {
+        type: "stream_event",
+        event: {
+          type: "content_block_start",
+          content_block: { type: "tool_use", id: "t-bash", name: "Bash", input: { command: "systemctl status caddy" } },
+        },
+      },
+      tools,
+    );
+    expect(bash[0]).toMatchObject({ type: "tool.start", kind: "shell", command: "systemctl status caddy" });
     const end = mapClaudeMessage(
       {
         type: "user",
@@ -35,6 +49,12 @@ describe("mapClaudeMessage", () => {
       tools,
     );
     expect(end[0]).toMatchObject({ type: "tool.end", callId: "t1", ok: true, kind: "read" });
+  });
+
+  it("maps result.usage", () => {
+    expect(
+      mapClaudeMessage({ type: "result", usage: { input_tokens: 3, output_tokens: 7 } }),
+    ).toEqual([{ type: "run.usage", inputTokens: 3, outputTokens: 7 }]);
   });
 
   it("maps a unified diff on tool_result when the SDK provided one", () => {
