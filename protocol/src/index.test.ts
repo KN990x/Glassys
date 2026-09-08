@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   PROTOCOL_VERSION,
@@ -9,6 +12,7 @@ import {
   isClientMessage,
   isPersistedTranscriptEvent,
   isTranscriptEvent,
+  resolveTheme,
 } from "../src/index.js";
 
 describe("protocol v1", () => {
@@ -107,5 +111,36 @@ describe("protocol v1", () => {
     expect(isMessageId("11111111-1111-4111-8111-111111111111")).toBe(true);
     expect(isMessageId("not-a-uuid")).toBe(false);
     expect(isMessageId(undefined)).toBe(false);
+  });
+
+  it("resolves system theme from prefers-color-scheme", () => {
+    expect(resolveTheme("light")).toBe("light");
+    expect(resolveTheme("dark")).toBe("dark");
+    expect(resolveTheme("system", true)).toBe("light");
+    expect(resolveTheme("system", false)).toBe("dark");
+  });
+
+  it("keeps schema v1 client consts aligned with isClientMessage", () => {
+    const schemaPath = join(dirname(fileURLToPath(import.meta.url)), "../schema/v1.json");
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as {
+      oneOf: Array<{ properties?: { type?: { const?: string } } }>;
+    };
+    const consts = schema.oneOf.map((item) => item.properties?.type?.const).filter((v): v is string => Boolean(v));
+    const samples: Record<string, unknown> = {
+      hello: { type: "hello", protocolVersion: 1 },
+      auth: { type: "auth", token: "" },
+      "user.message": { type: "user.message", text: "hi" },
+      "run.cancel": { type: "run.cancel" },
+      "queue.cancel": { type: "queue.cancel", id: "q1" },
+      "thread.new": { type: "thread.new" },
+      "thread.switch": { type: "thread.switch", id: "t1" },
+      "config.get": { type: "config.get" },
+      "config.set": { type: "config.set", patch: {} },
+      ping: { type: "ping" },
+    };
+    for (const [type, sample] of Object.entries(samples)) {
+      expect(consts).toContain(type);
+      expect(isClientMessage(sample)).toBe(true);
+    }
   });
 });

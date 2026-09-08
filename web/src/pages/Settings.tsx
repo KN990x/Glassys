@@ -7,7 +7,7 @@ import type {
   RedactedConfig,
   SettingSource,
 } from "@glassys/protocol";
-import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
+import { pickDefaultSelection, adapterSelectable, isTheme } from "@glassys/protocol";
 import { api, clearToken } from "../api";
 import { useT } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
@@ -48,6 +48,28 @@ export function Settings({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  const dirty =
+    Boolean(password || apiKey || clearKey) ||
+    JSON.stringify({
+      space: draft.space,
+      agent: draft.agent,
+      display: draft.display,
+      session: draft.session,
+    }) !==
+      JSON.stringify({
+        space: config.space,
+        agent: config.agent,
+        display: config.display,
+        session: config.session,
+      });
+
+  function requestClose() {
+    if (dirty && !window.confirm(t("settings.discard"))) return;
+    onCloseRef.current();
+  }
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
   const currentAdapter = adapters.find((a) => a.id === draft.agent.adapter) ?? adapters[0];
   const caps = currentAdapter?.capabilities;
 
@@ -62,7 +84,7 @@ export function Settings({
     const root = document.querySelector(".settings-dialog");
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        onCloseRef.current();
+        requestCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !root) return;
@@ -250,7 +272,7 @@ export function Settings({
     (draft.agent.adapter === "cursor" && draft.secrets.cursorApiKey.configured);
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
+    <div className="settings-overlay" onClick={requestClose}>
       <div
         className="settings-dialog"
         role="dialog"
@@ -260,7 +282,7 @@ export function Settings({
       >
         <header>
           <h2 id="settings-title">{t("settings.title")}</h2>
-          <button ref={closeRef} className="ghost" type="button" onClick={onClose}>
+          <button ref={closeRef} className="ghost" type="button" onClick={requestClose}>
             {t("settings.close")}
           </button>
         </header>
@@ -289,12 +311,26 @@ export function Settings({
               {t("settings.theme")}
               <select
                 value={draft.space.theme}
-                onChange={(e) => setDraft({ ...draft, space: { ...draft.space, theme: e.target.value as "dark" | "light" } })}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (!isTheme(next)) return;
+                  setDraft({ ...draft, space: { ...draft.space, theme: next } });
+                }}
               >
                 <option value="dark">{t("settings.theme.dark")}</option>
                 <option value="light">{t("settings.theme.light")}</option>
+                <option value="system">{t("settings.theme.system")}</option>
               </select>
             </label>
+            <label>
+              {t("settings.hostLabel")}
+              <input
+                value={draft.space.name}
+                maxLength={40}
+                onChange={(e) => setDraft({ ...draft, space: { ...draft.space, name: e.target.value } })}
+              />
+            </label>
+            <p className="muted">{t("settings.hostLabelHint")}</p>
             <label>
               {t("settings.thinking")}
               <select
@@ -555,7 +591,7 @@ export function Settings({
                   {t("wizard.cred.clearKey")}
                 </button>
               )}
-              {clearKey && <p className="warn">{t("wizard.cred.clearKey")}</p>}
+              {clearKey && <p className="warn">{t("settings.clearKeyWarn")}</p>}
             </details>
           </section>
 

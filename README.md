@@ -58,7 +58,7 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 - **UI language:** English by default; Spanish (`es`) is available in Settings.
 - **Distribution:** self-hosted. Every operator runs their own instance. Not a Glassys SaaS.
 - **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet), Codex SDK (needs the `codex` binary), plus a generic ACP host. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; Gemini, Codex, and ACP use a documented static fallback.
-- **v1:** one profile / one agent / one thread / one run at a time (FIFO queue).
+- **v1:** one profile / one agent / **one live thread** / one run at a time (FIFO queue). The thread drawer lists archived transcripts; only one thread is live.
 
 **Agent / adapter** is the product on the host. **Transport** is how Glassys talks to it (SDK or ACP — never print-mode). **CLI** is the vendor’s terminal app: it may stay installed; its login does not authenticate Glassys. Codex and OpenCode still need their binary on PATH.
 
@@ -103,11 +103,14 @@ If you are already inside the repo: `pnpm install && pnpm run service:install`.
 # status
 cd glassys && pnpm run service:status
 
+# upgrade (git pull, install, build, restart)
+cd glassys && pnpm run service:upgrade
+
 # uninstall (stops the service; does not delete the clone or data/)
 cd glassys && pnpm run service:uninstall
 ```
 
-Foreground (blocks the terminal): `pnpm run build && pnpm start`. Default bind is **localhost**. Put Caddy, Traefik, Nginx Proxy Manager, or Cloudflare Tunnel in front if you need a public URL. See [docs/deploy/host.md](docs/deploy/host.md).
+Foreground (blocks the terminal): `pnpm run build && pnpm start`. Default bind is **localhost**. Put Caddy or Cloudflare Tunnel in front if you need a public URL. See [docs/deploy/host.md](docs/deploy/host.md).
 
 ## Development
 
@@ -179,7 +182,7 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 - **Idioma de la UI:** inglés por defecto; español (`es`) en Ajustes.
 - **Distribución:** self-hosted. Cada operador monta la suya. No hay SaaS de Glassys.
 - **Adaptadores:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + servidor local, Gemini CLI SDK (aún no en npm), Codex SDK (hace falta el binario `codex`), más un host ACP genérico. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del runtime; Gemini, Codex y ACP usan un fallback estático documentado.
-- **v1:** un perfil / un agente / un hilo / un run a la vez (cola FIFO).
+- **v1:** un perfil / un agente / **un hilo vivo** / un run a la vez (cola FIFO). El cajón lista transcripts archivados; solo un hilo está vivo.
 
 **Agente / adaptador** es el producto en el host. **Transporte** es cómo le habla Glassys (SDK o ACP — nunca print-mode). **CLI** es el programa de terminal del vendor: puede seguir instalado; su login no autentica Glassys. Codex y OpenCode sí necesitan su binario en el PATH.
 
@@ -224,11 +227,14 @@ Si ya estás dentro del repo: `pnpm install && pnpm run service:install`.
 # estado
 cd glassys && pnpm run service:status
 
+# actualizar (git pull, install, build, restart)
+cd glassys && pnpm run service:upgrade
+
 # desinstalar (para el servicio; no borra el clone ni data/)
 cd glassys && pnpm run service:uninstall
 ```
 
-En primer plano (bloquea la terminal): `pnpm run build && pnpm start`. El bind por defecto es **localhost**. Pon Caddy, Traefik, Nginx Proxy Manager o Cloudflare Tunnel delante si necesitas una URL pública. Véase [docs/deploy/host.md](docs/deploy/host.md).
+En primer plano (bloquea la terminal): `pnpm run build && pnpm start`. El bind por defecto es **localhost**. Pon Caddy o Cloudflare Tunnel delante si necesitas una URL pública. Véase [docs/deploy/host.md](docs/deploy/host.md).
 
 ## Desarrollo
 

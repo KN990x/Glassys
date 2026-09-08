@@ -22,7 +22,10 @@ import { ToolCard } from "../components/ToolCard";
 import { ModelPicker } from "../components/ModelPicker";
 import { PermissionChip } from "../components/PermissionChip";
 import { Settings } from "./Settings";
+import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
+import { blockMatchesQuery, cwdBasename } from "../format";
+import { loadDraft, saveDraft } from "../draftStorage";
 
 const COMPOSER_MAX_PX = 160;
 
@@ -98,6 +101,9 @@ export function Chat({
   const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
   const [hostLabel, setHostLabel] = useState("");
   const [snapshotReady, setSnapshotReady] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
+  const [search, setSearch] = useState("");
+  const [restartNote, setRestartNote] = useState("");
   const sendRef = useRef<(msg: ClientMessage) => boolean>(() => false);
   const keepaliveRef = useRef<(seconds: number) => void>(() => undefined);
   const scroller = useRef<HTMLDivElement>(null);
@@ -105,6 +111,7 @@ export function Chat({
   const threadBtn = useRef<HTMLButtonElement>(null);
   const pinToBottom = useRef(true);
   const settingsBtn = useRef<HTMLButtonElement>(null);
+  const loadedDraftFor = useRef<string | null>(null);
   const closeSettings = useCallback(() => {
     setSettings(false);
     popOverlay();
@@ -225,6 +232,28 @@ export function Chat({
   }, [loadModels, config.agent.adapter, config.agent.cwd]);
 
   useEffect(() => {
+    if (loadedDraftFor.current === currentThreadId) return;
+    loadedDraftFor.current = currentThreadId;
+    const loaded = loadDraft(currentThreadId);
+    setText(loaded.text);
+    setDrafts(loaded.attachments);
+  }, [currentThreadId]);
+
+  useEffect(() => {
+    if (loadedDraftFor.current !== currentThreadId) return;
+    saveDraft(currentThreadId, text, drafts);
+  }, [currentThreadId, text, drafts]);
+
+  useEffect(() => {
+    const name = config.space.name.trim() || "Glassys";
+    const th = threads.find((item) => item.id === currentThreadId);
+    document.title = th?.title ? `${th.title} · ${name}` : name;
+    return () => {
+      document.title = name;
+    };
+  }, [config.space.name, threads, currentThreadId]);
+
+  useEffect(() => {
     if (!draftModel) return;
     const savedParams = config.agent.modelParams ?? [];
     if (draftModel.id === config.agent.model && JSON.stringify(draftModel.params) === JSON.stringify(savedParams)) {
@@ -281,6 +310,7 @@ export function Chat({
   }, [busy]);
 
   const waiting = queueItems.length > 0 || queued;
+  const visibleBlocks = search.trim() ? blocks.filter((b) => blockMatchesQuery(b, search)) : blocks;
   const canSend = Boolean(text.trim() || drafts.length) && conn === "connected" && snapshotReady && protocolError === null;
   const queuedIds = new Set(queueItems.map((item) => item.id));
   const lastTool = [...blocks].reverse().find((b) => b.kind === "tool" && b.status === "running");
@@ -301,9 +331,13 @@ export function Chat({
   }
 
   async function onNewThread() {
+    if (busy || waiting) {
+      setSendError(t("threads.busy"));
+      return;
+    }
     try {
       applyThreadList(await api.newThread());
-      setThreadOpen(false);
+      closeThreads();
       setSendError("");
     } catch (err) {
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
@@ -327,7 +361,7 @@ export function Chat({
 
   async function onSwitchThread(id: string) {
     if (id === currentThreadId) {
-      setThreadOpen(false);
+      closeThreads();
       return;
     }
     if (busy || waiting) {
@@ -336,10 +370,42 @@ export function Chat({
     }
     try {
       applyThreadList(await api.switchThread(id));
-      setThreadOpen(false);
+      closeThreads();
       setSendError("");
     } catch (err) {
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
+    }
+  }
+
+  async function onRenameThread(id: string, title: string) {
+    try {
+      applyThreadList(await api.renameThread(id, title));
+    } catch (err) {
+      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+    }
+  }
+
+  async function onExport() {
+    if (!currentThreadId) return;
+    try {
+      const file = await api.exportThread(currentThreadId);
+      const url = URL.createObjectURL(file.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSendError(operatorError(err instanceof Error ? err.message : t("chat.sendFailed"), t));
+    }
+  }
+
+  async function onRestart() {
+    try {
+      setRestartNote(t("settings.restarting"));
+      await api.restart();
+    } catch (err) {
+      setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
     }
   }
 
@@ -410,12 +476,15 @@ export function Chat({
           <div className="brand tight">
             <img src="/icon.svg" alt="" width={28} height={28} />
             <div>
-              <strong>{t("app.name")}</strong>
+              <strong>{config.space.name.trim() || t("app.name")}</strong>
               <span className="host-context muted">
                 {[hostLabel, cwdBasename(config.agent.cwd), currentAdapter?.displayName || config.agent.adapter]
                   .filter(Boolean)
                   .join(" · ")}
               </span>
+              {currentAdapter?.available && !currentAdapter.available.ok && (
+                <span className="warn">{t("wizard.adapter.unavailable")}</span>
+              )}
               <span className={`status ${statusClass}`} aria-live="polite">
                 {t(statusKey)}
               </span>
@@ -453,49 +522,18 @@ export function Chat({
         </div>
       </header>
       {threadOpen && (
-        <div className="thread-drawer" role="dialog" aria-label={t("threads.title")}>
-          <button
-            type="button"
-            className="thread-scrim"
-            aria-label={t("settings.close")}
-            onClick={() => closeThreads()}
-          />
-          <aside className="thread-panel">
-            <header>
-              <h2>{t("threads.title")}</h2>
-              <button type="button" className="primary" onClick={() => void onNewThread()}>
-                {t("threads.new")}
-              </button>
-            </header>
-            <p className="muted">{t("threads.switchResume")}</p>
-            {threads.length === 0 && <p className="muted">{t("threads.empty")}</p>}
-            <ul className="thread-list">
-              {threads.map((th) => (
-                <li key={th.id} className="thread-row">
-                  <button
-                    type="button"
-                    className={`ghost picker-item${th.id === currentThreadId ? " current" : ""}`}
-                    onClick={() => void onSwitchThread(th.id)}
-                  >
-                    <strong>{th.title}</strong>
-                    <span className="muted">
-                      {th.id === currentThreadId ? `${t("threads.current")} · ` : ""}
-                      {th.adapter} · {th.cwd}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost tiny"
-                    aria-label={t("threads.delete")}
-                    onClick={(e) => void onDeleteThread(th.id, e)}
-                  >
-                    {t("threads.delete")}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </aside>
-        </div>
+        <ThreadDrawer
+          threads={threads}
+          currentId={currentThreadId}
+          locale={config.space.locale}
+          busy={busy}
+          waiting={waiting}
+          onNew={() => void onNewThread()}
+          onSwitch={(id) => void onSwitchThread(id)}
+          onDelete={(id, e) => void onDeleteThread(id, e)}
+          onRename={onRenameThread}
+          onClose={closeThreads}
+        />
       )}
       <main className="chat-main">
         <h1 className="visually-hidden">{t("app.name")}</h1>
@@ -512,9 +550,10 @@ export function Chat({
       {config.restartRequired && (
         <p className="banner warn" role="status">
           {t("settings.restartRequired")}{" "}
-          <button type="button" className="ghost tiny" onClick={() => void api.restart()}>
+          <button type="button" className="ghost tiny" onClick={() => void onRestart()}>
             {t("settings.restart")}
           </button>
+          {restartNote ? ` ${restartNote}` : ""}
         </p>
       )}
       {sendError && (
@@ -538,12 +577,31 @@ export function Chat({
         onScroll={() => {
           const el = scroller.current;
           if (!el) return;
-          pinToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+          const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+          pinToBottom.current = bottom;
+          setAtBottom(bottom);
         }}
       >
+        <div className="transcript-toolbar">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("chat.search")}
+            aria-label={t("chat.search")}
+          />
+          <button type="button" className="ghost tiny" onClick={() => void onExport()} disabled={!currentThreadId}>
+            {t("chat.export")}
+          </button>
+        </div>
         <div className="transcript-inner">
+        {!snapshotReady && (
+          <p className="empty" aria-live="polite">
+            {t(conn === "reconnecting" ? "status.reconnecting" : "status.connecting")}
+          </p>
+        )}
         {blocks.length === 0 && snapshotReady && <p className="empty">{t("chat.empty")}</p>}
-        {blocks.map((b) => {
+        {visibleBlocks.map((b) => {
           if (b.kind === "user") {
             const pending = Boolean(b.messageId && queuedIds.has(b.messageId));
             return (
@@ -626,7 +684,20 @@ export function Chat({
           </span>
         )}
         </div>
-      </div>
+        {!atBottom && (
+          <button
+            type="button"
+            className="jump-bottom"
+            onClick={() => {
+              pinToBottom.current = true;
+              setAtBottom(true);
+              scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+            }}
+          >
+            {t("chat.jumpBottom")}
+          </button>
+        )}
+        </div>
       </main>
       <form
         className="composer"
@@ -665,6 +736,7 @@ export function Chat({
               </p>
             )}
             <PermissionChip config={config} caps={caps} onConfig={onConfig} />
+            {caps?.attachments === false && <p className="muted composer-hint">{t("chat.attachPathOnly")}</p>}
             {waiting && <p className="muted composer-hint">{t("chat.queuedHint")}</p>}
             {queueItems.length > 0 && (
               <ul className="queue-list" aria-label={t("chat.queueList")}>
@@ -698,6 +770,7 @@ export function Chat({
                   key={a.id}
                   type="button"
                   className="thumb-remove"
+                  aria-label={`${t("chat.removeAttach")} ${a.name}`}
                   onClick={() => setDrafts((cur) => cur.filter((d) => d.id !== a.id))}
                 >
                   <img src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
@@ -728,6 +801,7 @@ export function Chat({
               value={text}
               placeholder={t("chat.placeholder")}
               aria-label={t("chat.placeholder")}
+              enterKeyHint="send"
               onChange={(e) => {
                 setText(e.target.value);
                 resizeComposer(e.currentTarget);
@@ -762,12 +836,6 @@ export function Chat({
       )}
     </div>
   );
-}
-
-function cwdBasename(cwd: string): string {
-  const trimmed = cwd.replace(/[\\/]+$/, "");
-  const parts = trimmed.split(/[\\/]/);
-  return parts[parts.length - 1] || "";
 }
 
 function AttachIcon() {

@@ -1,3 +1,4 @@
+/* Cache name is rewritten at build to glassys-v${root package.json version}. */
 const CACHE = "glassys-v0.1.0";
 const PRECACHE = [
   "/",

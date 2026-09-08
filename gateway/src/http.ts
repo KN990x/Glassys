@@ -29,9 +29,11 @@ import {
   cwdErrorInPatch,
   deleteLiveThread,
   discoverAdapter,
+  exportLiveThread,
   listAdapterInfo,
   listLiveThreads,
   listModels,
+  renameLiveThread,
   startNewLiveThread,
   switchLiveThread,
 } from "./runtime.js";
@@ -103,7 +105,8 @@ async function requireAuth(req: IncomingMessage, res: ServerResponse): Promise<b
 }
 
 let setupLock: Promise<void> = Promise.resolve();
-const failedLoginsByIp = new Map<string, number>();
+const LOGIN_FAIL_TTL_MS = 15 * 60 * 1000;
+const failedLoginsByIp = new Map<string, { count: number; at: number }>();
 
 async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
   let release: () => void = () => undefined;
@@ -124,8 +127,15 @@ function clientIp(req: IncomingMessage): string {
   return addr.replace(/^::ffff:/, "");
 }
 
+function pruneFailedLogins(now = Date.now()): void {
+  for (const [ip, rec] of failedLoginsByIp) {
+    if (now - rec.at > LOGIN_FAIL_TTL_MS) failedLoginsByIp.delete(ip);
+  }
+}
+
 async function loginBackoff(ip: string): Promise<void> {
-  const failed = failedLoginsByIp.get(ip) ?? 0;
+  pruneFailedLogins();
+  const failed = failedLoginsByIp.get(ip)?.count ?? 0;
   if (failed <= 0) return;
   const ms = Math.min(2000, 150 * 2 ** Math.min(failed - 1, 4));
   await new Promise((r) => setTimeout(r, ms));
@@ -205,7 +215,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     const body = (await readJson(req)) as { password?: string };
     const token = await loginWithPassword(body.password || "");
     if (!token) {
-      failedLoginsByIp.set(ip, (failedLoginsByIp.get(ip) ?? 0) + 1);
+      const prev = failedLoginsByIp.get(ip);
+      failedLoginsByIp.set(ip, { count: (prev?.count ?? 0) + 1, at: Date.now() });
       send(res, 401, { error: "invalid password" });
       return true;
     }
@@ -216,8 +227,11 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   }
 
   if (method === "POST" && path === "/api/auth/logout") {
-    const cfg = await loadConfig();
-    res.setHeader("Set-Cookie", clearSessionCookie(requestIsSecure(req, cfg.network.publicUrl)));
+    const ok = await verifyRequestSession(req);
+    if (ok) {
+      const cfg = await loadConfig();
+      res.setHeader("Set-Cookie", clearSessionCookie(requestIsSecure(req, cfg.network.publicUrl)));
+    }
     send(res, 200, { ok: true });
     return true;
   }
@@ -384,6 +398,43 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     try {
       await switchLiveThread(id);
       send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "PATCH" && path.startsWith("/api/threads/") && !path.endsWith("/switch") && !path.endsWith("/export")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/threads/".length));
+    const body = (await readJson(req)) as { title?: string };
+    try {
+      await renameLiveThread(id, typeof body.title === "string" ? body.title : "");
+      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "GET" && path.startsWith("/api/threads/") && path.endsWith("/export")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/threads/".length, -"/export".length));
+    try {
+      const file = await exportLiveThread(id);
+      res.writeHead(200, {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${file.filename}"`,
+      });
+      res.end(file.markdown);
     } catch (err) {
       if (err instanceof HttpError) {
         send(res, err.status, { error: err.message });

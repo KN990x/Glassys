@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RedactedConfig } from "@glassys/protocol";
+import { isTheme, resolveTheme, type Theme } from "@glassys/protocol";
 import { I18nProvider, useT, type Locale } from "./i18n";
 import { api, getToken } from "./api";
 import { Setup } from "./pages/Setup";
@@ -8,16 +9,16 @@ import { Wizard } from "./pages/Wizard";
 import { Chat } from "./pages/Chat";
 
 type Gate = "boot" | "unreachable" | "setup" | "login" | "wizard" | "chat";
-type Theme = "dark" | "light";
+type ResolvedTheme = "dark" | "light";
 
 const THEME_KEY = "glassys_theme";
 const LOCALE_KEY = "glassys_locale";
-const THEME_COLOR: Record<Theme, string> = { dark: "#0a0a0a", light: "#fafafa" };
+const THEME_COLOR: Record<ResolvedTheme, string> = { dark: "#0a0a0a", light: "#fafafa" };
 
 function readStoredTheme(): Theme | null {
   try {
     const value = localStorage.getItem(THEME_KEY);
-    return value === "light" || value === "dark" ? value : null;
+    return isTheme(value) ? value : null;
   } catch {
     return null;
   }
@@ -42,13 +43,24 @@ function readNavigatorLocale(): Locale {
   return "en";
 }
 
-function applyDocumentTheme(theme: Theme) {
-  const root = document.documentElement;
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[theme]);
+function readPrefersLight(): boolean {
   try {
-    localStorage.setItem(THEME_KEY, theme);
+    if (typeof globalThis.matchMedia === "function") {
+      return globalThis.matchMedia("(prefers-color-scheme: light)").matches;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function applyDocumentTheme(resolved: ResolvedTheme, stored: Theme) {
+  const root = document.documentElement;
+  root.dataset.theme = resolved;
+  root.style.colorScheme = resolved;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[resolved]);
+  try {
+    localStorage.setItem(THEME_KEY, stored);
   } catch {
     /* private mode / quota */
   }
@@ -57,6 +69,8 @@ function applyDocumentTheme(theme: Theme) {
 export function App() {
   const [gate, setGate] = useState<Gate>("boot");
   const [config, setConfig] = useState<RedactedConfig | null>(null);
+  const [bootLocale, setBootLocale] = useState<Locale>(() => readStoredLocale() ?? readNavigatorLocale());
+  const [prefersLight, setPrefersLight] = useState(readPrefersLight);
 
   const refresh = useCallback(async () => {
     try {
@@ -97,18 +111,27 @@ export function App() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (typeof globalThis.matchMedia !== "function") return;
+    const mq = globalThis.matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => setPrefersLight(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   const locale: Locale =
-    config?.space.locale === "es" || config?.space.locale === "en"
-      ? config.space.locale
-      : (readStoredLocale() ?? readNavigatorLocale());
-  const theme: Theme =
-    config?.space.theme === "light" || config?.space.theme === "dark"
-      ? config.space.theme
-      : (readStoredTheme() ?? "dark");
+    gate === "setup" || gate === "login" || gate === "boot" || gate === "unreachable"
+      ? bootLocale
+      : config?.space.locale === "es" || config?.space.locale === "en"
+        ? config.space.locale
+        : bootLocale;
+  const themePref: Theme =
+    config && isTheme(config.space.theme) ? config.space.theme : (readStoredTheme() ?? "dark");
+  const resolvedTheme = resolveTheme(themePref, prefersLight);
 
   useEffect(() => {
-    applyDocumentTheme(theme);
-  }, [theme]);
+    applyDocumentTheme(resolvedTheme, themePref);
+  }, [resolvedTheme, themePref]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -122,12 +145,12 @@ export function App() {
   return (
     <I18nProvider locale={locale}>
       <div className="app">
-        {gate === "boot" && <main className="gate"><p className="muted">Glassys</p></main>}
+        {gate === "boot" && <BootScreen />}
         {gate === "unreachable" && (
           <Unreachable onRetry={() => { setGate("boot"); void refresh(); }} />
         )}
-        {gate === "setup" && <Setup onDone={() => void refresh()} />}
-        {gate === "login" && <Login onDone={() => void refresh()} />}
+        {gate === "setup" && <Setup locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
+        {gate === "login" && <Login locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
         {gate === "wizard" && config && (
           <Wizard config={config} onConfig={setConfig} onDone={() => void refresh()} />
         )}
@@ -136,6 +159,18 @@ export function App() {
         )}
       </div>
     </I18nProvider>
+  );
+}
+
+function BootScreen() {
+  const t = useT();
+  return (
+    <main className="gate" aria-busy="true">
+      <div className="panel stack boot-panel">
+        <div className="spinner" aria-hidden="true" />
+        <p className="muted">{t("status.connecting")}</p>
+      </div>
+    </main>
   );
 }
 

@@ -22,15 +22,20 @@ Already inside the repo: `bash scripts/install.sh` or `pnpm install && pnpm run 
 
 ```bash
 cd glassys && pnpm run service:status
+cd glassys && pnpm run service:upgrade
 cd glassys && pnpm run service:uninstall
 ```
+
+`service:upgrade` is `git pull && pnpm install && pnpm build &&` restart of the user unit (not Docker, not Windows). Stay in the clone you installed from.
 
 Uninstall stops the service and removes the unit/LaunchAgent. It does not delete the clone or `data/` (operator hash, transcript).
 
 - **macOS:** LaunchAgent `~/Library/LaunchAgents/dev.kn990x.glassys.plist` (`KeepAlive`).
-- **Linux:** systemd user unit `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot). If you install from a graphical session, the unit copies `DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS` when they are set; linger after reboot still has no display.
+- **Linux:** systemd user unit `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot). If you install from a graphical session, the unit copies `DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS` when they are set; linger after reboot still has no display. Logs: `journalctl --user -u glassys`. The installer does **not** duplicate that journal into `data/glassys.log`.
 
-Data defaults to `<repo>/data`. Override with `GLASSYS_DATA_DIR` when you run `service:install`. The installer does not copy API keys into the unit.
+The user-service unit runs as **your login user** with `WorkingDirectory` set to the clone. That is not the same as the example system unit below (`User=glassys`, `/opt/glassys`). Do not mix those paths.
+
+Data defaults to `<repo>/data`. Override with `GLASSYS_DATA_DIR` when you run `service:install`. The installer copies `GLASSYS_PORT` / `GLASSYS_BIND` into the unit when those env vars are set at install time, then checks `GET /health`. It does not copy API keys into the unit.
 
 Open `http://127.0.0.1:8787` (or `GLASSYS_PORT` if you set it) and complete the onboarding wizard before using chat. Defaults: bind `127.0.0.1:8787`. Do not bind `0.0.0.0` unless you understand that auto-run + host cwd is operator access to the machine.
 
@@ -99,7 +104,7 @@ WantedBy=multi-user.target
 
 Glassys is the app behind the proxy, not the proxy.
 
-- **Production:** terminate TLS at Caddy, Traefik, Nginx Proxy Manager, or Cloudflare Tunnel. Forward HTTP and WebSocket (`/ws`) to `127.0.0.1:<port>` from `config.yaml` (`network.port`, or `GLASSYS_PORT`). See [caddy.md](caddy.md). Idle HTTP cutoffs around 100s will drop long agent runs; keep WebSocket idle timeouts high. Glassys pings every 15–30s (default 25).
+- **Production:** terminate TLS at Caddy or Cloudflare Tunnel. Forward HTTP and WebSocket (`/ws`) to `127.0.0.1:<port>` from `config.yaml` (`network.port`, or `GLASSYS_PORT`). See [caddy.md](caddy.md) and [cloudflare.md](cloudflare.md). Idle HTTP cutoffs around 100s will drop long agent runs; keep WebSocket idle timeouts high. Glassys pings every 15–30s (default 25).
 - **Development:** Vite on `127.0.0.1:5173` only forwards `/api`, `/health`, and `/ws` to the gateway. That is not a substitute for a reverse proxy.
 
 If the PWA is on another origin, add that origin to `network.allowedOrigins` in `config.yaml`.

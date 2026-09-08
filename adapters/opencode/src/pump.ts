@@ -1,3 +1,5 @@
+export const MAX_EVENT_PUMP_BUFFER = 2_000;
+
 export class EventPump {
   private buf: unknown[] = [];
   private waiters: Array<() => void> = [];
@@ -14,6 +16,9 @@ export class EventPump {
           const next = await iterator.next();
           if (next.done || this.abortCtl.signal.aborted) break;
           this.buf.push(next.value);
+          if (this.buf.length > MAX_EVENT_PUMP_BUFFER) {
+            this.buf.splice(0, this.buf.length - MAX_EVENT_PUMP_BUFFER);
+          }
           this.waiters.shift()?.();
         }
       } catch {

@@ -24,12 +24,6 @@ function jwksFor(teamHost: string): ReturnType<typeof createRemoteJWKSet> {
   return jwks;
 }
 
-export function tokenFromRequest(req: IncomingMessage): string | undefined {
-  const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return parseCookies(req.headers.cookie)[SESSION_COOKIE];
-}
-
 /** Prefer a valid Bearer token; fall back to the session cookie if Bearer is missing or expired. */
 export async function verifyRequestSession(req: IncomingMessage): Promise<boolean> {
   const auth = req.headers.authorization;

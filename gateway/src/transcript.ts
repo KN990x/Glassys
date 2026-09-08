@@ -23,9 +23,3 @@ export async function readTranscript(): Promise<TranscriptEvent[]> {
     return [];
   }
 }
-
-export async function clearTranscript(): Promise<void> {
-  const path = await filePath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, "", "utf8");
-}

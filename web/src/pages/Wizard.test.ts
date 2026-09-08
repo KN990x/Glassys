@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { pickWizardAdapter, wizardCredentialReady, wizardFinishPatch } from "./Wizard";
+import { pickWizardAdapter, wizardCredentialReady, wizardFinishPatch, wizardStepIds } from "./Wizard";
 
 const caps = {
   models: true,
@@ -69,5 +69,13 @@ describe("wizardCredentialReady", () => {
     expect(wizardCredentialReady({ authKind: "sdk-login", apiKeyDraft: "cursor_x" })).toBe(true);
     expect(wizardCredentialReady({ authKind: "api-key" })).toBe(true);
     expect(wizardCredentialReady({ authKind: "cli-binary" })).toBe(true);
+  });
+});
+
+describe("wizardStepIds", () => {
+  it("omits the model step when the adapter has no catalog", () => {
+    expect(wizardStepIds({ ...caps, models: false })).not.toContain("model");
+    expect(wizardStepIds({ ...caps, models: true })).toContain("model");
+    expect(wizardStepIds({ ...caps, discover: true })).toContain("acp");
   });
 });

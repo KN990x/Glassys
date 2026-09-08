@@ -163,6 +163,11 @@ export function isOpencodeIdle(event: unknown): boolean {
   return type === "session.idle" || type === "session.idle.updated";
 }
 
+/** Leftover idle from a previous prompt must not end the next send. */
+export function isStaleOpencodeIdle(event: unknown, sawRunEvent: boolean, promptSettled: boolean): boolean {
+  return isOpencodeIdle(event) && !sawRunEvent && !promptSettled;
+}
+
 export function isOpencodeError(event: unknown): boolean {
   const rec = asRecord(event);
   const type = rec ? str(rec.type) : "";

@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -19,6 +27,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm test
+      - run: pnpm --filter @glassys/protocol --filter @glassys/adapter-contract --filter @glassys/adapter-cursor --filter @glassys/adapter-claude --filter @glassys/adapter-opencode --filter @glassys/adapter-gemini --filter @glassys/adapter-codex --filter @glassys/adapter-acp run build
       - run: pnpm typecheck
+      - run: pnpm test
       - run: pnpm build

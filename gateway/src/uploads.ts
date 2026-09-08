@@ -6,6 +6,8 @@ import type { PromptAttachment } from "@glassys/adapter-contract";
 import { paths } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { parseJsonl } from "./jsonl.js";
+import { loadConfig } from "./config.js";
+import { loadState } from "./state.js";
 
 export const MAX_UPLOAD_BYTES = 4_000_000;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -154,5 +156,46 @@ export async function gcUploads(now = Date.now()): Promise<void> {
     if (now - mtime < UNREFERENCED_TTL_MS) continue;
     await rm(data, { force: true });
     await rm(meta, { force: true });
+  }
+  await gcCwdUploads(referenced, now);
+}
+
+async function gcCwdUploads(referenced: Set<string>, now: number): Promise<void> {
+  const prefixes = new Set([...referenced].map((id) => id.slice(0, 8)));
+  const cwds = new Set<string>();
+  try {
+    const cfg = await loadConfig();
+    if (cfg.agent.cwd) cwds.add(cfg.agent.cwd);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const state = await loadState();
+    for (const cwd of state.recentCwds || []) if (cwd) cwds.add(cwd);
+  } catch {
+    /* ignore */
+  }
+  for (const cwd of cwds) {
+    const dir = join(cwd, UPLOAD_DIR);
+    let names: string[] = [];
+    try {
+      names = await readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (name === ".gitignore") continue;
+      const prefix = name.slice(0, 8);
+      if (prefixes.has(prefix)) continue;
+      const file = join(dir, name);
+      let mtime = now;
+      try {
+        mtime = (await stat(file)).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (now - mtime < UNREFERENCED_TTL_MS) continue;
+      await rm(file, { force: true });
+    }
   }
 }

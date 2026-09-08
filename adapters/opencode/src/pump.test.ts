@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EventPump } from "./pump.js";
+import { EventPump, MAX_EVENT_PUMP_BUFFER } from "./pump.js";
 
 async function* hang(): AsyncGenerator<unknown> {
   await new Promise(() => undefined);
@@ -71,5 +71,18 @@ describe("EventPump", () => {
     push({ type: "late" });
     await new Promise((r) => setTimeout(r, 20));
     expect(pump.drain()).toEqual([]);
+  });
+
+  it("caps the buffered event list", async () => {
+    async function* many() {
+      for (let i = 0; i < MAX_EVENT_PUMP_BUFFER + 100; i++) yield { i };
+    }
+    const pump = new EventPump(many());
+    await new Promise((r) => setTimeout(r, 40));
+    const buffered = pump.drain();
+    expect(buffered).toHaveLength(MAX_EVENT_PUMP_BUFFER);
+    expect(buffered[0]).toEqual({ i: 100 });
+    expect(buffered.at(-1)).toEqual({ i: MAX_EVENT_PUMP_BUFFER + 99 });
+    pump.abort();
   });
 });

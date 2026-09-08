@@ -10,9 +10,10 @@ import {
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
+  type PromptAttachment,
 } from "@glassys/adapter-contract";
 import { type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
-import { isOpencodeError, isOpencodeIdle, mapOpencodeEvent, opencodeSessionId } from "./mapper.js";
+import { isOpencodeError, isOpencodeIdle, isStaleOpencodeIdle, mapOpencodeEvent, opencodeSessionId } from "./mapper.js";
 import { EventPump } from "./pump.js";
 
 export { EventPump } from "./pump.js";
@@ -211,13 +212,14 @@ class OpencodeSession implements AdapterSession {
   async send(
     text: string,
     onEvent: Parameters<AdapterSession["send"]>[1],
-    sendOpts?: { model?: string; attachments?: { path: string; mime: string; name: string }[] },
+    sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
     if (sendOpts?.model) this.model = sendOpts.model;
     const runId = randomUUID();
     const model = parseModel(this.model);
     const promptText = promptWithAttachments(text, sendOpts?.attachments);
     return pendingRun(runId, async ({ signal, isCancelled }) => {
+      this.pump.drain();
       const prompt = this.client.session.prompt({
         path: { id: this.agentId },
         body: {
@@ -228,6 +230,7 @@ class OpencodeSession implements AdapterSession {
       let promptSettled = false;
       let idle = false;
       let failed = false;
+      let sawRunEvent = false;
       void prompt.finally(() => {
         promptSettled = true;
       });
@@ -237,12 +240,15 @@ class OpencodeSession implements AdapterSession {
           const next = await this.pump.next(waitMs, signal);
           if (isCancelled()) break;
           if (next.event) {
-            for (const ev of mapOpencodeEvent(next.event, this.tools, this.snapshots, this.agentId)) {
+            const mapped = mapOpencodeEvent(next.event, this.tools, this.snapshots, this.agentId);
+            if (mapped.length) sawRunEvent = true;
+            for (const ev of mapped) {
               onEvent(ev);
               if (ev.type === "run.error") failed = true;
             }
             if (isOpencodeError(next.event) && !foreignSession(next.event, this.agentId)) failed = true;
             if (isOpencodeIdle(next.event) && !foreignSession(next.event, this.agentId)) {
+              if (isStaleOpencodeIdle(next.event, sawRunEvent, promptSettled)) continue;
               idle = true;
               break;
             }

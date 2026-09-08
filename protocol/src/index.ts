@@ -11,6 +11,25 @@ export function clampKeepaliveSeconds(value: number): number {
   return Math.min(MAX_KEEPALIVE_SECONDS, Math.max(MIN_KEEPALIVE_SECONDS, Math.round(value)));
 }
 
+export function isTheme(value: unknown): value is Theme {
+  return value === "dark" || value === "light" || value === "system";
+}
+
+export function resolveTheme(theme: Theme, prefersLight?: boolean): ResolvedTheme {
+  if (theme === "light" || theme === "dark") return theme;
+  if (prefersLight === true) return "light";
+  if (prefersLight === false) return "dark";
+  const matchMedia = (globalThis as { matchMedia?: (query: string) => { matches: boolean } }).matchMedia;
+  if (typeof matchMedia === "function") {
+    try {
+      if (matchMedia("(prefers-color-scheme: light)").matches) return "light";
+    } catch {
+      /* ignore */
+    }
+  }
+  return "dark";
+}
+
 export {
   defaultParamsFor,
   pickDefaultSelection,
@@ -47,7 +66,8 @@ export type ToolKind =
   | "task"
   | "other";
 
-export type Theme = "dark" | "light";
+export type Theme = "dark" | "light" | "system";
+export type ResolvedTheme = "dark" | "light";
 export type ThinkingDefault = "collapsed" | "expanded";
 export type EdgeAuth = "none" | "cloudflare-access" | "header";
 export type SettingSource = "project" | "user" | "plugins" | "team" | "mdm" | "all";

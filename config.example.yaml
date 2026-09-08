@@ -2,9 +2,9 @@
 # Secrets do not belong here — use environment variables or data/secrets.json.
 
 space:
-  name: Glassys # PWA always displays Glassys; not editable in Settings.
+  name: Glassys # Short host label in the PWA topbar. Editable in Settings.
   locale: en
-  theme: dark
+  theme: dark # dark | light | system
 
 onboarding:
   completed: false

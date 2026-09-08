@@ -7,6 +7,7 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const open = userOpen ?? (block.status === "running" || block.toolKind !== "shell");
   const hunks = useMemo(() => (showDiff && block.diff ? splitHunks(block.diff) : []), [block.diff, showDiff]);
   const chunkLines = block.chunk ? block.chunk.split("\n").length : 0;
@@ -17,10 +18,12 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
     if (!block.command) return;
     try {
       await navigator.clipboard.writeText(block.command);
+      setCopyFailed(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+      setCopyFailed(true);
     }
   }
 
@@ -50,7 +53,7 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
         </button>
         {block.command && (
           <button type="button" className="ghost tiny tool-copy" onClick={(e) => void copyCommand(e)}>
-            {copied ? t("chat.copied") : t("tool.copyCommand")}
+            {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
           </button>
         )}
       </div>

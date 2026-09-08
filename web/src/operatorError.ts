@@ -1,5 +1,9 @@
 const MESSAGE_KEYS: Record<string, string> = {
   busy: "threads.busy",
+  unauthorized: "error.unauthorized",
+  "invalid json": "error.invalidJson",
+  "unknown message": "error.unknownMessage",
+  "title required": "error.titleRequired",
   "payload too large": "error.payloadTooLarge",
   "ACP adapter needs agent.options.command (or a registry pick)": "wizard.acp.commandRequired",
   "Onboarding is not complete": "error.onboarding",

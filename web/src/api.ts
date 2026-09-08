@@ -94,4 +94,23 @@ export const api = {
     req<{ ok: boolean; url?: string }>("/api/auth/adapter-login", { method: "POST", body: JSON.stringify({ adapter }) }),
   adapterLoginCancel: () => req<{ ok: boolean }>("/api/auth/adapter-login/cancel", { method: "POST" }),
   restart: () => req<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
+  renameThread: (id: string, title: string) =>
+    req<{ threads: ThreadSummary[]; currentId: string | null }>(`/api/threads/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+  exportThread: async (id: string) => {
+    const headers = new Headers();
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`/api/threads/${encodeURIComponent(id)}/export`, { headers, credentials: "include" });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || res.statusText);
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get("content-disposition") || "";
+    const name = /filename="([^"]+)"/.exec(cd)?.[1] || "thread.md";
+    return { blob, name };
+  },
 };

@@ -25,6 +25,7 @@
     "service:install": "node scripts/host-service.mjs install",
     "service:uninstall": "node scripts/host-service.mjs uninstall",
     "service:status": "node scripts/host-service.mjs status",
+    "service:upgrade": "node scripts/host-service.mjs upgrade",
     "test": "pnpm --filter @glassys/protocol --filter @glassys/adapter-contract --filter @glassys/adapter-cursor --filter @glassys/adapter-claude --filter @glassys/adapter-opencode --filter @glassys/adapter-gemini --filter @glassys/adapter-codex --filter @glassys/adapter-acp run build && pnpm --filter @glassys/protocol --filter @glassys/adapter-contract --filter @glassys/adapter-cursor --filter @glassys/adapter-claude --filter @glassys/adapter-opencode --filter @glassys/adapter-gemini --filter @glassys/adapter-codex --filter @glassys/adapter-acp --filter @glassys/gateway --filter @glassys/web run test && node --test scripts/host-service.test.mjs scripts/install.test.mjs",
     "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "node scripts/lint.mjs"

@@ -174,6 +174,7 @@ export function mapCursorDelta(update: unknown): ServerMessage[] {
       return ev ? [ev] : [];
     }
     case "partial-tool-call":
+      // Headless SDK streams these; Glassys paints tools on start/end only.
       return [];
     case "shell-output-delta": {
       const chunk = shellChunk(rec.event) ?? shellChunk(rec);

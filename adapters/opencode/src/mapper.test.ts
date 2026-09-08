@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapOpencodeEvent, opencodeSessionId } from "./mapper.js";
+import { isOpencodeError, isOpencodeIdle, isStaleOpencodeIdle, mapOpencodeEvent, opencodeSessionId } from "./mapper.js";
 
 describe("mapOpencodeEvent", () => {
   it("maps text and reasoning deltas", () => {
@@ -121,5 +121,13 @@ describe("mapOpencodeEvent", () => {
         properties: { tokens: { input: 11, output: 7 } },
       }),
     ).toEqual([{ type: "run.usage", inputTokens: 11, outputTokens: 7 }]);
+  });
+
+  it("treats leftover session.idle as stale until the current prompt has events", () => {
+    expect(isStaleOpencodeIdle({ type: "session.idle" }, false, false)).toBe(true);
+    expect(isStaleOpencodeIdle({ type: "session.idle" }, true, false)).toBe(false);
+    expect(isStaleOpencodeIdle({ type: "session.idle" }, false, true)).toBe(false);
+    expect(isOpencodeIdle({ type: "session.idle.updated" })).toBe(true);
+    expect(isOpencodeError({ type: "session.error" })).toBe(true);
   });
 });

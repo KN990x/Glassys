@@ -1,8 +1,17 @@
 import { useState, type FormEvent } from "react";
 import { api, setToken } from "../api";
-import { useT } from "../i18n";
+import { useT, type Locale } from "../i18n";
+import { LocaleSwitch } from "../components/LocaleSwitch";
 
-export function Login({ onDone }: { onDone: () => void }) {
+export function Login({
+  onDone,
+  locale,
+  onLocale,
+}: {
+  onDone: () => void;
+  locale: Locale;
+  onLocale: (locale: Locale) => void;
+}) {
   const t = useT();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,6 +43,7 @@ export function Login({ onDone }: { onDone: () => void }) {
             <p className="muted">{t("app.tagline")}</p>
           </div>
         </div>
+        <LocaleSwitch locale={locale} onChange={onLocale} />
         <h2>{t("login.title")}</h2>
         <form onSubmit={submit} className="stack">
           <label>
