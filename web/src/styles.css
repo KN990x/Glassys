@@ -241,6 +241,9 @@ details label { margin-top: 0.35rem; }
 .status.connected { color: var(--ok); }
 .status.reconnecting, .status.connecting, .status.queued, .status.running { color: var(--warn); }
 .status.error { color: var(--danger); }
+.host-context { display: block; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16rem; }
+.thread-row { display: flex; gap: 0.35rem; align-items: flex-start; }
+.thread-row .picker-item { flex: 1; min-width: 0; text-align: left; }
 .top-actions { display: flex; gap: 0.75rem; align-items: center; min-width: 0; }
 
 .transcript {

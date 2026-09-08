@@ -186,7 +186,7 @@ export function Chat({
       setThreads(r.threads);
       setCurrentThreadId(r.currentId);
     }).catch(() => undefined);
-  }, [loadModels, config.agent.adapter, config.agent.cwd, settings]);
+  }, [loadModels, config.agent.adapter, config.agent.cwd]);
 
   useEffect(() => {
     if (!draftModel) return;
@@ -255,6 +255,21 @@ export function Chat({
     }
   }
 
+  async function onDeleteThread(id: string, e: { stopPropagation: () => void }) {
+    e.stopPropagation();
+    if (busy || waiting) {
+      setSendError(t("threads.busy"));
+      return;
+    }
+    if (!window.confirm(t("threads.deleteConfirm"))) return;
+    try {
+      applyThreadList(await api.deleteThread(id));
+      setSendError("");
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : t("threads.busy"));
+    }
+  }
+
   async function onSwitchThread(id: string) {
     if (id === currentThreadId) {
       setThreadOpen(false);
@@ -291,7 +306,12 @@ export function Chat({
     e.preventDefault();
     const value = text.trim();
     if ((!value && !drafts.length) || conn !== "connected" || !snapshotReady || protocolError !== null) return;
-    if (!sendRef.current({ type: "user.message", text: value, attachments: drafts.length ? drafts : undefined })) {
+    if (!sendRef.current({
+      type: "user.message",
+      text: value,
+      id: crypto.randomUUID(),
+      attachments: drafts.length ? drafts : undefined,
+    })) {
       setSendError(t("chat.sendFailed"));
       return;
     }
@@ -334,6 +354,11 @@ export function Chat({
             <img src="/icon.svg" alt="" width={28} height={28} />
             <div>
               <strong>{t("app.name")}</strong>
+              <span className="host-context muted">
+                {[cwdBasename(config.agent.cwd), currentAdapter?.displayName || config.agent.adapter]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
               <span className={`status ${statusClass}`} aria-live="polite">
                 {t(statusKey)}
               </span>
@@ -377,7 +402,7 @@ export function Chat({
             {threads.length === 0 && <p className="muted">{t("threads.empty")}</p>}
             <ul className="thread-list">
               {threads.map((th) => (
-                <li key={th.id}>
+                <li key={th.id} className="thread-row">
                   <button
                     type="button"
                     className={`ghost picker-item${th.id === currentThreadId ? " current" : ""}`}
@@ -386,8 +411,16 @@ export function Chat({
                     <strong>{th.title}</strong>
                     <span className="muted">
                       {th.id === currentThreadId ? `${t("threads.current")} · ` : ""}
-                      {th.cwd}
+                      {th.adapter} · {th.cwd}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost tiny"
+                    aria-label={t("threads.delete")}
+                    onClick={(e) => void onDeleteThread(th.id, e)}
+                  >
+                    {t("threads.delete")}
                   </button>
                 </li>
               ))}
@@ -405,6 +438,14 @@ export function Chat({
       {configError && (
         <p className="banner error" role="alert">
           {configError}
+        </p>
+      )}
+      {config.restartRequired && (
+        <p className="banner warn" role="status">
+          {t("settings.restartRequired")}{" "}
+          <button type="button" className="ghost tiny" onClick={() => void api.restart()}>
+            {t("settings.restart")}
+          </button>
         </p>
       )}
       {sendError && (
@@ -542,7 +583,7 @@ export function Chat({
               <ul className="queue-list" aria-label={t("chat.queueList")}>
                 {queueItems.map((item) => (
                   <li key={item.id}>
-                    <span>{item.text || t("chat.pending")}</span>
+                    <span>{item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}</span>
                     <button
                       type="button"
                       className="ghost tiny"
@@ -635,6 +676,12 @@ export function Chat({
       )}
     </div>
   );
+}
+
+function cwdBasename(cwd: string): string {
+  const trimmed = cwd.replace(/[\\/]+$/, "");
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1] || "";
 }
 
 function AttachIcon() {

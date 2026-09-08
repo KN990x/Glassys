@@ -33,4 +33,11 @@ describe("uploads", () => {
     expect(files[0]?.path).toBe(stored?.path);
     expect(await loadUpload("../secret")).toBeNull();
   });
+
+  it("garbage-collects unreferenced uploads after the TTL", async () => {
+    const { gcUploads } = await import("./uploads.js");
+    const att = await saveUpload(Buffer.from("png-bytes"), "image/png", "old.png");
+    await gcUploads(Date.now() + 48 * 60 * 60 * 1000);
+    expect(await loadUpload(att.id)).toBeNull();
+  });
 });

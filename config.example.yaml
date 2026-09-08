@@ -17,15 +17,17 @@ agent:
   # Empty until the adapter fills its default (Cursor: grok-4.6 extra high).
   model: ""
   modelParams: []
-  # Adapter-specific. Cursor: settingSources, sandbox, autoRun.
-  # Claude: permissionMode, autoRun. ACP: command, args, registryId.
+  # Opaque per adapter. Defaults below are for Cursor (the example adapter).
+  # Cursor: settingSources, sandbox, autoRun.
+  #   autoRun false → local.autoReview (classifier denies; headless SDK cannot prompt).
+  # Claude: permissionMode, autoRun.
+  # ACP: command, args, registryId, autoRun (required command after onboarding too).
+  # OpenCode / Codex / Gemini: model only; they have no Glassys deny lever.
   options:
     settingSources:
       - project
       - user
     sandbox: false
-    # true = tools run unattended.
-    # Cursor false = local.autoReview (classifier denies; headless SDK cannot prompt).
     autoRun: true
 
 network:

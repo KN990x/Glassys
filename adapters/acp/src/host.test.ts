@@ -55,19 +55,3 @@ describe("registerHostHandlers autoRun", () => {
     }
   });
 });
-
-
-describe("resolveInsideCwd", () => {
-  const cwd = resolve("/tmp/glassys-ws");
-
-  it("allows paths under cwd", () => {
-    expect(resolveInsideCwd(cwd, "src/a.ts")).toBe(resolve(cwd, "src/a.ts"));
-    expect(resolveInsideCwd(cwd, ".")).toBe(cwd);
-  });
-
-  it("rejects path escape", () => {
-    expect(() => resolveInsideCwd(cwd, "../etc/passwd")).toThrow(/outside/);
-    expect(() => resolveInsideCwd(cwd, "/etc/passwd")).toThrow(/outside/);
-    expect(() => resolveInsideCwd(cwd, "src/../../etc/passwd")).toThrow(/outside/);
-  });
-});

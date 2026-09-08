@@ -32,6 +32,23 @@ describe("mapAcpUpdate", () => {
     ).toMatchObject({ type: "tool.end", ok: true, outputPreview: "file body" });
   });
 
+  it("classifies kind from update.kind, not a prose title", () => {
+    const start = mapAcpUpdate({
+      update: { sessionUpdate: "tool_call", toolCallId: "t2", kind: "read", title: "Reading package.json" },
+    })[0];
+    expect(start).toMatchObject({ type: "tool.start", kind: "read", title: "Reading package.json" });
+  });
+
+  it("maps cancelled tool updates as denied", () => {
+    const tools = new Map<string, string>([["t3", "write"]]);
+    expect(
+      mapAcpUpdate(
+        { update: { sessionUpdate: "tool_call_update", toolCallId: "t3", status: "cancelled", error: "Glassys denied" } },
+        tools,
+      )[0],
+    ).toMatchObject({ type: "tool.end", ok: false, denied: true });
+  });
+
   it("maps a unified diff on tool_call_update when present", () => {
     const tools = new Map<string, string>([["t1", "edit"]]);
     const diff = "--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n";

@@ -248,16 +248,27 @@ describe("runtime queue", () => {
   });
 
   it("cancels a run that is still inside send()", async () => {
-    control.holdSend();
-    const { enqueueMessage, cancelRun, readTranscript, drainEmit } = await import("./runtime.js");
-    void enqueueMessage("one");
-    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "user.message"));
-    await cancelRun();
-    control.goSend();
-    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
-    await drainEmit();
-    const events = await readTranscript();
-    expect(events.some((e) => e.type === "run.done")).toBe(false);
+    const { hub } = await import("./hub.js");
+    const live: string[] = [];
+    const origBroadcast = hub.broadcast.bind(hub);
+    hub.broadcast = (msg) => {
+      live.push(msg.type);
+      origBroadcast(msg);
+    };
+    try {
+      control.holdSend();
+      const { enqueueMessage, cancelRun, readTranscript, drainEmit } = await import("./runtime.js");
+      void enqueueMessage("one");
+      await waitUntil(() => live.includes("run.start"));
+      await cancelRun();
+      control.goSend();
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
+      await drainEmit();
+      const events = await readTranscript();
+      expect(events.some((e) => e.type === "run.done")).toBe(false);
+    } finally {
+      hub.broadcast = origBroadcast;
+    }
   });
 
   it("does not clear the transcript until an in-flight run idles after identity change", async () => {
@@ -316,6 +327,31 @@ describe("runtime queue", () => {
     const listed = await listLiveThreads();
     expect(listed.length).toBeGreaterThanOrEqual(2);
     expect(listed.some((t) => t.cwd === dir || t.title.includes("one"))).toBe(true);
+  });
+
+  it("retracts queued jobs when identity changes", async () => {
+    const { hub } = await import("./hub.js");
+    const types: string[] = [];
+    const origBroadcast = hub.broadcast.bind(hub);
+    hub.broadcast = (msg) => {
+      types.push(msg.type);
+      origBroadcast(msg);
+    };
+    try {
+      control.hold();
+      const { enqueueMessage, applyConfigPatch, snapshotQueue, readTranscript } = await import("./runtime.js");
+      void enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
+      await enqueueMessage("two");
+      expect(snapshotQueue().length).toBe(1);
+      const other = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
+      await applyConfigPatch({ agent: { cwd: other } });
+      expect(snapshotQueue()).toEqual([]);
+      expect(types).toContain("user.retracted");
+      control.go();
+    } finally {
+      hub.broadcast = origBroadcast;
+    }
   });
 
   it("does not wipe a new thread that starts after an identity change", async () => {

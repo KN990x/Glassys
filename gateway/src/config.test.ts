@@ -99,6 +99,32 @@ describe("config patch", () => {
     await expect(applyPatch({ onboarding: { completed: true } })).rejects.toThrow(/command/);
   });
 
+  it("rejects saving ACP without a command after onboarding", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "acp";
+    cfg.agent.options = { command: "npx" };
+    cfg.onboarding.completed = true;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { applyPatch } = await import("./config.js");
+    await expect(applyPatch({ agent: { options: { command: "" } } })).rejects.toThrow(/command/);
+  });
+
+  it("ignores leftover options from another adapter in the fingerprint", async () => {
+    const { agentFingerprint } = await import("./config.js");
+    const a = defaultConfig();
+    a.agent.adapter = "claude";
+    a.agent.cwd = "/tmp/ws";
+    a.agent.options = { permissionMode: "dontAsk", autoRun: false, sandbox: true };
+    const b = defaultConfig();
+    b.agent.adapter = "claude";
+    b.agent.cwd = "/tmp/ws";
+    b.agent.options = { permissionMode: "dontAsk", autoRun: false };
+    expect(agentFingerprint(a)).toBe(agentFingerprint(b));
+  });
+
   it("rejects switching adapter when probe fails", async () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
     process.env.GLASSYS_DATA_DIR = dir;

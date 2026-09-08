@@ -232,7 +232,7 @@ async function handleClient(
 
   switch (msg.type) {
     case "user.message":
-      await enqueueMessage(msg.text, msg.attachments);
+      await enqueueMessage(msg.text, msg.attachments, msg.id);
       break;
     case "run.cancel":
       await cancelRun();

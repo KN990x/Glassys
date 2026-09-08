@@ -79,7 +79,12 @@ export interface Adapter {
     options: Record<string, unknown>;
   };
   /** Optional host check (missing SDK, missing binary). Throw if the adapter cannot create/send. */
-  probe?(): Promise<void>;
+  probe?(options?: Record<string, unknown>): Promise<void>;
+  /**
+   * When `capabilities.resume` is false, the runtime may still call `resume` if this returns true
+   * (ACP: child advertised session load/resume on a previous initialize).
+   */
+  shouldResume?(agentId: string, opts: AdapterCreateOptions): Promise<boolean>;
   loginInteractive?(opts?: AdapterLoginOptions): Promise<void>;
   authStatus?(): Promise<{ loggedIn: boolean; email?: string }>;
   discover?(): Promise<AdapterDiscoverItem[]>;

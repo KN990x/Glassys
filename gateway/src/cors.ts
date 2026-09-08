@@ -78,7 +78,7 @@ export async function setCors(req: IncomingMessage, res: ServerResponse): Promis
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 }
 
 export async function originAllowed(origin: string | undefined, requestHost?: string): Promise<boolean> {

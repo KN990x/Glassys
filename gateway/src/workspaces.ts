@@ -50,7 +50,7 @@ export async function listWorkspaces(root: string): Promise<WorkspaceHit[]> {
   if (!root || !isAbsolute(root)) throw new HttpError(400, "Workspace root must be an absolute path");
   const abs = resolve(root);
   if (abs === "/" || abs === "/Users" || abs === "/home") {
-    throw new HttpError(400, "Pick a project folder, not the filesystem root");
+    throw new HttpError(400, "Pick a working directory, not the filesystem root");
   }
   try {
     const s = await stat(abs);
@@ -60,7 +60,17 @@ export async function listWorkspaces(root: string): Promise<WorkspaceHit[]> {
     throw new HttpError(400, "Workspace root does not exist");
   }
   const hits: WorkspaceHit[] = [];
+  if (!(await isGitRepo(abs))) {
+    hits.push({ path: abs, name: basename(abs) });
+  }
   await walk(abs, 0, hits);
-  hits.sort((a, b) => a.name.localeCompare(b.name));
-  return hits.slice(0, MAX_HITS);
+  const seen = new Set<string>();
+  const unique: WorkspaceHit[] = [];
+  for (const hit of hits) {
+    if (seen.has(hit.path)) continue;
+    seen.add(hit.path);
+    unique.push(hit);
+  }
+  unique.sort((a, b) => a.name.localeCompare(b.name));
+  return unique.slice(0, MAX_HITS);
 }

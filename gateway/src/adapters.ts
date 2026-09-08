@@ -31,10 +31,13 @@ export function tryGetAdapter(id: string): Adapter | undefined {
   return byId.get(id);
 }
 
-export async function probeAdapter(adapter: Adapter): Promise<AdapterAvailability> {
+export async function probeAdapter(
+  adapter: Adapter,
+  options?: Record<string, unknown>,
+): Promise<AdapterAvailability> {
   if (!adapter.probe) return { ok: true };
   try {
-    await adapter.probe();
+    await adapter.probe(options);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };

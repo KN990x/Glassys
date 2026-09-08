@@ -12,9 +12,11 @@ describe("transcript reducer", () => {
     expect(start[0]?.id).toBe("tool:c1");
     const replayed = replay([
       { type: "tool.start", callId: "c1", kind: "read", title: "Read" },
+      { type: "tool.start", callId: "c1", kind: "read", title: "Read", path: "a.ts" },
       { type: "tool.end", callId: "c1", ok: true, kind: "read" },
     ]);
-    expect(replayed[0]?.id).toBe("tool:c1");
+    expect(replayed).toHaveLength(1);
+    expect(replayed[0]).toMatchObject({ kind: "tool", path: "a.ts" });
   });
 
   it("does not keep queued banners in the thread", () => {

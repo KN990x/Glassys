@@ -1,3 +1,5 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   AdapterError,
@@ -5,6 +7,7 @@ import {
   errorMessage,
   pendingRun,
   promptWithAttachments,
+  requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -79,6 +82,48 @@ export function acpShouldLoadSession(caps: Record<string, unknown> | undefined):
   return sessionCaps?.loadSession === true;
 }
 
+export function acpChildSupportsResume(caps: Record<string, unknown> | undefined): boolean {
+  return !acpResumeUnsupported("session", caps);
+}
+
+function resumeCapPath(storeDir: string): string {
+  return join(storeDir, "resume-capability.json");
+}
+
+async function persistResumeCapability(
+  storeDir: string,
+  command: string,
+  args: string[],
+  supported: boolean,
+): Promise<void> {
+  if (!storeDir) return;
+  try {
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(resumeCapPath(storeDir), JSON.stringify({ command, args, supported }), "utf8");
+  } catch {
+    /* store is best-effort */
+  }
+}
+
+async function storedResumeCapability(
+  storeDir: string,
+  command: string,
+  args: string[],
+): Promise<boolean> {
+  try {
+    const raw = JSON.parse(await readFile(resumeCapPath(storeDir), "utf8")) as {
+      command?: string;
+      args?: unknown;
+      supported?: boolean;
+    };
+    if (raw.command !== command) return false;
+    if (JSON.stringify(raw.args ?? []) !== JSON.stringify(args)) return false;
+    return raw.supported === true;
+  } catch {
+    return false;
+  }
+}
+
 async function openAcpSession(
   rpc: JsonRpcStdio,
   opts: AdapterCreateOptions,
@@ -143,6 +188,7 @@ class AcpSession implements AdapterSession {
       throw err instanceof AdapterError ? err : new AdapterError(`ACP initialize failed: ${errorMessage(err)}`, "startup");
     }
     const caps = asRecord(init?.agentCapabilities) ?? asRecord(init?.capabilities) ?? undefined;
+    await persistResumeCapability(opts.storeDir, command, args, acpChildSupportsResume(caps));
     let sessionId: string;
     try {
       sessionId = await openAcpSession(rpc, opts, resumeId, caps);
@@ -287,8 +333,16 @@ export const acpAdapter: Adapter = {
     }
   },
 
-  async probe() {
-    /* Generic host; agent.options.command is required at create and when completing onboarding. */
+  async probe(options?: Record<string, unknown>) {
+    const command = optionString(options, "command", "").trim();
+    if (!command) return;
+    await requireHostCommand(command, `ACP command is not on PATH: ${command}`);
+  },
+
+  async shouldResume(_agentId, opts) {
+    const command = optionString(opts.options, "command", "");
+    const args = optionStringArray(opts.options, "args", []);
+    return storedResumeCapability(opts.storeDir, command, args);
   },
 
   async create(opts) {

@@ -19,8 +19,26 @@ describe("mapCodexJsonl", () => {
       mapCodexJsonl({ type: "item.updated", item: { id: "i3", type: "agent_message", text: "Hel" } }, new Map(), snap),
     ).toEqual([{ type: "text.delta", text: "Hel" }]);
     expect(
-      mapCodexJsonl({ type: "item.completed", item: { id: "i3", type: "agent_message", text: "Hello" } }, new Map(), snap),
+      mapCodexJsonl({ type: "item.updated", item: { id: "i3", type: "agent_message", text: "Hello" } }, new Map(), snap),
     ).toEqual([{ type: "text.delta", text: "lo" }]);
+  });
+
+  it("streams command output on item.updated", () => {
+    const snap = new Map<string, string>();
+    expect(
+      mapCodexJsonl(
+        { type: "item.updated", item: { id: "sh", type: "command_execution", aggregated_output: "hel" } },
+        new Map(),
+        snap,
+      ),
+    ).toEqual([{ type: "tool.progress", callId: "sh", chunk: "hel" }]);
+    expect(
+      mapCodexJsonl(
+        { type: "item.updated", item: { id: "sh", type: "command_execution", aggregated_output: "hello" } },
+        new Map(),
+        snap,
+      ),
+    ).toEqual([{ type: "tool.progress", callId: "sh", chunk: "lo" }]);
   });
 
   it("uses the file path on file_change, not the item id", () => {

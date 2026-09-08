@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentConfig, ModelParam, ThreadSummary, TranscriptEvent } from "@glassys/protocol";
@@ -7,6 +7,7 @@ import { paths } from "./paths.js";
 import { createMutex } from "./lock.js";
 import { loadState, saveState } from "./state.js";
 import { loadConfig } from "./config.js";
+import { parseJsonl } from "./jsonl.js";
 
 export interface ThreadMeta {
   id: string;
@@ -69,17 +70,7 @@ async function loadMeta(id: string): Promise<ThreadMeta | null> {
 
 async function readEvents(path: string): Promise<TranscriptEvent[]> {
   try {
-    const raw = await readFile(path, "utf8");
-    const events: TranscriptEvent[] = [];
-    for (const line of raw.split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        events.push(JSON.parse(line) as TranscriptEvent);
-      } catch {
-        /* skip corrupt line */
-      }
-    }
-    return events;
+    return parseJsonl<TranscriptEvent>(await readFile(path, "utf8"));
   } catch {
     return [];
   }
@@ -241,6 +232,25 @@ export async function rememberCwd(cwd: string): Promise<void> {
   await saveState({ recentCwds: recents });
 }
 
-export function joinThreadPath(id: string, file: string): string {
-  return join(paths.threadDir(id), file);
+export async function refreshLiveTitle(): Promise<void> {
+  return withThreads(async () => {
+    const id = currentThreadId;
+    if (!id) return;
+    const meta = await loadMeta(id);
+    if (!meta) return;
+    const events = await readEvents(paths.threadTranscript(id));
+    const next = titleFrom(meta.cwd, events);
+    if (!next || next === meta.title) return;
+    await writeMeta({ ...meta, title: next, updatedAt: nowIso() });
+  });
+}
+
+export async function removeThread(id: string): Promise<void> {
+  return withThreads(async () => {
+    if (!id || id.includes("/") || id.includes("..")) throw new Error("invalid thread id");
+    if (id === currentThreadId) throw new Error("cannot remove the live thread");
+    const meta = await loadMeta(id);
+    if (!meta) throw new Error("Thread not found");
+    await rm(paths.threadDir(id), { recursive: true, force: true });
+  });
 }
