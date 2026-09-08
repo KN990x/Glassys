@@ -4,6 +4,7 @@ import type {
   AdapterPublicInfo,
   ModelCatalogItem,
   ModelListSource,
+  PromptTemplate,
   RedactedConfig,
   SettingSource,
 } from "@glassys/protocol";
@@ -17,6 +18,7 @@ import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
+import { enableWebPush } from "../push";
 
 export function Settings({
   config,
@@ -45,6 +47,35 @@ export function Settings({
   const [auth, setAuth] = useState<{ loggedIn: boolean; email?: string; apiKeyConfigured: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [discover, setDiscover] = useState<AdapterDiscoverItem[]>([]);
+  const [usage, setUsage] = useState<{
+    inputTokens: number;
+    outputTokens: number;
+    byAdapter: Record<string, { inputTokens: number; outputTokens: number }>;
+  } | null>(null);
+  const [threadUsage, setThreadUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
+  const [schedules, setSchedules] = useState<
+    Array<{
+      id: string;
+      text: string;
+      cwd: string;
+      cron?: string;
+      at?: string;
+      enabled: boolean;
+      nextRun: string | null;
+    }>
+  >([]);
+  const [scheduleText, setScheduleText] = useState("");
+  const [scheduleCron, setScheduleCron] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [update, setUpdate] = useState<{
+    version: string;
+    protocolVersion: number;
+    git?: { sha: string; branch: string; dirty: boolean };
+    service: "launchd" | "systemd" | "none";
+    upgrading?: { phase: string; error?: string };
+  } | null>(null);
+  const [behind, setBehind] = useState<number | null>(null);
+  const [notifyNote, setNotifyNote] = useState("");
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -56,12 +87,14 @@ export function Settings({
       agent: draft.agent,
       display: draft.display,
       session: draft.session,
+      prompts: draft.prompts,
     }) !==
       JSON.stringify({
         space: config.space,
         agent: config.agent,
         display: config.display,
         session: config.session,
+        prompts: config.prompts,
       });
 
   function requestClose() {
@@ -139,6 +172,38 @@ export function Settings({
   }, [t]);
 
   useEffect(() => {
+    api
+      .usage()
+      .then(setUsage)
+      .catch(() => setUsage(null));
+    api
+      .threads()
+      .then((r) => {
+        const th = r.threads.find((item) => item.id === r.currentId);
+        setThreadUsage(th?.usage ?? null);
+      })
+      .catch(() => setThreadUsage(null));
+    api
+      .schedules()
+      .then((r) => setSchedules(r.schedules))
+      .catch(() => setSchedules([]));
+    api
+      .adminUpdate()
+      .then(setUpdate)
+      .catch(() => setUpdate(null));
+  }, []);
+
+  useEffect(() => {
+    const phase = update?.upgrading?.phase;
+    if (!phase || phase === "idle" || phase === "error") return;
+    const timer = setInterval(() => {
+      void api.adminUpdate().then(setUpdate).catch(() => undefined);
+      void fetch("/health").catch(() => undefined);
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [update?.upgrading?.phase]);
+
+  useEffect(() => {
     let cancelled = false;
     setModels([]);
     setModelSource("live");
@@ -210,6 +275,7 @@ export function Settings({
           shellLinesVisible: Math.max(1, Math.floor(Number(draft.display.shellLinesVisible) || 12)),
         },
         session: draft.session,
+        prompts: { templates: draft.prompts?.templates ?? [] },
         adapterApiKey: apiKey
           ? { adapter: draft.agent.adapter, value: apiKey }
           : clearKey
@@ -265,6 +331,42 @@ export function Settings({
         options: setOption(draft.agent.options, "settingSources", on ? [...cur, s] : cur.filter((x) => x !== s)),
       },
     });
+  }
+
+  const templates = draft.prompts?.templates ?? [];
+
+  function setTemplates(next: PromptTemplate[]) {
+    setDraft({ ...draft, prompts: { templates: next } });
+  }
+
+  async function refreshSchedules() {
+    try {
+      setSchedules((await api.schedules()).schedules);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function enableNotify(on: boolean) {
+    setDraft({ ...draft, session: { ...draft.session, notifyOnComplete: on } });
+    setNotifyNote("");
+    if (!on) return;
+    if (!window.isSecureContext) {
+      setNotifyNote(t("settings.notifyHint"));
+      return;
+    }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setNotifyNote(t("settings.notifyNeedSw"));
+      return;
+    }
+    try {
+      const { publicKey } = await api.vapid();
+      const sub = await enableWebPush(publicKey);
+      await api.pushSubscribe(sub);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setNotifyNote(msg.includes("denied") || msg.includes("permission") ? t("settings.notifyDenied") : operatorError(msg, t));
+    }
   }
 
   const keyFromEnv = Boolean(draft.secrets.adapters?.[draft.agent.adapter]?.apiKey.fromEnv);
@@ -619,10 +721,281 @@ export function Settings({
             </label>
             )}
             <label>
+              {t("settings.stall")}
+              <select
+                value={draft.session.stallSeconds}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    session: { ...draft.session, stallSeconds: Number.parseInt(e.target.value, 10) || 0 },
+                  })
+                }
+              >
+                <option value={0}>{t("settings.stall.off")}</option>
+                <option value={60}>{t("settings.stall.60")}</option>
+                <option value={180}>{t("settings.stall.180")}</option>
+                <option value={300}>{t("settings.stall.300")}</option>
+              </select>
+            </label>
+            <label className="choice">
+              <input
+                type="checkbox"
+                checked={draft.session.notifyOnComplete}
+                onChange={(e) => void enableNotify(e.target.checked)}
+              />
+              {t("settings.notify")}
+            </label>
+            <p className="muted">{t("settings.notifyHint")}</p>
+            {notifyNote && <p className="warn">{notifyNote}</p>}
+            <label>
               {t("settings.password")}
               <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
             <p className="muted">{t("settings.passwordHint")}</p>
+          </section>
+
+          <section className="settings-section">
+            <h3>{t("settings.usage")}</h3>
+            {threadUsage && (
+              <p>
+                {t("settings.usageThread")}: ↓{threadUsage.inputTokens} ↑{threadUsage.outputTokens}
+              </p>
+            )}
+            {usage && (
+              <>
+                <p>
+                  {t("settings.usageAll")}: ↓{usage.inputTokens} ↑{usage.outputTokens}
+                </p>
+                {Object.entries(usage.byAdapter).map(([id, tot]) => (
+                  <p key={id} className="muted">
+                    {id}: ↓{tot.inputTokens} ↑{tot.outputTokens}
+                  </p>
+                ))}
+              </>
+            )}
+          </section>
+
+          <section className="settings-section">
+            <h3>{t("settings.prompts")}</h3>
+            <p className="muted">{t("settings.promptsHint")}</p>
+            {templates.map((tpl, i) => (
+              <div key={tpl.id} className="prompt-row">
+                <label>
+                  {t("settings.promptSlash")}
+                  <input
+                    value={tpl.slash}
+                    onChange={(e) => {
+                      const next = templates.slice();
+                      next[i] = { ...tpl, slash: e.target.value, id: tpl.id || e.target.value };
+                      setTemplates(next);
+                    }}
+                  />
+                </label>
+                <label>
+                  {t("settings.promptTitle")}
+                  <input
+                    value={tpl.title}
+                    onChange={(e) => {
+                      const next = templates.slice();
+                      next[i] = { ...tpl, title: e.target.value };
+                      setTemplates(next);
+                    }}
+                  />
+                </label>
+                <label>
+                  {t("settings.promptText")}
+                  <textarea
+                    rows={3}
+                    value={tpl.text}
+                    onChange={(e) => {
+                      const next = templates.slice();
+                      next[i] = { ...tpl, text: e.target.value };
+                      setTemplates(next);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="ghost tiny"
+                  onClick={() => setTemplates(templates.filter((_, j) => j !== i))}
+                >
+                  {t("settings.promptRemove")}
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                setTemplates([
+                  ...templates,
+                  { id: `tpl-${templates.length + 1}`, slash: "", title: "", text: "" },
+                ])
+              }
+            >
+              {t("settings.promptAdd")}
+            </button>
+          </section>
+
+          <section className="settings-section">
+            <h3>{t("settings.schedules")}</h3>
+            <p className="muted">{t("settings.schedulesHint")}</p>
+            <label>
+              {t("settings.scheduleText")}
+              <textarea rows={3} value={scheduleText} onChange={(e) => setScheduleText(e.target.value)} />
+            </label>
+            <label>
+              {t("settings.scheduleCron")}
+              <input
+                value={scheduleCron}
+                placeholder="0 6 * * *"
+                onChange={(e) => {
+                  setScheduleCron(e.target.value);
+                  if (e.target.value) setScheduleAt("");
+                }}
+              />
+            </label>
+            <label>
+              {t("settings.scheduleAt")}
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => {
+                  setScheduleAt(e.target.value);
+                  if (e.target.value) setScheduleCron("");
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    await api.createSchedule({
+                      text: scheduleText,
+                      cwd: draft.agent.cwd,
+                      cron: scheduleCron.trim() || undefined,
+                      at: scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
+                    });
+                    setScheduleText("");
+                    setScheduleCron("");
+                    setScheduleAt("");
+                    await refreshSchedules();
+                  } catch (err) {
+                    setError(operatorError(err instanceof Error ? err.message : String(err), t));
+                  }
+                })();
+              }}
+            >
+              {t("settings.scheduleAdd")}
+            </button>
+            {schedules.length === 0 && <p className="muted">{t("settings.scheduleEmpty")}</p>}
+            <ul className="schedule-list">
+              {schedules.map((job) => (
+                <li key={job.id}>
+                  <p>{job.text}</p>
+                  <p className="muted">
+                    {job.cron || job.at} · {t("settings.scheduleNext")} {job.nextRun || "—"} · {job.cwd}
+                  </p>
+                  <label className="choice">
+                    <input
+                      type="checkbox"
+                      checked={job.enabled}
+                      onChange={(e) => {
+                        void api
+                          .patchSchedule(job.id, { enabled: e.target.checked })
+                          .then(() => refreshSchedules())
+                          .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
+                      }}
+                    />
+                    {t("settings.scheduleEnable")}
+                  </label>
+                  <button
+                    type="button"
+                    className="ghost tiny"
+                    onClick={() => {
+                      void api
+                        .deleteSchedule(job.id)
+                        .then(() => refreshSchedules())
+                        .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
+                    }}
+                  >
+                    {t("settings.promptRemove")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="settings-section">
+            <h3>{t("settings.update")}</h3>
+            {update && (
+              <>
+                <p>
+                  {t("settings.updateVersion")}: {update.version}
+                  {update.git ? ` · ${update.git.branch} ${update.git.sha.slice(0, 7)}${update.git.dirty ? "*" : ""}` : ""}
+                </p>
+                <p className="muted">{t("settings.updateService")}: {update.service}</p>
+                {behind !== null && (
+                  <p>
+                    {behind} {t("settings.updateBehind")}
+                  </p>
+                )}
+                {update.upgrading?.phase && update.upgrading.phase !== "idle" && (
+                  <p className="warn" role="status">
+                    {update.upgrading.phase === "error"
+                      ? `${t("settings.updateFailed")} ${update.upgrading.error || ""}`
+                      : t("settings.updating")}
+                  </p>
+                )}
+              </>
+            )}
+            <div className="row">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  void api
+                    .adminUpdateCheck()
+                    .then((r) => setBehind(r.behind))
+                    .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
+                }}
+              >
+                {t("settings.updateCheck")}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      await api.upgrade();
+                      setUpdate(await api.adminUpdate());
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : "";
+                      setError(msg.includes("user service") ? t("settings.updateNeedService") : operatorError(msg, t));
+                    }
+                  })();
+                }}
+              >
+                {t("settings.updateNow")}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setRestartNote(t("settings.restarting"));
+                  void api.restart().catch((err) => {
+                    setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
+                  });
+                }}
+              >
+                {t("settings.restart")}
+              </button>
+              {restartNote ? <span className="muted">{restartNote}</span> : null}
+            </div>
+            {update?.service === "none" && <p className="muted">{t("settings.updateNeedService")}</p>}
           </section>
 
           <section className="settings-section">

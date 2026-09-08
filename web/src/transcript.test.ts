@@ -60,6 +60,8 @@ describe("transcript reducer", () => {
     expect(denied[0]).toMatchObject({ kind: "tool", status: "denied" });
     const usage = reduceTranscript([], { type: "run.usage", inputTokens: 3, outputTokens: 9 });
     expect(usage[0]).toMatchObject({ kind: "usage", inputTokens: 3, outputTokens: 9 });
+    const stalled = reduceTranscript([], { type: "run.stalled", idleMs: 180000 });
+    expect(stalled[0]).toMatchObject({ kind: "banner", text: "stalled" });
   });
 
   it("closes open thinking on run.done without inventing a duration", () => {

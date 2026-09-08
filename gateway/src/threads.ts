@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentConfig, ModelParam, ThreadSummary, TranscriptEvent } from "@glassys/protocol";
-import { PROFILE_ID } from "@glassys/protocol";
+import { MAX_PINNED_CWDS, PROFILE_ID } from "@glassys/protocol";
 import { paths } from "./paths.js";
 import { createMutex } from "./lock.js";
 import { loadState, saveState } from "./state.js";
@@ -21,6 +21,7 @@ export interface ThreadMeta {
   createdAt: string;
   updatedAt: string;
   titleManual?: boolean;
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 const withThreads = createMutex();
@@ -206,6 +207,7 @@ export async function listThreads(): Promise<ThreadSummary[]> {
       adapter: meta.adapter,
       cwd: meta.cwd,
       updatedAt: meta.updatedAt,
+      ...(meta.usage ? { usage: meta.usage } : {}),
     });
   }
   out.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
@@ -240,6 +242,31 @@ export async function rememberCwd(cwd: string): Promise<void> {
   const state = await loadState();
   const recents = [cwd, ...(state.recentCwds || []).filter((p) => p !== cwd)].slice(0, 8);
   await saveState({ recentCwds: recents });
+}
+
+export async function setPinnedCwds(pins: string[]): Promise<string[]> {
+  const next = [...new Set(pins.filter((p) => typeof p === "string" && p.length > 0))].slice(0, MAX_PINNED_CWDS);
+  await saveState({ pinnedCwds: next });
+  return next;
+}
+
+export async function addLiveUsage(inputTokens?: number, outputTokens?: number): Promise<void> {
+  return withThreads(async () => {
+    const id = currentThreadId;
+    if (!id) return;
+    const meta = await loadMeta(id);
+    if (!meta) return;
+    const input = meta.usage?.inputTokens ?? 0;
+    const output = meta.usage?.outputTokens ?? 0;
+    await writeMeta({
+      ...meta,
+      usage: {
+        inputTokens: input + (typeof inputTokens === "number" ? inputTokens : 0),
+        outputTokens: output + (typeof outputTokens === "number" ? outputTokens : 0),
+      },
+      updatedAt: nowIso(),
+    });
+  });
 }
 
 export async function refreshLiveTitle(): Promise<void> {

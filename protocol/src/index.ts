@@ -5,10 +5,19 @@ export const DEFAULT_KEEPALIVE_SECONDS = 25;
 export const MIN_KEEPALIVE_SECONDS = 15;
 export const MAX_KEEPALIVE_SECONDS = 30;
 export const PROFILE_ID = "default";
+export const DEFAULT_STALL_SECONDS = 180;
+export const MAX_STALL_SECONDS = 3600;
+export const MAX_PINNED_CWDS = 12;
 
 export function clampKeepaliveSeconds(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_KEEPALIVE_SECONDS;
   return Math.min(MAX_KEEPALIVE_SECONDS, Math.max(MIN_KEEPALIVE_SECONDS, Math.round(value)));
+}
+
+/** 0 disables the run stall watchdog. */
+export function clampStallSeconds(value: number): number {
+  if (!Number.isFinite(value) || value < 0) return DEFAULT_STALL_SECONDS;
+  return Math.min(MAX_STALL_SECONDS, Math.round(value));
 }
 
 export function isTheme(value: unknown): value is Theme {
@@ -168,6 +177,26 @@ export interface DisplayConfig {
 export interface SessionConfig {
   resumeOnStart: boolean;
   queue: "fifo";
+  /** Seconds of no run events before `run.stalled`. 0 = off. */
+  stallSeconds: number;
+  /** Web Push / notification when a run finishes, errors, stalls, or a tool is denied. */
+  notifyOnComplete: boolean;
+}
+
+export interface PromptTemplate {
+  id: string;
+  slash: string;
+  title: string;
+  text: string;
+}
+
+export interface PromptsConfig {
+  templates: PromptTemplate[];
+}
+
+export interface ThreadUsage {
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export interface GlassysConfig {
@@ -178,6 +207,7 @@ export interface GlassysConfig {
   security: SecurityConfig;
   display: DisplayConfig;
   session: SessionConfig;
+  prompts: PromptsConfig;
 }
 
 export interface SecretFlags {
@@ -185,6 +215,7 @@ export interface SecretFlags {
   adapters: Record<string, { apiKey: { configured: boolean; fromEnv?: boolean } }>;
   /** @deprecated Use adapters.cursor. Kept so older clients still type-check. */
   cursorApiKey: { configured: boolean };
+  vapidConfigured?: boolean;
 }
 
 export interface RedactedConfig extends GlassysConfig {
@@ -202,6 +233,7 @@ export type ConfigPatch = {
   };
   display?: Partial<DisplayConfig>;
   session?: Partial<SessionConfig>;
+  prompts?: Partial<PromptsConfig>;
   /** Writes secrets.adapters[adapter]. Empty/null clears. */
   adapterApiKey?: { adapter: string; value: string | null };
   /** @deprecated Writes secrets.adapters.cursor */
@@ -219,6 +251,7 @@ export interface QueueItem {
   id: string;
   text: string;
   hasAttachments?: boolean;
+  source?: "user" | "schedule";
 }
 
 export interface ThreadSummary {
@@ -227,6 +260,7 @@ export interface ThreadSummary {
   adapter: string;
   cwd: string;
   updatedAt: string;
+  usage?: ThreadUsage;
 }
 
 export type ClientMessage =
@@ -283,6 +317,7 @@ export type TranscriptEvent =
   | { type: "run.done" }
   | { type: "run.error"; message: string; phase?: "startup" | "run" }
   | { type: "run.cancelled" }
+  | { type: "run.stalled"; idleMs: number }
   | { type: "run.usage"; inputTokens?: number; outputTokens?: number };
 
 export type ServerMessage =
@@ -336,6 +371,53 @@ export function defaultAgentOptions(): Record<string, unknown> {
   return {};
 }
 
+export function normalizePromptTemplates(templates: unknown): PromptTemplate[] {
+  if (!Array.isArray(templates)) return defaultPromptTemplates();
+  const seen = new Set<string>();
+  const out: PromptTemplate[] = [];
+  for (const raw of templates) {
+    if (!raw || typeof raw !== "object") continue;
+    const rec = raw as Record<string, unknown>;
+    const slash = String(rec.slash || "")
+      .replace(/^\//, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 40);
+    const text = String(rec.text || "").trim();
+    if (!slash || !text || seen.has(slash)) continue;
+    seen.add(slash);
+    const id = (String(rec.id || slash).trim() || slash).slice(0, 40);
+    const title = (String(rec.title || slash).trim() || slash).slice(0, 80);
+    out.push({ id, slash, title, text });
+  }
+  return out;
+}
+
+export function defaultPromptTemplates(): PromptTemplate[] {
+  return [
+    {
+      id: "status",
+      slash: "status",
+      title: "Host status",
+      text: "Check systemd/launchd failed units, disk usage, and memory. Summarize what needs attention.",
+    },
+    {
+      id: "disk",
+      slash: "disk",
+      title: "Disk usage",
+      text: "Report filesystem usage and large directories that look abnormal.",
+    },
+    {
+      id: "failed-units",
+      slash: "failed-units",
+      title: "Failed units",
+      text: "List failed or degraded services and recent journal errors.",
+    },
+  ];
+}
+
 export function defaultConfig(): GlassysConfig {
   return {
     space: { name: "Glassys", locale: "en", theme: "dark" },
@@ -368,7 +450,10 @@ export function defaultConfig(): GlassysConfig {
     session: {
       resumeOnStart: true,
       queue: "fifo",
+      stallSeconds: DEFAULT_STALL_SECONDS,
+      notifyOnComplete: true,
     },
+    prompts: { templates: defaultPromptTemplates() },
   };
 }
 

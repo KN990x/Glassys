@@ -26,7 +26,9 @@ cd glassys && pnpm run service:upgrade
 cd glassys && pnpm run service:uninstall
 ```
 
-`service:upgrade` is `git pull && pnpm install && pnpm build &&` restart of the user unit (not Docker, not Windows). Stay in the clone you installed from.
+`service:upgrade` is `git pull --ff-only && pnpm install && pnpm build &&` restart of the user unit (not Docker, not Windows). Stay in the clone you installed from. From the PWA, **Upgrade** runs the same path only when the user service is installed (`GLASSYS_SERVICE=1` in the unit/plist). If `git pull --ff-only` fails, the PWA upgrade **stops** and does not install or build. Foreground `pnpm start` can Restart but cannot Upgrade (HTTP 409); use `pnpm run service:upgrade` in the clone.
+
+Web Push needs HTTPS or localhost. A loopback bind on the LAN is not enough: put a tunnel or reverse proxy in front, then subscribe from Settings. iOS only delivers push to an installed PWA.
 
 Uninstall stops the service and removes the unit/LaunchAgent. It does not delete the clone or `data/` (operator hash, transcript).
 

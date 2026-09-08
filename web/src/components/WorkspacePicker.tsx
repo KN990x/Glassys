@@ -12,6 +12,7 @@ export function WorkspacePicker({
   const t = useT();
   const [root, setRoot] = useState("");
   const [recents, setRecents] = useState<string[]>([]);
+  const [pins, setPins] = useState<string[]>([]);
   const [hits, setHits] = useState<{ path: string; name: string }[]>([]);
   const [error, setError] = useState("");
 
@@ -24,6 +25,7 @@ export function WorkspacePicker({
     try {
       const r = await api.workspaces(nextRoot);
       setRecents(r.recents);
+      setPins(r.pins || []);
       setHits(r.workspaces);
     } catch (err) {
       setHits([]);
@@ -37,10 +39,22 @@ export function WorkspacePicker({
         {t("wizard.workspace.path")}
         <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="/home/you" />
       </label>
-      {recents.length > 0 && (
+      {pins.length > 0 && (
+        <div className="picker-list">
+          <p className="muted">{t("threads.pins")}</p>
+          {pins.map((p) => (
+            <button key={`pin:${p}`} type="button" className="ghost picker-item" onClick={() => onChange(p)}>
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      {recents.filter((p) => !pins.includes(p)).length > 0 && (
         <div className="picker-list">
           <p className="muted">{t("wizard.workspace.recent")}</p>
-          {recents.map((p) => (
+          {recents
+            .filter((p) => !pins.includes(p))
+            .map((p) => (
             <button key={p} type="button" className="ghost picker-item" onClick={() => onChange(p)}>
               {p}
             </button>

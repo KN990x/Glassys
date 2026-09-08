@@ -8,7 +8,11 @@ import {
   MAX_KEEPALIVE_SECONDS,
   MIN_KEEPALIVE_SECONDS,
   clampKeepaliveSeconds,
+  clampStallSeconds,
+  DEFAULT_STALL_SECONDS,
   defaultConfig,
+  defaultPromptTemplates,
+  normalizePromptTemplates,
   isClientMessage,
   isPersistedTranscriptEvent,
   isTranscriptEvent,
@@ -25,6 +29,18 @@ describe("protocol v1", () => {
     expect(defaultConfig().agent.adapter).toBe("cursor");
     expect(defaultConfig().agent.model).toBe("");
     expect(defaultConfig().agent.options).toEqual({});
+    expect(defaultConfig().session.stallSeconds).toBe(DEFAULT_STALL_SECONDS);
+    expect(defaultConfig().session.notifyOnComplete).toBe(true);
+    expect(defaultConfig().prompts.templates.map((t) => t.slash)).toEqual(
+      defaultPromptTemplates().map((t) => t.slash),
+    );
+    expect(clampStallSeconds(-1)).toBe(DEFAULT_STALL_SECONDS);
+    expect(clampStallSeconds(0)).toBe(0);
+    expect(clampStallSeconds(99999)).toBe(3600);
+    expect(normalizePromptTemplates([{ slash: "/Status", title: "S", text: " ping " }])).toEqual([
+      { id: "status", slash: "status", title: "S", text: "ping" },
+    ]);
+    expect(normalizePromptTemplates([])).toEqual([]);
   });
 
   it("accepts known client envelopes with required fields", () => {
@@ -60,6 +76,7 @@ describe("protocol v1", () => {
     expect(isPersistedTranscriptEvent({ type: "user.message", text: "x" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "user.retracted", id: "m1" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "run.usage", inputTokens: 1 })).toBe(true);
+    expect(isPersistedTranscriptEvent({ type: "run.stalled", idleMs: 180000 })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "tool.progress", callId: "c1", chunk: "x" })).toBe(false);
     expect(isTranscriptEvent({ type: "queue.snapshot", items: [] } as never)).toBe(false);
     expect(isTranscriptEvent({ type: "threads.snapshot", threads: [], currentId: null } as never)).toBe(false);

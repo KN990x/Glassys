@@ -9,7 +9,9 @@ import {
   type AgentConfig,
   type RedactedConfig,
   clampKeepaliveSeconds,
+  clampStallSeconds,
   defaultConfig,
+  normalizePromptTemplates,
   optionString,
 } from "@glassys/protocol";
 import { paths } from "./paths.js";
@@ -97,7 +99,17 @@ function normalizeLoaded(cfg: GlassysConfig, parsed: unknown): { cfg: GlassysCon
   const keepalive = clampKeepaliveSeconds(cfg.network.wsKeepaliveSeconds);
   const keepaliveChanged = keepalive !== cfg.network.wsKeepaliveSeconds;
   cfg.network.wsKeepaliveSeconds = keepalive;
-  const persist = migrated.changed || before !== JSON.stringify(cfg.agent) || keepaliveChanged;
+  const stall = clampStallSeconds(cfg.session.stallSeconds);
+  const stallChanged = stall !== cfg.session.stallSeconds;
+  cfg.session.stallSeconds = stall;
+  if (typeof cfg.session.notifyOnComplete !== "boolean") cfg.session.notifyOnComplete = true;
+  const templates = Array.isArray(cfg.prompts?.templates)
+    ? normalizePromptTemplates(cfg.prompts.templates)
+    : defaultConfig().prompts.templates;
+  const promptsChanged = JSON.stringify(cfg.prompts?.templates) !== JSON.stringify(templates);
+  cfg.prompts = { templates };
+  const persist =
+    migrated.changed || before !== JSON.stringify(cfg.agent) || keepaliveChanged || stallChanged || promptsChanged;
   return { cfg, persist };
 }
 
@@ -149,6 +161,14 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
     }
     const adapter = tryGetAdapter(after.agent.adapter);
     if (adapter?.normalizeConfig) after.agent = adapter.normalizeConfig(after.agent);
+    after.network.wsKeepaliveSeconds = clampKeepaliveSeconds(after.network.wsKeepaliveSeconds);
+    after.session.stallSeconds = clampStallSeconds(after.session.stallSeconds);
+    if (typeof after.session.notifyOnComplete !== "boolean") after.session.notifyOnComplete = true;
+    after.prompts = {
+      templates: Array.isArray(after.prompts?.templates)
+        ? normalizePromptTemplates(after.prompts.templates)
+        : defaultConfig().prompts.templates,
+    };
     const adapterChanging =
       isObj(rest.agent) && typeof rest.agent.adapter === "string" && rest.agent.adapter !== before.agent.adapter;
     const completing = rest.onboarding?.completed === true;
@@ -203,6 +223,7 @@ export async function redacted(cfg?: GlassysConfig, restart?: boolean): Promise<
       operatorPassword: { configured: flags.operatorPassword },
       adapters,
       cursorApiKey: { configured: flags.cursorApiKey },
+      vapidConfigured: flags.vapidConfigured,
     },
     restartRequired: restart,
   };

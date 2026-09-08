@@ -13,14 +13,14 @@ import type {
   ServerMessage,
   TranscriptEvent,
 } from "@glassys/protocol";
-import { PROFILE_ID, isMessageId, isPersistedTranscriptEvent } from "@glassys/protocol";
+import { MAX_PINNED_CWDS, PROFILE_ID, isMessageId, isPersistedTranscriptEvent } from "@glassys/protocol";
 import { agentFingerprint, applyPatch, loadConfig, redacted } from "./config.js";
 import { adapterApiKey, loadSecrets, secretsFlags } from "./secrets.js";
 import { getAdapter, listAdapters, probeAdapter } from "./adapters.js";
 import { cancelLoginJob, snapshotLoginJob, startLoginJob } from "./adapter-login.js";
 import { hub } from "./hub.js";
 import { log, paths } from "./paths.js";
-import { loadState, saveState } from "./state.js";
+import { loadState, saveState, addUsageTotals } from "./state.js";
 import { appendTranscript, readTranscript } from "./transcript.js";
 import { HttpError, isActiveRunError } from "./errors.js";
 import { createMutex } from "./lock.js";
@@ -38,9 +38,13 @@ import {
   readThreadBundle,
   resetLiveThreadCache,
   startNewThread,
+  addLiveUsage,
+  setPinnedCwds,
 } from "./threads.js";
 import { gcUploads, materializeAttachments } from "./uploads.js";
 import { eventsToMarkdown } from "./transcript-export.js";
+import { notifyFromEvent, resetPushRunFlags } from "./push.js";
+import { bindScheduleRuntime, startSchedules, stopSchedules } from "./schedules.js";
 
 export interface Runtime {
   busy: boolean;
@@ -65,6 +69,7 @@ type QueueJob = {
   text: string;
   generation: number;
   attachments?: MessageAttachment[];
+  source?: "user" | "schedule";
 };
 
 let session: AdapterSession | null = null;
@@ -89,6 +94,21 @@ export function setRunCancelTimeoutForTests(ms: number): void {
   runCancelTimeoutMs = ms;
 }
 
+let nowFn = () => Date.now();
+let stallPollMs = 1000;
+
+export function setNowForTests(fn?: () => number): void {
+  nowFn = fn ?? (() => Date.now());
+}
+
+export function setStallPollMsForTests(ms: number): void {
+  stallPollMs = ms;
+}
+
+export function runtimeBusy(): boolean {
+  return runtime.busy || processing || Boolean(currentRun) || rotating;
+}
+
 function persistable(event: ServerMessage): TranscriptEvent | null {
   if (!isPersistedTranscriptEvent(event)) return null;
   return event;
@@ -99,7 +119,14 @@ async function emit(event: ServerMessage, agentId?: string | null): Promise<void
     if (agentId) await persistAgentId(agentId);
     const stored = persistable(event);
     if (stored) await appendTranscript(stored);
+    if (event.type === "run.usage") {
+      const cfg = await loadConfig();
+      await addUsageTotals(cfg.agent.adapter, event.inputTokens, event.outputTokens);
+      await addLiveUsage(event.inputTokens, event.outputTokens);
+      hub.broadcast({ type: "threads.snapshot", threads: await listThreads(), currentId: liveThreadId() });
+    }
     hub.broadcast(event);
+    void notifyFromEvent(event).catch((err) => log("warn", "push notify failed", { error: String(err) }));
   });
   emitChain = done.catch((err) => {
     log("error", "emit failed", { error: String(err) });
@@ -134,6 +161,7 @@ export function snapshotQueue(): QueueItem[] {
       id: j.id,
       text: j.text,
       hasAttachments: j.attachments?.length ? true : undefined,
+      source: j.source,
     }));
 }
 
@@ -429,7 +457,7 @@ async function processQueue(): Promise<void> {
         try {
           const gen = await withQueueLock(async () => {
             runtime.busy = true;
-            runStartedAt = Date.now();
+            runStartedAt = nowFn();
             return item.gen;
           });
           await broadcastSession();
@@ -501,11 +529,15 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
   let sawRunError = false;
   let thinkingOpen = false;
   let thinkingStarted = 0;
+  let lastEventAt = nowFn();
+  let stalledEmitted = false;
+  let stallTimer: ReturnType<typeof setInterval> | undefined;
   const onEvent = (event: ServerMessage) => {
+    lastEventAt = nowFn();
     if (event.type === "run.error") sawRunError = true;
     if (event.type === "thinking.delta" && !thinkingOpen) {
       thinkingOpen = true;
-      thinkingStarted = Date.now();
+      thinkingStarted = nowFn();
     }
     if (event.type === "thinking.done") thinkingOpen = false;
     void emit(event, handle.agentId);
@@ -514,14 +546,27 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
   const closeThinkingIfOpen = async () => {
     if (!thinkingOpen) return;
     thinkingOpen = false;
-    await emit({ type: "thinking.done", durationMs: Math.max(0, Date.now() - thinkingStarted) }, handle.agentId);
+    await emit({ type: "thinking.done", durationMs: Math.max(0, nowFn() - thinkingStarted) }, handle.agentId);
   };
 
   const cfg = await loadConfig();
   const runId = randomUUID();
-  runStartedAt = Date.now();
+  runStartedAt = nowFn();
+  lastEventAt = nowFn();
+  resetPushRunFlags();
   await emit({ type: "run.start", runId });
   await broadcastSession();
+  const stallSeconds = cfg.session.stallSeconds;
+  if (stallSeconds > 0) {
+    stallTimer = setInterval(() => {
+      if (stalledEmitted) return;
+      const idleMs = nowFn() - lastEventAt;
+      if (idleMs >= stallSeconds * 1000) {
+        stalledEmitted = true;
+        void emit({ type: "run.stalled", idleMs });
+      }
+    }, stallPollMs);
+  }
 
   if (cancelGeneration !== gen) {
     await emit({ type: "run.cancelled" });
@@ -594,6 +639,7 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       });
     }
   } finally {
+    if (stallTimer) clearInterval(stallTimer);
     currentRun = null;
     currentJobId = null;
   }
@@ -603,6 +649,7 @@ export async function enqueueMessage(
   text: string,
   attachments?: MessageAttachment[],
   clientId?: string,
+  source: "user" | "schedule" = "user",
 ): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed && !attachments?.length) return;
@@ -659,7 +706,7 @@ export async function enqueueMessage(
     const queued = await withQueueLock(async () => {
       if (rotating || identityGeneration !== prepared.generation) return { ok: false as const };
       const busy = runtime.busy || processing || queue.length > 0;
-      queue.push({ id: prepared.id, text: trimmed, attachments, generation: prepared.generation });
+      queue.push({ id: prepared.id, text: trimmed, attachments, generation: prepared.generation, source });
       return { ok: true as const, busy };
     });
     if (!queued.ok) return;
@@ -848,6 +895,31 @@ export async function renameLiveThread(id: string, title: string): Promise<void>
   await broadcastThreads();
 }
 
+export async function openWorkspace(cwd: string): Promise<void> {
+  const check = await validateCwd(cwd);
+  if (!check.ok) throw new HttpError(400, check.error);
+  const cfg = await loadConfig();
+  if (cfg.agent.cwd === cwd) return;
+  const threads = await listThreads();
+  const match = threads
+    .filter((t) => t.cwd === cwd)
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  if (match.length) {
+    await switchLiveThread(match[0]!.id);
+    return;
+  }
+  await applyConfigPatch({ agent: { cwd } });
+}
+
+export async function pinWorkspaces(pins: string[]): Promise<string[]> {
+  if (pins.length > MAX_PINNED_CWDS) throw new HttpError(400, "Too many pinned workspaces");
+  for (const cwd of pins) {
+    const check = await validateCwd(cwd);
+    if (!check.ok) throw new HttpError(400, check.error);
+  }
+  return setPinnedCwds(pins);
+}
+
 export async function exportLiveThread(id: string): Promise<{ filename: string; markdown: string }> {
   assertThreadId(id);
   const bundle = await readThreadBundle(id);
@@ -873,9 +945,22 @@ export async function initRuntime(): Promise<void> {
       log("warn", "startup resume skipped", { error: String(err) });
     }
   }
+  bindScheduleRuntime({
+    enqueue: (text, source) => enqueueMessage(text, undefined, undefined, source),
+    isIdle: () => !runtimeBusy(),
+    liveThreadId,
+    liveCwd: async () => (await loadConfig()).agent.cwd,
+    switchThread: (id) => switchLiveThread(id),
+    applyCwd: async (cwd) => {
+      await applyConfigPatch({ agent: { cwd } });
+    },
+  });
+  startSchedules();
 }
 
 export async function shutdownRuntime(): Promise<void> {
+  stopSchedules();
+  bindScheduleRuntime(null);
   await cancelLoginJob().catch(() => undefined);
   await withQueueLock(async () => {
     queue = [];

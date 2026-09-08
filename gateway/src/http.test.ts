@@ -49,6 +49,8 @@ describe("http api", () => {
     resetLiveThreadCache();
     setRuntimeBusyForTests(false);
     setRestartHandler(async () => undefined);
+    const { setDetectServiceForTests } = await import("./admin-update.js");
+    setDetectServiceForTests(null);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
@@ -154,6 +156,19 @@ describe("http api", () => {
     expect(reachBody.user).toBeTruthy();
     const ws = await fetch(`${base}/api/workspaces`, { headers: auth });
     expect(ws.status).toBe(200);
+    expect(((await ws.json()) as { pins: string[] }).pins).toEqual([]);
+    const pin = await fetch(`${base}/api/workspaces/pins`, {
+      method: "PUT",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ pins: [dir] }),
+    });
+    expect(pin.status).toBe(200);
+    const wsPinned = await fetch(`${base}/api/workspaces`, { headers: auth });
+    expect(((await wsPinned.json()) as { pins: string[] }).pins).toEqual([dir]);
+    const { setDetectServiceForTests } = await import("./admin-update.js");
+    setDetectServiceForTests("none");
+    const upgrade = await fetch(`${base}/api/admin/upgrade`, { method: "POST", headers: auth });
+    expect(upgrade.status).toBe(409);
     const png = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       "base64",

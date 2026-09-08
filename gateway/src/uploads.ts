@@ -9,7 +9,52 @@ import { loadConfig } from "./config.js";
 import { loadState } from "./state.js";
 
 export const MAX_UPLOAD_BYTES = 4_000_000;
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const TEXT_MIME = new Set([
+  "text/plain",
+  "text/markdown",
+  "text/x-log",
+  "application/json",
+  "application/x-ndjson",
+]);
+const TEXT_EXT = new Set([".log", ".txt", ".md", ".json", ".jsonl", ".service", ".conf", ".journal"]);
+
+export function isImageMime(mime: string): boolean {
+  const normalized = mime === "image/jpg" ? "image/jpeg" : mime;
+  return IMAGE_MIME.has(normalized);
+}
+
+function extOf(name: string): string {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i).toLowerCase() : "";
+}
+
+export function normalizeUploadMime(mime: string, name: string): string {
+  const raw = (mime || "").split(";")[0]?.trim().toLowerCase() || "";
+  const normalized = raw === "image/jpg" ? "image/jpeg" : raw;
+  if (IMAGE_MIME.has(normalized) || TEXT_MIME.has(normalized)) return normalized;
+  if (normalized === "application/octet-stream" || normalized === "text/x-unknown" || !normalized) {
+    const ext = extOf(name);
+    if (TEXT_EXT.has(ext)) {
+      if (ext === ".json") return "application/json";
+      if (ext === ".jsonl") return "application/x-ndjson";
+      if (ext === ".md") return "text/markdown";
+      if (ext === ".log") return "text/x-log";
+      return "text/plain";
+    }
+  }
+  throw new HttpError(400, "Only jpeg, png, webp, gif, and text/log uploads are allowed");
+}
+
+export function assertImageMime(mime: string): string {
+  return normalizeUploadMime(mime, "image.png");
+}
+
+function rejectBinaryText(body: Buffer, mime: string): void {
+  if (isImageMime(mime)) return;
+  const sample = body.subarray(0, 512);
+  if (sample.includes(0)) throw new HttpError(400, "Only jpeg, png, webp, gif, and text/log uploads are allowed");
+}
 
 export interface StoredUpload {
   id: string;
@@ -26,18 +71,13 @@ function dataPath(id: string): string {
   return `${paths.uploads()}/${id}`;
 }
 
-export function assertImageMime(mime: string): string {
-  const normalized = mime === "image/jpg" ? "image/jpeg" : mime;
-  if (!ALLOWED.has(normalized)) throw new HttpError(400, "Only jpeg, png, webp, and gif uploads are allowed");
-  return normalized;
-}
-
 export async function saveUpload(body: Buffer, mime: string, name: string): Promise<MessageAttachment> {
   if (body.length > MAX_UPLOAD_BYTES) throw new HttpError(413, "payload too large");
   if (!body.length) throw new HttpError(400, "empty upload");
-  const safeMime = assertImageMime(mime);
+  const safeMime = normalizeUploadMime(mime, name);
+  rejectBinaryText(body, safeMime);
   const id = randomUUID();
-  const base = name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || "image";
+  const base = name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || (isImageMime(safeMime) ? "image" : "file");
   await mkdir(paths.uploads(), { recursive: true });
   await writeFile(dataPath(id), body);
   await writeFile(metaPath(id), JSON.stringify({ id, mime: safeMime, name: base }), "utf8");
@@ -49,8 +89,12 @@ export async function loadUpload(id: string): Promise<StoredUpload | null> {
   try {
     const meta = JSON.parse(await readFile(metaPath(id), "utf8")) as { mime?: string; name?: string };
     const mime = typeof meta.mime === "string" ? meta.mime : "";
-    const name = typeof meta.name === "string" ? meta.name : "image";
-    if (!ALLOWED.has(mime)) return null;
+    const name = typeof meta.name === "string" ? meta.name : "file";
+    try {
+      normalizeUploadMime(mime, name);
+    } catch {
+      return null;
+    }
     return { id, mime, name, path: dataPath(id) };
   } catch {
     return null;

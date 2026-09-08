@@ -438,7 +438,8 @@ button.host-copy {
   align-items: flex-end;
   gap: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
   border: 1px solid var(--stroke);
   border-radius: var(--radius-lg);
   background: var(--input-bg);
@@ -744,6 +745,61 @@ button.host-copy {
 }
 .thread-rename { display: flex; gap: 0.35rem; min-width: 0; }
 .thread-rename input { min-width: 0; flex: 1; }
+
+.usage-chip { font-size: 0.7rem; }
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 12rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: var(--radius);
+  background: var(--bg-muted);
+  border: 1px solid var(--stroke);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: start center;
+  padding: 12vh 1rem 1rem;
+}
+.palette-overlay .thread-scrim { z-index: 0; }
+.palette-panel {
+  position: relative;
+  z-index: 1;
+  width: min(36rem, 100%);
+  max-height: min(24rem, 70vh);
+  overflow: auto;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: var(--bg-elev);
+  box-shadow: 0 16px 48px color-mix(in srgb, #000 35%, transparent);
+}
+.palette-inline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 0.35rem);
+  width: auto;
+  max-height: 14rem;
+}
+.palette-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.2rem; }
+.prompt-row, .schedule-list { display: grid; gap: 0.5rem; }
+.schedule-list { list-style: none; margin: 0; padding: 0; }
+.schedule-list li {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--stroke);
+}
 
 @media (max-width: 640px) {
   .top-actions .ghost { padding: 0.4rem 0.7rem; }

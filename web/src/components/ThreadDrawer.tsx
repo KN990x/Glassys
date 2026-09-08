@@ -15,6 +15,12 @@ export function ThreadDrawer({
   onRename,
   onClose,
   git,
+  currentCwd,
+  pins,
+  recents,
+  onOpenCwd,
+  onPin,
+  onUnpin,
 }: {
   threads: ThreadSummary[];
   currentId: string | null;
@@ -27,6 +33,12 @@ export function ThreadDrawer({
   onRename: (id: string, title: string) => Promise<void>;
   onClose: () => void;
   git?: { branch: string; dirty: boolean };
+  currentCwd?: string;
+  pins?: string[];
+  recents?: string[];
+  onOpenCwd?: (cwd: string) => void;
+  onPin?: (cwd: string) => void;
+  onUnpin?: (cwd: string) => void;
 }) {
   const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -86,6 +98,54 @@ export function ThreadDrawer({
           </div>
         </header>
         <p className="muted">{t("threads.switchResume")}</p>
+        {pins && pins.length > 0 && (
+          <section className="thread-group">
+            <h3 className="thread-context">{t("threads.pins")}</h3>
+            <ul className="thread-list">
+              {pins.map((cwd) => (
+                <li key={`pin:${cwd}`} className="thread-row">
+                  <button
+                    type="button"
+                    className={`ghost picker-item${cwd === currentCwd ? " current" : ""}`}
+                    onClick={() => onOpenCwd?.(cwd)}
+                    disabled={busy || waiting}
+                  >
+                    <strong>{cwdBasename(cwd)}</strong>
+                    <span className="muted">{cwd}</span>
+                  </button>
+                  <button type="button" className="ghost tiny" onClick={() => onUnpin?.(cwd)}>
+                    {t("threads.unpin")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {recents && recents.filter((c) => !(pins || []).includes(c)).length > 0 && (
+          <section className="thread-group">
+            <h3 className="thread-context">{t("threads.recents")}</h3>
+            <ul className="thread-list">
+              {recents
+                .filter((c) => !(pins || []).includes(c))
+                .map((cwd) => (
+                  <li key={`recent:${cwd}`} className="thread-row">
+                    <button
+                      type="button"
+                      className={`ghost picker-item${cwd === currentCwd ? " current" : ""}`}
+                      onClick={() => onOpenCwd?.(cwd)}
+                      disabled={busy || waiting}
+                    >
+                      <strong>{cwdBasename(cwd)}</strong>
+                      <span className="muted">{cwd}</span>
+                    </button>
+                    <button type="button" className="ghost tiny" onClick={() => onPin?.(cwd)}>
+                      {t("threads.pin")}
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        )}
         {threads.length === 0 && <p className="muted">{t("threads.empty")}</p>}
         {groups.map((group) => (
           <section key={group.cwd || "none"} className="thread-group">
@@ -129,6 +189,9 @@ export function ThreadDrawer({
                       <span className="muted">
                         {th.id === currentId ? `${t("threads.current")} · ` : ""}
                         {th.adapter} · {formatRelativeTime(th.updatedAt, Date.now(), locale)}
+                        {th.usage && (th.usage.inputTokens || th.usage.outputTokens)
+                          ? ` · ↓${th.usage.inputTokens} ↑${th.usage.outputTokens}`
+                          : ""}
                       </span>
                     </button>
                   )}

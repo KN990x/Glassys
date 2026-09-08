@@ -13,7 +13,7 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Workspace path must be absolute": "error.cwdAbsolute",
   "Workspace path is not a directory": "error.cwdNotDir",
   "Workspace path does not exist": "error.cwdMissing",
-  "Only jpeg, png, webp, and gif uploads are allowed": "error.uploadMime",
+  "Only jpeg, png, webp, gif, and text/log uploads are allowed": "error.uploadMime",
   "Queue is full": "error.queueFull",
   "invalid thread id": "error.invalidThreadId",
   "Too many attachments": "error.tooManyAttachments",
