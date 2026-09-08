@@ -4,25 +4,44 @@ Run the Glassys gateway as a normal process on the machine the agent should oper
 
 This is the recommended mode when the agent needs the real workspace, host `git`, and often the host Docker CLI.
 
-## Run
+## Run as a user service (recommended)
 
-pnpm 11.14+:
+One line from an empty directory (Node.js **22.13+** and pnpm; Corepack: `corepack enable`):
 
 ```bash
-pnpm install
+git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
+```
+
+Already inside the repo: `pnpm install && pnpm run service:install`. That builds if needed and leaves the gateway running when you close the terminal.
+
+```bash
+cd glassys && pnpm run service:status
+cd glassys && pnpm run service:uninstall
+```
+
+Uninstall stops the service and removes the unit/LaunchAgent. It does not delete the clone or `data/` (operator hash, transcript).
+
+- **macOS:** LaunchAgent `~/Library/LaunchAgents/dev.kn990x.glassys.plist` (`KeepAlive`).
+- **Linux:** systemd user unit `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot).
+
+Data defaults to `<repo>/data`. Override with `GLASSYS_DATA_DIR` when you run `service:install`. The installer does not copy API keys into the unit.
+
+Open `http://127.0.0.1:8787` and complete the onboarding wizard before using chat. Defaults: bind `127.0.0.1:8787`. Do not bind `0.0.0.0` unless you understand that auto-run + host cwd is operator access to the machine.
+
+## Foreground
+
+Useful for a one-off debug session (closing the terminal stops the process):
+
+```bash
 pnpm run build
 export GLASSYS_DATA_DIR=/var/lib/glassys
 # optional per-adapter keys: CURSOR_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, CODEX_API_KEY, OPENCODE_API_KEY, GLASSYS_JWT_SECRET
 node gateway/dist/index.js
 ```
 
-Defaults: bind `127.0.0.1:8787`. Do not bind `0.0.0.0` unless you understand that auto-run + host cwd is operator access to the machine.
+## systemd system unit (dedicated Unix user)
 
-Complete the onboarding wizard in the browser before using chat.
-
-## systemd example
-
-Paths, user, and `WorkingDirectory` are yours to set. Nothing here is a hostname from a specific homelab.
+For a machine-wide service under a dedicated account. Paths, user, and `WorkingDirectory` are yours to set. Nothing here is a hostname from a specific homelab. For the usual homelab/laptop install, prefer `pnpm run service:install` above.
 
 ```ini
 [Unit]
@@ -47,7 +66,7 @@ WantedBy=multi-user.target
 
 ## launchd (macOS)
 
-Use `KeepAlive` and a `ProgramArguments` array pointing at `node` and `gateway/dist/index.js`. Set `GLASSYS_DATA_DIR` in `EnvironmentVariables`.
+`pnpm run service:install` writes the LaunchAgent. To do it by hand: `KeepAlive`, `ProgramArguments` pointing at `node` and `gateway/dist/index.js`, and `GLASSYS_DATA_DIR` in `EnvironmentVariables`.
 
 ## Proxy
 

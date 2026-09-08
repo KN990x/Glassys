@@ -80,17 +80,22 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor CLI, Claude Code, Ope
 Recommended if the agent should operate the real machine (Docker, git, your files).
 
 ```bash
-git clone https://github.com/KN990x/Glassys.git glassys
-cd glassys
-pnpm install
-pnpm run build
-export GLASSYS_DATA_DIR="$PWD/data"
-node gateway/dist/index.js
+git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Open `http://127.0.0.1:8787`, complete the wizard (operator password, adapter, absolute workspace path, CLI sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
+Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). That one line clones, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` and complete the wizard (operator password, adapter, absolute workspace path, CLI sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
 
-Default bind is **localhost**. Put Caddy, Traefik, Nginx Proxy Manager, or Cloudflare Tunnel in front if you need a public URL. See [docs/deploy/host.md](docs/deploy/host.md).
+If you are already inside the repo: `pnpm install && pnpm run service:install`.
+
+```bash
+# status
+cd glassys && pnpm run service:status
+
+# uninstall (stops the service; does not delete the clone or data/)
+cd glassys && pnpm run service:uninstall
+```
+
+Foreground (blocks the terminal): `pnpm run build && pnpm start`. Default bind is **localhost**. Put Caddy, Traefik, Nginx Proxy Manager, or Cloudflare Tunnel in front if you need a public URL. See [docs/deploy/host.md](docs/deploy/host.md).
 
 ## Compose (mode B)
 
@@ -194,17 +199,22 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor CLI, Claude Code, O
 Recomendado si el agente debe operar la máquina real (Docker, git, tus archivos).
 
 ```bash
-git clone https://github.com/KN990x/Glassys.git glassys
-cd glassys
-pnpm install
-pnpm run build
-export GLASSYS_DATA_DIR="$PWD/data"
-node gateway/dist/index.js
+git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install
 ```
 
-Abre `http://127.0.0.1:8787`, completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del CLI en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
+Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). Esa línea clona, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del CLI en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
 
-El bind por defecto es **localhost**. Pon Caddy, Traefik, Nginx Proxy Manager o Cloudflare Tunnel delante si necesitas una URL pública. Véase [docs/deploy/host.md](docs/deploy/host.md).
+Si ya estás dentro del repo: `pnpm install && pnpm run service:install`.
+
+```bash
+# estado
+cd glassys && pnpm run service:status
+
+# desinstalar (para el servicio; no borra el clone ni data/)
+cd glassys && pnpm run service:uninstall
+```
+
+En primer plano (bloquea la terminal): `pnpm run build && pnpm start`. El bind por defecto es **localhost**. Pon Caddy, Traefik, Nginx Proxy Manager o Cloudflare Tunnel delante si necesitas una URL pública. Véase [docs/deploy/host.md](docs/deploy/host.md).
 
 ## Compose (modo B)
 
