@@ -99,7 +99,11 @@ export function Chat({
   const [modelSource, setModelSource] = useState<ModelListSource>("live");
   const [catalogError, setCatalogError] = useState("");
   const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
+  const [adaptersError, setAdaptersError] = useState("");
   const [hostLabel, setHostLabel] = useState("");
+  const [loopback, setLoopback] = useState(false);
+  const [git, setGit] = useState<{ branch: string; dirty: boolean } | undefined>();
+  const [hostCopied, setHostCopied] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
@@ -152,6 +156,7 @@ export function Chat({
           snapshotReadyRef.current = false;
           setSnapshotReady(false);
         }
+        if (s === "connected") setRestartNote("");
         setConn(s);
       },
       onEvent: (msg: ServerMessage) => {
@@ -215,9 +220,20 @@ export function Chat({
     keepaliveRef.current(config.network.wsKeepaliveSeconds);
   }, [config.network.wsKeepaliveSeconds]);
 
+  const loadAdapters = useCallback(() => {
+    setAdaptersError("");
+    api
+      .adapters()
+      .then((r) => setAdapters(r.adapters))
+      .catch((err) => {
+        setAdapters([]);
+        setAdaptersError(err instanceof Error ? err.message : t("wizard.adapters.failed"));
+      });
+  }, [t]);
+
   useEffect(() => {
     void loadModels();
-    api.adapters().then((r) => setAdapters(r.adapters)).catch(() => setAdapters([]));
+    loadAdapters();
     api.threads().then((r) => {
       setThreads(r.threads);
       setCurrentThreadId(r.currentId);
@@ -227,13 +243,23 @@ export function Chat({
       .then((r) => {
         const parts = [r.user, r.hostname].filter((p): p is string => Boolean(p && p.trim()));
         setHostLabel(parts.join("@"));
+        setLoopback(r.loopback);
+        setGit(r.git);
       })
       .catch(() => undefined);
-  }, [loadModels, config.agent.adapter, config.agent.cwd]);
+  }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd]);
 
   useEffect(() => {
     if (loadedDraftFor.current === currentThreadId) return;
+    const prev = loadedDraftFor.current;
+    if (prev) saveDraft(prev, text, drafts);
+    const orphan = prev === null && Boolean(text.trim() || drafts.length);
     loadedDraftFor.current = currentThreadId;
+    if (!currentThreadId) return;
+    if (orphan) {
+      saveDraft(currentThreadId, text, drafts);
+      return;
+    }
     const loaded = loadDraft(currentThreadId);
     setText(loaded.text);
     setDrafts(loaded.attachments);
@@ -330,16 +356,27 @@ export function Chat({
     setCurrentThreadId(r.currentId);
   }
 
+  function beginThreadChange() {
+    snapshotReadyRef.current = false;
+    setSnapshotReady(false);
+    setBlocks([]);
+  }
+
   async function onNewThread() {
     if (busy || waiting) {
       setSendError(t("threads.busy"));
       return;
     }
+    const prevBlocks = blocks;
     try {
+      beginThreadChange();
       applyThreadList(await api.newThread());
       closeThreads();
       setSendError("");
     } catch (err) {
+      snapshotReadyRef.current = true;
+      setSnapshotReady(true);
+      setBlocks(prevBlocks);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -368,11 +405,16 @@ export function Chat({
       setSendError(t("threads.busy"));
       return;
     }
+    const prevBlocks = blocks;
     try {
+      beginThreadChange();
       applyThreadList(await api.switchThread(id));
       closeThreads();
       setSendError("");
     } catch (err) {
+      snapshotReadyRef.current = true;
+      setSnapshotReady(true);
+      setBlocks(prevBlocks);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -389,6 +431,19 @@ export function Chat({
     if (!currentThreadId) return;
     try {
       const file = await api.exportThread(currentThreadId);
+      const shareFile = new File([file.blob], file.name, { type: "text/markdown" });
+      const nav = navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+        share?: (data: ShareData) => Promise<void>;
+      };
+      try {
+        if (typeof nav.share === "function" && nav.canShare?.({ files: [shareFile] })) {
+          await nav.share({ files: [shareFile], title: file.name });
+          return;
+        }
+      } catch {
+        /* fall through to download */
+      }
       const url = URL.createObjectURL(file.blob);
       const a = document.createElement("a");
       a.href = url;
@@ -449,7 +504,7 @@ export function Chat({
       onConfig(await api.saveConfig({ agent: { model: id, modelParams: params } }));
     } catch (err) {
       setDraftModel(null);
-      setModelError(err instanceof Error ? err.message : t("chat.modelFailed"));
+      setModelError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
     }
   }
 
@@ -478,9 +533,35 @@ export function Chat({
             <div>
               <strong>{config.space.name.trim() || t("app.name")}</strong>
               <span className="host-context muted">
-                {[hostLabel, cwdBasename(config.agent.cwd), currentAdapter?.displayName || config.agent.adapter]
-                  .filter(Boolean)
-                  .join(" · ")}
+                <button
+                  type="button"
+                  className="host-copy"
+                  title={config.agent.cwd}
+                  aria-label={t("chat.copyCwd")}
+                  onClick={() => {
+                    const value = config.agent.cwd;
+                    if (!value) return;
+                    void navigator.clipboard.writeText(value).then(
+                      () => {
+                        setHostCopied(true);
+                        setTimeout(() => setHostCopied(false), 1500);
+                      },
+                      () => setSendError(t("chat.copyFailed")),
+                    );
+                  }}
+                >
+                  {[
+                    hostLabel,
+                    config.agent.cwd || cwdBasename(config.agent.cwd),
+                    git
+                      ? `${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}`
+                      : "",
+                    currentAdapter?.displayName || config.agent.adapter,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {hostCopied ? ` · ${t("chat.copied")}` : ""}
+                </button>
               </span>
               {currentAdapter?.available && !currentAdapter.available.ok && (
                 <span className="warn">{t("wizard.adapter.unavailable")}</span>
@@ -510,6 +591,7 @@ export function Chat({
               ref={settingsBtn}
               type="button"
               className="ghost"
+              aria-expanded={settings}
               onClick={() => {
                 if (threadOpen) setThreadOpen(false);
                 pushOverlay("settings");
@@ -533,6 +615,7 @@ export function Chat({
           onDelete={(id, e) => void onDeleteThread(id, e)}
           onRename={onRenameThread}
           onClose={closeThreads}
+          git={git}
         />
       )}
       <main className="chat-main">
@@ -545,6 +628,19 @@ export function Chat({
       {configError && (
         <p className="banner error" role="alert">
           {configError}
+        </p>
+      )}
+      {loopback && (
+        <p className="banner warn" role="status">
+          {t("reach.loopback")}
+        </p>
+      )}
+      {adaptersError && (
+        <p className="banner error" role="alert">
+          {t("chat.adaptersFailed")}{" "}
+          <button type="button" className="ghost tiny" onClick={() => loadAdapters()}>
+            {t("chat.adaptersRetry")}
+          </button>
         </p>
       )}
       {config.restartRequired && (
@@ -600,7 +696,10 @@ export function Chat({
             {t(conn === "reconnecting" ? "status.reconnecting" : "status.connecting")}
           </p>
         )}
-        {blocks.length === 0 && snapshotReady && <p className="empty">{t("chat.empty")}</p>}
+        {blocks.length === 0 && snapshotReady && !search.trim() && <p className="empty">{t("chat.empty")}</p>}
+        {search.trim() && visibleBlocks.length === 0 && blocks.length > 0 && (
+          <p className="empty">{t("chat.searchEmpty")}</p>
+        )}
         {visibleBlocks.map((b) => {
           if (b.kind === "user") {
             const pending = Boolean(b.messageId && queuedIds.has(b.messageId));
@@ -687,7 +786,7 @@ export function Chat({
         {!atBottom && (
           <button
             type="button"
-            className="jump-bottom"
+            className="ghost jump-bottom"
             onClick={() => {
               pinToBottom.current = true;
               setAtBottom(true);

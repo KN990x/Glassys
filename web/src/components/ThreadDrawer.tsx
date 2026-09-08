@@ -14,6 +14,7 @@ export function ThreadDrawer({
   onDelete,
   onRename,
   onClose,
+  git,
 }: {
   threads: ThreadSummary[];
   currentId: string | null;
@@ -25,6 +26,7 @@ export function ThreadDrawer({
   onDelete: (id: string, e: { stopPropagation: () => void }) => void;
   onRename: (id: string, title: string) => Promise<void>;
   onClose: () => void;
+  git?: { branch: string; dirty: boolean };
 }) {
   const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -34,6 +36,8 @@ export function ThreadDrawer({
 
   useEffect(() => {
     closeRef.current?.focus();
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const root = document.querySelector(".thread-panel");
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -60,7 +64,10 @@ export function ThreadDrawer({
       }
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
   }, [onClose, editing]);
 
   return (
@@ -83,7 +90,14 @@ export function ThreadDrawer({
         {groups.map((group) => (
           <section key={group.cwd || "none"} className="thread-group">
             <h3 className="thread-context">{group.cwd ? cwdBasename(group.cwd) : t("threads.context")}</h3>
-            {group.cwd ? <p className="muted thread-cwd">{group.cwd}</p> : null}
+            {group.cwd ? (
+              <p className="muted thread-cwd">
+                {group.cwd}
+                {git && group.threads.some((th) => th.id === currentId)
+                  ? ` · ${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}`
+                  : ""}
+              </p>
+            ) : null}
             <ul className="thread-list">
               {group.threads.map((th) => (
                 <li key={th.id} className="thread-row">

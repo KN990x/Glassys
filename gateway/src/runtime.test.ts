@@ -109,8 +109,9 @@ describe("runtime queue", () => {
   afterEach(async () => {
     control.go();
     control.goSend();
-    const { shutdownRuntime } = await import("./runtime.js");
+    const { shutdownRuntime, setRunCancelTimeoutForTests, DEFAULT_RUN_CANCEL_TIMEOUT_MS } = await import("./runtime.js");
     await shutdownRuntime();
+    setRunCancelTimeoutForTests(DEFAULT_RUN_CANCEL_TIMEOUT_MS);
   });
 
   it("rejects messages before onboarding is complete", async () => {
@@ -656,6 +657,74 @@ describe("runtime queue", () => {
       expect(types).toContain("threads.snapshot");
     } finally {
       hub.broadcast = orig;
+    }
+  });
+
+  it("keeps a manual title when the live thread is archived", async () => {
+    const { enqueueMessage, startNewLiveThread, listLiveThreads, renameLiveThread, readTranscript, drainEmit } =
+      await import("./runtime.js");
+    await enqueueMessage("hello from ops");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+    await drainEmit();
+    const live = (await listLiveThreads())[0];
+    expect(live).toBeTruthy();
+    await renameLiveThread(live!.id, "Ops box");
+    await startNewLiveThread();
+    const listed = await listLiveThreads();
+    expect(listed.find((t) => t.id === live!.id)?.title).toBe("Ops box");
+  });
+
+  it("rejects a path-like thread id on switch", async () => {
+    const { switchLiveThread } = await import("./runtime.js");
+    await expect(switchLiveThread("..")).rejects.toThrow(/invalid thread id/);
+    await expect(switchLiveThread("../evil")).rejects.toThrow(/invalid thread id/);
+  });
+
+  it("cancels the in-flight job when cancelQueued matches currentJobId", async () => {
+    control.hold();
+    const { enqueueMessage, cancelQueued, readTranscript, drainEmit } = await import("./runtime.js");
+    void enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
+    const events = await readTranscript();
+    const user = events.find((e) => e.type === "user.message" && "text" in e && e.text === "one");
+    expect(user && "id" in user ? user.id : "").toBeTruthy();
+    await cancelQueued((user as { id: string }).id);
+    control.go();
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
+    await drainEmit();
+    expect((await readTranscript()).some((e) => e.type === "run.cancelled")).toBe(true);
+  });
+
+  it("times out a hung wait() after cancel", async () => {
+    const origCreate = fakeAdapter.create;
+    fakeAdapter.create = async () => ({
+      agentId: "agent-hang",
+      async send() {
+        return {
+          id: "run-hang",
+          async cancel() {
+            /* adapter ignores cancel */
+          },
+          wait() {
+            return new Promise<"finished">(() => undefined);
+          },
+        };
+      },
+      async dispose() {
+        /* noop */
+      },
+    });
+    try {
+      const { enqueueMessage, cancelRun, readTranscript, drainEmit, setRunCancelTimeoutForTests, snapshotRuntime } =
+        await import("./runtime.js");
+      setRunCancelTimeoutForTests(40);
+      void enqueueMessage("hang");
+      await waitUntil(() => snapshotRuntime().busy);
+      await cancelRun();
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
+      await drainEmit();
+    } finally {
+      fakeAdapter.create = origCreate;
     }
   });
 });

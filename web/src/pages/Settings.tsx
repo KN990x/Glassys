@@ -36,6 +36,7 @@ export function Settings({
   const [clearKey, setClearKey] = useState(false);
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
+  const [restartNote, setRestartNote] = useState("");
   const [models, setModels] = useState<ModelCatalogItem[]>([]);
   const [modelSource, setModelSource] = useState<ModelListSource>("live");
   const [modelError, setModelError] = useState("");
@@ -290,9 +291,19 @@ export function Settings({
           {config.restartRequired && (
             <p className="warn">
               {t("settings.restartRequired")}{" "}
-              <button type="button" className="ghost tiny" onClick={() => void api.restart()}>
+              <button
+                type="button"
+                className="ghost tiny"
+                onClick={() => {
+                  setRestartNote(t("settings.restarting"));
+                  void api.restart().catch((err) => {
+                    setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
+                  });
+                }}
+              >
                 {t("settings.restart")}
               </button>
+              {restartNote ? ` ${restartNote}` : ""}
             </p>
           )}
           <section className="settings-section">
@@ -611,6 +622,7 @@ export function Settings({
               {t("settings.password")}
               <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
+            <p className="muted">{t("settings.passwordHint")}</p>
           </section>
 
           <section className="settings-section">

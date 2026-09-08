@@ -18,7 +18,9 @@ export function PermissionChip({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
-  const visible = Boolean(caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode");
+  const visible = Boolean(
+    caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode" || caps?.toolConfirmation === "none",
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -48,6 +50,8 @@ export function PermissionChip({
     : caps.toolConfirmation === "permission-mode"
       ? t(`wizard.exec.permission.${mode === "dontAsk" ? "dontAsk" : mode === "acceptEdits" ? "acceptEdits" : "bypass"}`)
       : t("chip.unattended");
+  const sandboxPart = caps.sandbox ? (sandbox ? t("chip.sandboxOn") : t("chip.sandboxOff")) : "";
+  const chipLabel = sandboxPart ? `${label} · ${sandboxPart}` : label;
 
   async function patch(options: Record<string, unknown>) {
     if (!window.confirm(t("chip.archiveConfirm"))) return;
@@ -61,11 +65,17 @@ export function PermissionChip({
 
   return (
     <div className="chip-wrap" ref={wrap}>
-      <button type="button" className="ghost tiny" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        {sandbox ? `${label} · ${t("wizard.exec.sandbox")}` : label}
+      <button
+        type="button"
+        className="ghost tiny"
+        aria-expanded={open}
+        aria-controls="permission-chip-pop"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {chipLabel}
       </button>
       {open && (
-        <div className="chip-pop">
+        <div className="chip-pop" id="permission-chip-pop" role="dialog">
           {caps.sandbox && (
             <label className="choice">
               <input
@@ -97,6 +107,7 @@ export function PermissionChip({
             </label>
           )}
           {caps.toolConfirmation === "auto-review-deny" && <p className="muted">{t("wizard.exec.danger")}</p>}
+          {caps.toolConfirmation === "none" && <p className="muted">{t("wizard.exec.unattended")}</p>}
           {error && <p className="error-text">{error}</p>}
         </div>
       )}

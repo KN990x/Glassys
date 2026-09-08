@@ -30,6 +30,11 @@ export function Setup({
     try {
       const { token } = await api.setup(password);
       setToken(token);
+      try {
+        await api.saveConfig({ space: { locale } });
+      } catch {
+        /* locale is best-effort; wizard can still set it */
+      }
       onDone();
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);

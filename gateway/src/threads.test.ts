@@ -56,4 +56,17 @@ describe("threads store", () => {
     await refreshLiveTitle();
     expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Ops box");
   });
+
+  it("keeps a manual title when the live thread is archived", async () => {
+    const id = await ensureLiveThread();
+    const { renameThread, archiveLiveThread, listThreads } = await import("./threads.js");
+    await renameThread(id, "Ops box");
+    await writeFile(
+      paths.threadTranscript(id),
+      `${JSON.stringify({ type: "user.message", text: "hello from ops" })}\n`,
+      "utf8",
+    );
+    await archiveLiveThread(null);
+    expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Ops box");
+  });
 });

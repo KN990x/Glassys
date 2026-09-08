@@ -1,7 +1,7 @@
 {
   "name": "Glassys",
   "short_name": "Glassys",
-  "description": "Chat face for local coding agents",
+  "description": "Chat face for systems work on your host",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

@@ -5,7 +5,6 @@ import type { MessageAttachment, TranscriptEvent } from "@glassys/protocol";
 import type { PromptAttachment } from "@glassys/adapter-contract";
 import { paths } from "./paths.js";
 import { HttpError } from "./errors.js";
-import { parseJsonl } from "./jsonl.js";
 import { loadConfig } from "./config.js";
 import { loadState } from "./state.js";
 
@@ -110,6 +109,19 @@ export async function materializeAttachments(
 
 const UNREFERENCED_TTL_MS = 24 * 60 * 60 * 1000;
 
+function collectAttachmentIds(raw: string, into: Set<string>): void {
+  for (const line of raw.split("\n")) {
+    if (!line.includes("user.message") || !line.includes("attachments")) continue;
+    try {
+      const ev = JSON.parse(line) as TranscriptEvent;
+      if (ev.type !== "user.message" || !ev.attachments) continue;
+      for (const att of ev.attachments) into.add(att.id);
+    } catch {
+      /* skip corrupt line */
+    }
+  }
+}
+
 export async function gcUploads(now = Date.now()): Promise<void> {
   let files: string[] = [];
   try {
@@ -126,11 +138,7 @@ export async function gcUploads(now = Date.now()): Promise<void> {
   }
   for (const tid of threadIds) {
     try {
-      const events = parseJsonl<TranscriptEvent>(await readFile(paths.threadTranscript(tid), "utf8"));
-      for (const ev of events) {
-        if (ev.type !== "user.message" || !ev.attachments) continue;
-        for (const att of ev.attachments) referenced.add(att.id);
-      }
+      collectAttachmentIds(await readFile(paths.threadTranscript(tid), "utf8"), referenced);
     } catch {
       /* skip unreadable thread */
     }

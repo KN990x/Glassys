@@ -114,55 +114,61 @@ async function createEmptyThread(agent: AgentConfig, agentId: string | null): Pr
   return meta;
 }
 
+async function ensureLiveThreadUnlocked(): Promise<string> {
+  if (currentThreadId) return currentThreadId;
+  const state = await loadState();
+  if (state.threadId) {
+    const meta = await loadMeta(state.threadId);
+    if (meta) {
+      currentThreadId = state.threadId;
+      return currentThreadId;
+    }
+  }
+  const cfg = await loadConfig();
+  const legacy = await readEvents(paths.legacyTranscript());
+  if (legacy.length) {
+    const id = randomUUID();
+    await mkdir(paths.threadDir(id), { recursive: true });
+    try {
+      await rename(paths.legacyTranscript(), paths.threadTranscript(id));
+    } catch {
+      await writeFile(paths.threadTranscript(id), "", "utf8");
+    }
+    const meta = metaFromAgent(id, cfg.agent, state.agentId);
+    meta.title = titleFrom(cfg.agent.cwd, legacy);
+    await writeMeta(meta);
+    currentThreadId = id;
+    await saveState({ threadId: id });
+    return id;
+  }
+  const meta = await createEmptyThread(cfg.agent, state.agentId);
+  return meta.id;
+}
+
 export async function ensureLiveThread(): Promise<string> {
-  return withThreads(async () => {
-    if (currentThreadId) return currentThreadId;
-    const state = await loadState();
-    if (state.threadId) {
-      const meta = await loadMeta(state.threadId);
-      if (meta) {
-        currentThreadId = state.threadId;
-        return currentThreadId;
-      }
-    }
-    const cfg = await loadConfig();
-    const legacy = await readEvents(paths.legacyTranscript());
-    if (legacy.length) {
-      const id = randomUUID();
-      await mkdir(paths.threadDir(id), { recursive: true });
-      try {
-        await rename(paths.legacyTranscript(), paths.threadTranscript(id));
-      } catch {
-        await writeFile(paths.threadTranscript(id), "", "utf8");
-      }
-      const meta = metaFromAgent(id, cfg.agent, state.agentId);
-      meta.title = titleFrom(cfg.agent.cwd, legacy);
-      await writeMeta(meta);
-      currentThreadId = id;
-      await saveState({ threadId: id });
-      return id;
-    }
-    const meta = await createEmptyThread(cfg.agent, state.agentId);
-    return meta.id;
-  });
+  return withThreads(() => ensureLiveThreadUnlocked());
+}
+
+async function archiveLiveThreadUnlocked(agentId: string | null, agent?: AgentConfig): Promise<ThreadMeta | null> {
+  const id = currentThreadId ?? (await loadState()).threadId;
+  if (!id) return null;
+  const cfgAgent = agent ?? (await loadConfig()).agent;
+  const events = await readEvents(paths.threadTranscript(id));
+  const prev = (await loadMeta(id)) ?? metaFromAgent(id, cfgAgent, agentId);
+  const generated = titleFrom(cfgAgent.cwd, events) || prev.title;
+  const meta: ThreadMeta = {
+    ...prev,
+    ...metaFromAgent(id, cfgAgent, agentId, prev.createdAt),
+    title: prev.titleManual ? prev.title : generated,
+    titleManual: prev.titleManual,
+    agentId,
+  };
+  await writeMeta(meta);
+  return meta;
 }
 
 export async function archiveLiveThread(agentId: string | null, agent?: AgentConfig): Promise<ThreadMeta | null> {
-  return withThreads(async () => {
-    const id = currentThreadId ?? (await loadState()).threadId;
-    if (!id) return null;
-    const cfgAgent = agent ?? (await loadConfig()).agent;
-    const events = await readEvents(paths.threadTranscript(id));
-    const prev = (await loadMeta(id)) ?? metaFromAgent(id, cfgAgent, agentId);
-    const meta: ThreadMeta = {
-      ...prev,
-      ...metaFromAgent(id, cfgAgent, agentId, prev.createdAt),
-      title: titleFrom(cfgAgent.cwd, events) || prev.title,
-      agentId,
-    };
-    await writeMeta(meta);
-    return meta;
-  });
+  return withThreads(() => archiveLiveThreadUnlocked(agentId, agent));
 }
 
 export async function openEmptyThread(): Promise<ThreadMeta> {
@@ -173,9 +179,12 @@ export async function openEmptyThread(): Promise<ThreadMeta> {
 }
 
 export async function startNewThread(agentId: string | null): Promise<ThreadMeta> {
-  await ensureLiveThread();
-  await archiveLiveThread(agentId);
-  return openEmptyThread();
+  return withThreads(async () => {
+    await ensureLiveThreadUnlocked();
+    await archiveLiveThreadUnlocked(agentId);
+    const cfg = await loadConfig();
+    return createEmptyThread(cfg.agent, null);
+  });
 }
 
 export async function listThreads(): Promise<ThreadSummary[]> {

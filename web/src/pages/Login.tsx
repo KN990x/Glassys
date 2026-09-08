@@ -25,9 +25,16 @@ export function Login({
     try {
       const { token } = await api.login(password);
       setToken(token);
+      try {
+        await api.saveConfig({ space: { locale } });
+      } catch {
+        /* locale is best-effort */
+      }
       onDone();
-    } catch {
-      setError(t("login.error"));
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      const network = /failed to fetch|network|load failed|aborterror/i.test(raw) || raw === "Failed to fetch";
+      setError(network ? t("login.unreachable") : t("login.error"));
     } finally {
       setSubmitting(false);
     }

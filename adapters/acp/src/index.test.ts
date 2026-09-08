@@ -27,5 +27,6 @@ describe("acp adapter capabilities", () => {
     expect(acpChildSupportsResume(undefined)).toBe(false);
     expect(acpChildSupportsResume({ session: { loadSession: true } })).toBe(true);
     await expect(acpAdapter.probe?.()).resolves.toBeUndefined();
+    await expect(acpAdapter.probe?.({})).rejects.toThrow(/command/);
   });
 });

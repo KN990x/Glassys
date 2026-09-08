@@ -2,6 +2,8 @@ import { WebSocket } from "ws";
 import type { ServerMessage } from "@glassys/protocol";
 import { isPersistedTranscriptEvent } from "@glassys/protocol";
 
+export const MAX_HANDSHAKE_BUFFER = 500;
+
 export class Hub {
   private clients = new Set<WebSocket>();
   /** While a socket is in this map, broadcasts are queued instead of sent. */
@@ -43,6 +45,7 @@ export class Hub {
       const buf = this.buffers.get(ws);
       if (buf) {
         buf.push(msg);
+        if (buf.length > MAX_HANDSHAKE_BUFFER) buf.splice(0, buf.length - MAX_HANDSHAKE_BUFFER);
         continue;
       }
       try {
@@ -65,7 +68,11 @@ export function isHandshakeEphemeral(msg: ServerMessage): boolean {
 
 /** After snapshot + later transcript read, send leftover buffer without duplicating persisted events. */
 export function flushHandshakeBuffer(buffered: ServerMessage[], alreadySent: ServerMessage[]): ServerMessage[] {
-  const seen = new Set(alreadySent.map((ev) => JSON.stringify(ev)));
+  const remaining = new Map<string, number>();
+  for (const ev of alreadySent) {
+    const key = JSON.stringify(ev);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
   const out: ServerMessage[] = [];
   for (const msg of buffered) {
     if (isHandshakeEphemeral(msg)) {
@@ -73,10 +80,12 @@ export function flushHandshakeBuffer(buffered: ServerMessage[], alreadySent: Ser
       continue;
     }
     const raw = JSON.stringify(msg);
-    if (!seen.has(raw)) {
-      out.push(msg);
-      seen.add(raw);
+    const left = remaining.get(raw) ?? 0;
+    if (left > 0) {
+      remaining.set(raw, left - 1);
+      continue;
     }
+    out.push(msg);
   }
   return out;
 }

@@ -9,6 +9,14 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Onboarding is not complete": "error.onboarding",
   "Attachments could not be read": "error.attachments",
   "Thread not found": "error.threadNotFound",
+  "Workspace path is required": "error.cwdRequired",
+  "Workspace path must be absolute": "error.cwdAbsolute",
+  "Workspace path is not a directory": "error.cwdNotDir",
+  "Workspace path does not exist": "error.cwdMissing",
+  "Only jpeg, png, webp, and gif uploads are allowed": "error.uploadMime",
+  "Queue is full": "error.queueFull",
+  "invalid thread id": "error.invalidThreadId",
+  "Too many attachments": "error.tooManyAttachments",
 };
 
 export function operatorError(message: string, t: (key: string) => string): string {

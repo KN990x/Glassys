@@ -59,9 +59,15 @@ export const api = {
       method: "DELETE",
     }),
   reachability: () =>
-    req<{ bind: string; port: number; publicUrl: string; loopback: boolean; hostname?: string; user?: string }>(
-      "/api/reachability",
-    ),
+    req<{
+      bind: string;
+      port: number;
+      publicUrl: string;
+      loopback: boolean;
+      hostname?: string;
+      user?: string;
+      git?: { branch: string; dirty: boolean };
+    }>("/api/reachability"),
   workspaces: (root?: string) =>
     req<{ recents: string[]; workspaces: { path: string; name: string }[] }>(
       root ? `/api/workspaces?root=${encodeURIComponent(root)}` : "/api/workspaces",
