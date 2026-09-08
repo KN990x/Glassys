@@ -360,7 +360,10 @@ export const acpAdapter: Adapter = {
 
   async probe(options?: Record<string, unknown>) {
     const command = optionString(options, "command", "").trim();
-    if (!command) return;
+    if (!command) {
+      if (options) throw new AdapterError("ACP adapter needs agent.options.command (or a registry pick)", "startup");
+      return;
+    }
     await requireHostCommand(command, `ACP command is not on PATH: ${command}`);
   },
 

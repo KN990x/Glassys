@@ -1,10 +1,32 @@
 import type { TranscriptEvent } from "@glassys/protocol";
 import type { ThreadMeta } from "./threads.js";
 
+export function coalesceTranscriptEvents(events: TranscriptEvent[]): TranscriptEvent[] {
+  const out: TranscriptEvent[] = [];
+  for (const ev of events) {
+    const last = out[out.length - 1];
+    if (ev.type === "text.delta" && last?.type === "text.delta") {
+      out[out.length - 1] = { type: "text.delta", text: last.text + ev.text };
+      continue;
+    }
+    if (ev.type === "thinking.delta" && last?.type === "thinking.delta") {
+      out[out.length - 1] = { type: "thinking.delta", text: last.text + ev.text };
+      continue;
+    }
+    out.push(ev);
+  }
+  return out;
+}
+
 export function eventsToMarkdown(meta: ThreadMeta, events: TranscriptEvent[]): string {
   const lines: string[] = [`# ${meta.title}`, "", `- Adapter: ${meta.adapter}`, `- Workspace: ${meta.cwd}`, ""];
-  for (const ev of events) {
+  const retracted = new Set(
+    events.filter((ev) => ev.type === "user.retracted").map((ev) => (ev.type === "user.retracted" ? ev.id : "")),
+  );
+  for (const ev of coalesceTranscriptEvents(events)) {
+    if (ev.type === "user.retracted") continue;
     if (ev.type === "user.message") {
+      if (ev.id && retracted.has(ev.id)) continue;
       lines.push("## Operator", "", ev.text.trim() || "(empty)", "");
       continue;
     }
@@ -13,7 +35,7 @@ export function eventsToMarkdown(meta: ThreadMeta, events: TranscriptEvent[]): s
       continue;
     }
     if (ev.type === "text.delta") {
-      lines.push(ev.text);
+      lines.push(ev.text, "");
       continue;
     }
     if (ev.type === "tool.start") {

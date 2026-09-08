@@ -41,6 +41,7 @@ import { loadState } from "./state.js";
 import { listWorkspaces } from "./workspaces.js";
 import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
 import { liveThreadId } from "./threads.js";
+import { readGitContext } from "./host-git.js";
 
 const GATEWAY_VERSION = (() => {
   try {
@@ -465,6 +466,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const cfg = await loadConfig();
     const bind = cfg.network.bind;
+    const git = await readGitContext(cfg.agent.cwd);
     send(res, 200, {
       bind,
       port: cfg.network.port,
@@ -472,6 +474,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       loopback: bind === "127.0.0.1" || bind === "::1" || bind === "localhost",
       hostname: hostname(),
       user: userInfo().username,
+      ...(git ? { git } : {}),
     });
     return true;
   }

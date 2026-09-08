@@ -10,7 +10,8 @@ describe("operatorError", () => {
     expect(operatorError("unknown message", t)).toBe("i18n:error.unknownMessage");
     expect(operatorError("title required", t)).toBe("i18n:error.titleRequired");
     expect(operatorError("payload too large", t)).toBe("i18n:error.payloadTooLarge");
-    expect(operatorError("Attachments could not be read", t)).toBe("i18n:error.attachments");
+    expect(operatorError("Workspace path does not exist", t)).toBe("i18n:error.cwdMissing");
+    expect(operatorError("Queue is full", t)).toBe("i18n:error.queueFull");
     expect(operatorError("model said something", t)).toBe("model said something");
   });
 });

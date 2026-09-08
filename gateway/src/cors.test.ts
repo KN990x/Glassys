@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { listenBind, listenPort, resolveAllowedOrigin, setupOriginAllowed } from "./cors.js";
+import { listenBind, listenPort, resolveAllowedOrigin, setupOriginAllowed, CORS_ALLOW_METHODS } from "./cors.js";
 
 describe("listen address", () => {
   const prevBind = process.env.GLASSYS_BIND;
@@ -67,6 +67,12 @@ describe("resolveAllowedOrigin", () => {
         allowedOrigins: ["https://glassys.example"],
       }),
     ).toBeNull();
+  });
+});
+
+describe("CORS methods", () => {
+  it("allows PATCH for thread rename from a cross-origin PWA", () => {
+    expect(CORS_ALLOW_METHODS.split(",").map((s) => s.trim())).toContain("PATCH");
   });
 });
 

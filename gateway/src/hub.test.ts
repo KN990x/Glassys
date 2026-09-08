@@ -75,4 +75,26 @@ describe("hub", () => {
     expect(flushed.filter((m) => m.type === "text.delta" && "text" in m && m.text === "from-disk")).toHaveLength(0);
     expect(isHandshakeEphemeral(buffered[2]!)).toBe(true);
   });
+
+  it("keeps two identical leftover deltas that were not already sent", () => {
+    const flushed = flushHandshakeBuffer(
+      [
+        { type: "text.delta", text: " " },
+        { type: "text.delta", text: " " },
+      ],
+      [],
+    );
+    expect(flushed.filter((m) => m.type === "text.delta")).toHaveLength(2);
+  });
+
+  it("drops only as many identical deltas as the snapshot already included", () => {
+    const flushed = flushHandshakeBuffer(
+      [
+        { type: "text.delta", text: " " },
+        { type: "text.delta", text: " " },
+      ],
+      [{ type: "text.delta", text: " " }],
+    );
+    expect(flushed.filter((m) => m.type === "text.delta")).toHaveLength(1);
+  });
 });

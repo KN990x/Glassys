@@ -92,7 +92,16 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   const [adaptersError, setAdaptersError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [discover, setDiscover] = useState<AdapterDiscoverItem[]>([]);
-  const [locale, setLocale] = useState(config.space.locale);
+  const [locale, setLocale] = useState(() => {
+    if (config.space.locale === "es" || config.space.locale === "en") return config.space.locale;
+    try {
+      const stored = localStorage.getItem("glassys_locale");
+      if (stored === "es" || stored === "en") return stored;
+    } catch {
+      /* private mode */
+    }
+    return "en";
+  });
   const [theme, setTheme] = useState(config.space.theme);
 
   const current = adapters.find((a) => a.id === adapterId) ?? adapters[0];

@@ -45,6 +45,20 @@ describe("PermissionChip", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows sandbox off on the chip when sandbox is disabled", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <PermissionChip config={cfg()} caps={caps} onConfig={() => undefined} />
+        </I18nProvider>,
+      );
+    });
+    expect(host.querySelector("button")?.textContent).toContain("Sandbox off");
+  });
+
   it("does not patch options when the operator cancels the archive confirm", async () => {
     vi.stubGlobal("confirm", () => false);
     host = document.createElement("div");

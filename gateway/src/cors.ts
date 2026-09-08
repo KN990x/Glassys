@@ -4,6 +4,8 @@ import { listenBind, listenPort } from "./listen.js";
 
 export { listenBind, listenPort };
 
+export const CORS_ALLOW_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+
 export function originMatchesRequestHost(origin: string, hostHeader: string | undefined): boolean {
   if (!hostHeader) return false;
   try {
@@ -78,7 +80,7 @@ export async function setCors(req: IncomingMessage, res: ServerResponse): Promis
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", CORS_ALLOW_METHODS);
 }
 
 export async function originAllowed(origin: string | undefined, requestHost?: string): Promise<boolean> {
