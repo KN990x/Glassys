@@ -16,4 +16,11 @@ describe("i18n catalogs", () => {
       expect(copy).toContain("acp");
     }
   });
+
+  it("distinguishes Cursor SDK login from cursor-cli", () => {
+    expect(en["wizard.cred.login"].toLowerCase()).toContain("sdk");
+    expect(en["wizard.cred.required"].toLowerCase()).toContain("cursor-cli");
+    expect(es["wizard.cred.login"].toLowerCase()).toContain("sdk");
+    expect(es["wizard.cred.required"].toLowerCase()).toContain("cursor-cli");
+  });
 });

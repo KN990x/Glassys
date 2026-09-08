@@ -175,7 +175,7 @@ export const CURSOR_DEFAULT_MODEL = {
   params: [{ id: "effort", value: "xhigh" }] as ModelParam[],
 };
 
-/** Empty / Composer-default configs become Grok 4.6 Extra high. Explicit params are kept. */
+/** Empty configs become Grok 4.6 Extra high. An explicit Composer (or other) id is kept. */
 export function normalizeCursorConfig(agent: AgentConfig): AgentConfig {
   const next: AgentConfig = {
     ...agent,
@@ -187,7 +187,7 @@ export function normalizeCursorConfig(agent: AgentConfig): AgentConfig {
     },
   };
   const hadParams = Array.isArray(agent.modelParams) && agent.modelParams.length > 0;
-  if (!next.model || next.model === "composer-2.5") {
+  if (!next.model) {
     const grok = CURSOR_STATIC_CATALOG.find((m) => m.id === CURSOR_FLAGSHIP_MODEL_ID) ?? CURSOR_STATIC_CATALOG[0];
     next.model = CURSOR_FLAGSHIP_MODEL_ID;
     if (!hadParams) next.modelParams = cursorParamsForFlagship(grok);

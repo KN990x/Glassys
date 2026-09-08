@@ -1,5 +1,13 @@
 import { Agent, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
-import { AdapterError, type Adapter, type AdapterCreateOptions, type AdapterEventHandler, type AdapterRun, type AdapterSession } from "@glassys/adapter-contract";
+import {
+  AdapterError,
+  type Adapter,
+  type AdapterCreateOptions,
+  type AdapterEventHandler,
+  type AdapterLoginOptions,
+  type AdapterRun,
+  type AdapterSession,
+} from "@glassys/adapter-contract";
 import { optionBool, optionStringArray, type AgentConfig, type ModelParam, type SettingSource } from "@glassys/protocol";
 import { mapCursorDelta } from "./mapper.js";
 import { runResultErrorMessage, wrapSdkError } from "./errors.js";
@@ -159,8 +167,19 @@ export const cursorAdapter: Adapter = {
     }
   },
 
-  async loginInteractive(): Promise<void> {
-    await Cursor.auth.login();
+  async probe() {
+    if (typeof Cursor.auth?.status !== "function" || typeof Agent.create !== "function") {
+      throw new AdapterError("Cursor SDK is not usable on this host", "startup");
+    }
+  },
+
+  async loginInteractive(opts?: AdapterLoginOptions): Promise<void> {
+    await Cursor.auth.login({
+      openBrowser: true,
+      onLoginUrl: opts?.onLoginUrl,
+      signal: opts?.signal,
+      apiKeyName: "Glassys",
+    });
   },
 
   async authStatus(): Promise<{ loggedIn: boolean; email?: string }> {

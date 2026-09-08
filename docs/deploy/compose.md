@@ -6,13 +6,13 @@ A coding agent needs the real project tree. Inside a container that means volume
 
 ## Compose file
 
-The repository `docker-compose.yml` builds locally (v1 does not require a published image). The image is a production slice: gateway `dist`, adapter `dist`, production `node_modules`, and the built PWA — not the TypeScript sources.
+The repository `docker-compose.yml` builds locally (v1 does not require a published image). The image is a production slice: gateway `dist`, adapter `dist`, production `node_modules`, and the built PWA — not the TypeScript sources. The service uses `restart: unless-stopped`.
 
 Typical env:
 
 ```bash
 GLASSYS_WORKSPACE=/absolute/path/on/the/host
-# Optional. Prefer CLI/SDK login on the host (mode A) over storing keys.
+# Optional. Prefer Cursor SDK login on the host (mode A) over storing keys. cursor-cli is a different store.
 # CURSOR_API_KEY=cursor_...
 # ANTHROPIC_API_KEY=
 # GEMINI_API_KEY=

@@ -11,6 +11,8 @@ import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api, clearToken } from "../api";
 import { useT } from "../i18n";
 import { ModelPicker } from "../components/ModelPicker";
+import { CatalogFallbackNotice } from "../components/CatalogFallback";
+import { SdkLoginControls } from "../components/SdkLogin";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption } from "../adapterOptions";
 
 export function Settings({
@@ -37,7 +39,6 @@ export function Settings({
   const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
   const [adaptersError, setAdaptersError] = useState("");
   const [auth, setAuth] = useState<{ loggedIn: boolean; email?: string; apiKeyConfigured: boolean } | null>(null);
-  const [loginBusy, setLoginBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [discover, setDiscover] = useState<AdapterDiscoverItem[]>([]);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -357,10 +358,7 @@ export function Settings({
               {t("wizard.workspace.path")}
               <input value={draft.agent.cwd} onChange={(e) => setDraft({ ...draft, agent: { ...draft.agent, cwd: e.target.value } })} />
             </label>
-            {modelSource === "fallback" && caps?.liveCatalog !== false && (
-              <p className="warn">{t("wizard.model.fallback")}{modelError ? ` (${modelError})` : ""}</p>
-            )}
-            {modelError && caps?.liveCatalog === false && <p className="warn">{modelError}</p>}
+            <CatalogFallbackNotice liveCatalog={caps?.liveCatalog} source={modelSource} error={modelError} />
             {caps?.models !== false && (
               <ModelPicker
                 models={models}
@@ -490,35 +488,23 @@ export function Settings({
                 </label>
               </>
             )}
-            {auth?.loggedIn ? (
-              <p className="ok">
-                {t("wizard.cred.signedIn")}
-                {auth.email ? ` (${auth.email})` : ""}
-              </p>
-            ) : (
-              <p className="muted">{t("wizard.cred.signedOut")}</p>
-            )}
+            {caps?.auth.kind === "sdk-login" &&
+              (auth?.loggedIn ? (
+                <p className="ok">
+                  {t("wizard.cred.signedIn")}
+                  {auth.email ? ` (${auth.email})` : ""}
+                </p>
+              ) : (
+                <p className="muted">{t("wizard.cred.signedOut")}</p>
+              ))}
             {caps?.auth.kind === "sdk-login" && (
-              <button
-                type="button"
-                className="ghost"
-                disabled={loginBusy}
-                onClick={async () => {
-                  setError("");
-                  setLoginBusy(true);
-                  try {
-                    await api.adapterLogin(draft.agent.adapter);
-                    setAuth(await api.adapterStatus(draft.agent.adapter));
-                    await loadModels(draft.agent.adapter);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : String(err));
-                  } finally {
-                    setLoginBusy(false);
-                  }
+              <SdkLoginControls
+                adapterId={draft.agent.adapter}
+                onSignedIn={async () => {
+                  setAuth(await api.adapterStatus(draft.agent.adapter));
+                  await loadModels(draft.agent.adapter);
                 }}
-              >
-                {loginBusy ? t("wizard.cred.loginBusy") : t("wizard.cred.login")}
-              </button>
+              />
             )}
             {keyConfigured && <p className="ok">{t("wizard.cred.keyConfigured")}</p>}
             {keyFromEnv && <p className="warn">{t("settings.cred.fromEnv")}</p>}

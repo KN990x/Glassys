@@ -4,6 +4,7 @@ import {
   AdapterError,
   errorMessage,
   pendingRun,
+  requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -106,8 +107,11 @@ export const codexAdapter: Adapter = {
     return {
       models: CODEX_STATIC_CATALOG,
       source: "fallback" as const,
-      error: "Codex SDK does not expose a live model catalog",
     };
+  },
+
+  async probe() {
+    await requireHostCommand("codex", "Codex CLI is not on PATH. Install the Codex CLI on this host.");
   },
 
   async create(opts) {

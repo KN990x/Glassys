@@ -22,11 +22,17 @@ cd glassys && pnpm run service:uninstall
 Uninstall stops the service and removes the unit/LaunchAgent. It does not delete the clone or `data/` (operator hash, transcript).
 
 - **macOS:** LaunchAgent `~/Library/LaunchAgents/dev.kn990x.glassys.plist` (`KeepAlive`).
-- **Linux:** systemd user unit `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot).
+- **Linux:** systemd user unit `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot). If you install from a graphical session, the unit copies `DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS` when they are set; linger after reboot still has no display.
 
 Data defaults to `<repo>/data`. Override with `GLASSYS_DATA_DIR` when you run `service:install`. The installer does not copy API keys into the unit.
 
-Open `http://127.0.0.1:8787` and complete the onboarding wizard before using chat. Defaults: bind `127.0.0.1:8787`. Do not bind `0.0.0.0` unless you understand that auto-run + host cwd is operator access to the machine.
+Open `http://127.0.0.1:8787` (or `GLASSYS_PORT` if you set it) and complete the onboarding wizard before using chat. Defaults: bind `127.0.0.1:8787`. Do not bind `0.0.0.0` unless you understand that auto-run + host cwd is operator access to the machine.
+
+## Cursor SDK login (not cursor-cli)
+
+Glassys does not reuse Cursor IDE or `cursor-cli` / `cursor-agent` sessions. Sign in with **Cursor SDK** in the wizard (the PWA shows a URL if no browser opens on the host) or set `CURSOR_API_KEY`. Store path: `~/.cursor/sdk/auth.json` for the user whose `HOME` the service uses. See the credential matrix in the README.
+
+The login POST returns as soon as the SDK has a URL; it does not hold an HTTP connection until you finish in the browser. Long proxy idle timeouts still apply to agent **WebSocket** runs, not to this short POST.
 
 ## Foreground
 

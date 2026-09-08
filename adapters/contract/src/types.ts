@@ -47,6 +47,11 @@ export interface AdapterSession {
   dispose(): Promise<void>;
 }
 
+export interface AdapterLoginOptions {
+  onLoginUrl?: (url: string) => void;
+  signal?: AbortSignal;
+}
+
 export interface Adapter {
   readonly id: string;
   readonly displayName: string;
@@ -70,7 +75,7 @@ export interface Adapter {
   };
   /** Optional host check (missing SDK, missing binary). Throw if the adapter cannot create/send. */
   probe?(): Promise<void>;
-  loginInteractive?(): Promise<void>;
+  loginInteractive?(opts?: AdapterLoginOptions): Promise<void>;
   authStatus?(): Promise<{ loggedIn: boolean; email?: string }>;
   discover?(): Promise<AdapterDiscoverItem[]>;
   /** Process-level teardown (shared servers). Session dispose stays on AdapterSession. */

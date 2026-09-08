@@ -157,6 +157,7 @@ export function Chat({
     if (!vv) return;
     const sync = () => {
       document.documentElement.style.setProperty("--vv-height", `${Math.round(vv.height)}px`);
+      document.documentElement.style.setProperty("--vv-offset", `${Math.round(vv.offsetTop)}px`);
     };
     sync();
     vv.addEventListener("resize", sync);
@@ -165,6 +166,7 @@ export function Chat({
       vv.removeEventListener("resize", sync);
       vv.removeEventListener("scroll", sync);
       document.documentElement.style.removeProperty("--vv-height");
+      document.documentElement.style.removeProperty("--vv-offset");
     };
   }, []);
 
@@ -344,12 +346,11 @@ export function Chat({
               />
             )}
             {modelSource === "fallback" && caps?.liveCatalog !== false && caps && (
-              <span className="warn">
+              <p className="warn" title={catalogError || undefined}>
                 {t("wizard.model.fallbackShort")}
-                {catalogError ? ` (${catalogError})` : ""}
-              </span>
+              </p>
             )}
-            {busy && <p className="muted composer-hint">{t("chat.queuedHint")}</p>}
+            {queued && <p className="muted composer-hint">{t("chat.queuedHint")}</p>}
           </div>
           <div className="composer-box">
             <textarea
@@ -398,14 +399,8 @@ export function Chat({
 
 function SendIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 19V5m0 0 6 6M12 5 6 11"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4 5.5 18h4.2L12 12.5 14.3 18h4.2L12 4z" fill="currentColor" />
     </svg>
   );
 }

@@ -417,10 +417,12 @@ describe("runtime queue", () => {
       void enqueueMessage("one");
       await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
       await expect(cancelRun()).resolves.toBeUndefined();
-      await drainEmit();
-      const err = (await readTranscript()).find((e) => e.type === "run.error");
-      expect(err).toMatchObject({ type: "run.error", phase: "run" });
       control.go();
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
+      await drainEmit();
+      const events = await readTranscript();
+      expect(events.some((e) => e.type === "run.error")).toBe(false);
+      expect(events.some((e) => e.type === "run.cancelled")).toBe(true);
     } finally {
       fakeAdapter.create = origCreate;
     }

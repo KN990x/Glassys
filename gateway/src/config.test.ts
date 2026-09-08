@@ -91,4 +91,35 @@ describe("config patch", () => {
       vi.mocked(probeAdapter).mockRestore();
     }
   });
+
+  it("probes Gemini for real when switching to it", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { applyPatch } = await import("./config.js");
+    await expect(applyPatch({ agent: { adapter: "gemini" } })).rejects.toThrow(/Gemini CLI SDK/);
+  });
+
+  it("does not probe when saving the already selected adapter", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const cfg = defaultConfig();
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { probeAdapter } = await import("./adapters.js");
+    vi.mocked(probeAdapter).mockClear();
+    vi.mocked(probeAdapter).mockResolvedValue({ ok: false, error: "Gemini CLI SDK is not available" });
+    try {
+      const { applyPatch } = await import("./config.js");
+      const { config } = await applyPatch({ agent: { adapter: "cursor" }, space: { locale: "es" } });
+      expect(config.space.locale).toBe("es");
+      expect(probeAdapter).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(probeAdapter).mockRestore();
+    }
+  });
 });

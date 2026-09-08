@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { defaultConfig, type RedactedConfig, type ServerMessage } from "@glassys/protocol";
 import { I18nProvider } from "./i18n";
+import "./styles.css";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -176,5 +177,24 @@ describe("Chat composer and layout", () => {
     });
     await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "hello");
     expect(send().disabled).toBe(false);
+  });
+
+  it("stacks composer fallback below the picker instead of beside it", async () => {
+    const { api } = await import("./api");
+    vi.mocked(api.models).mockResolvedValueOnce({
+      models: [{ id: "grok-4.6", displayName: "Grok 4.6" }],
+      source: "fallback",
+      error: "API key is required for cloud operations. Set CURSOR_API_KEY, pass apiKey, or run Cursor.auth.login().",
+    });
+    await renderChat();
+    const meta = host.querySelector(".composer-meta");
+    expect(meta).toBeTruthy();
+    const warn = meta?.querySelector(".warn");
+    expect(warn?.tagName).toBe("P");
+    expect(warn?.textContent).toBe("Using fallback catalog");
+    expect(warn?.textContent).not.toMatch(/CURSOR_API_KEY/);
+    expect(meta?.querySelector(".composer-hint")).toBeNull();
+    expect(warn?.previousElementSibling?.classList.contains("model-picker")).toBe(true);
+    expect(meta?.querySelector("p.warn")?.parentElement).toBe(meta);
   });
 });

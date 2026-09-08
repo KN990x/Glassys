@@ -40,6 +40,22 @@ function closeOpenThinking(blocks: Block[]): Block[] {
   return changed ? next : blocks;
 }
 
+function closeOpenTools(blocks: Block[]): Block[] {
+  let changed = false;
+  const next = blocks.map((b) => {
+    if (b.kind === "tool" && b.status === "running") {
+      changed = true;
+      return { ...b, status: "done" as const };
+    }
+    return b;
+  });
+  return changed ? next : blocks;
+}
+
+function closeOpenWork(blocks: Block[]): Block[] {
+  return closeOpenThinking(closeOpenTools(blocks));
+}
+
 export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block[] {
   const next = blocks.slice();
   const last = next[next.length - 1];
@@ -129,12 +145,12 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       return next.filter((b) => !(b.kind === "banner" && b.tone === "queue"));
     case "run.error":
       next.push({ id: nid("err"), kind: "banner", text: event.message, tone: "error" });
-      return closeOpenThinking(next);
+      return closeOpenWork(next);
     case "run.cancelled":
       next.push({ id: nid("c"), kind: "banner", text: "cancelled", tone: "info" });
-      return closeOpenThinking(next);
+      return closeOpenWork(next);
     case "run.done":
-      return closeOpenThinking(next);
+      return closeOpenWork(next);
     default:
       return next;
   }

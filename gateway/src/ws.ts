@@ -11,7 +11,7 @@ import {
 import { verifyEdge, verifyRequestSession, verifySession } from "./auth.js";
 import { originAllowed } from "./cors.js";
 import { redacted, loadConfig } from "./config.js";
-import { hub, isHandshakeEphemeral } from "./hub.js";
+import { hub, flushHandshakeBuffer } from "./hub.js";
 import { log } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { createMutex } from "./lock.js";
@@ -208,11 +208,12 @@ async function handleClient(
     hub.send(ws, { type: "transcript.snapshot", events });
     await drainEmit();
     const later = await readTranscript();
-    for (const ev of later.slice(events.length)) {
+    const extra = later.slice(events.length);
+    for (const ev of extra) {
       hub.send(ws, ev);
     }
-    for (const buffered of hub.takeBuffer(ws)) {
-      if (isHandshakeEphemeral(buffered)) hub.send(ws, buffered);
+    for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), extra)) {
+      hub.send(ws, buffered);
     }
     hub.release(ws);
     hub.send(ws, { type: "session", ...snapshotRuntime() });

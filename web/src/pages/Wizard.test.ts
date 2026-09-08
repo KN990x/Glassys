@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { pickWizardAdapter, wizardFinishPatch } from "./Wizard";
+import { pickWizardAdapter, wizardCredentialReady, wizardFinishPatch } from "./Wizard";
 
 const caps = {
   models: true,
@@ -61,26 +61,13 @@ describe("pickWizardAdapter", () => {
   });
 });
 
-
-describe("wizardFinishPatch", () => {
-  it("persists cwd and model when finishing onboarding", () => {
-    expect(
-      wizardFinishPatch({
-        adapterId: "cursor",
-        cwd: "/tmp/project",
-        model: "grok-4.6",
-        modelParams: [{ id: "effort", value: "xhigh" }],
-        options: { sandbox: true, autoRun: false },
-      }),
-    ).toEqual({
-      agent: {
-        adapter: "cursor",
-        cwd: "/tmp/project",
-        model: "grok-4.6",
-        modelParams: [{ id: "effort", value: "xhigh" }],
-        options: { sandbox: true, autoRun: false },
-      },
-      onboarding: { completed: true },
-    });
+describe("wizardCredentialReady", () => {
+  it("requires SDK login or a key for Cursor, not for other auth kinds", () => {
+    expect(wizardCredentialReady({ authKind: "sdk-login" })).toBe(false);
+    expect(wizardCredentialReady({ authKind: "sdk-login", loggedIn: true })).toBe(true);
+    expect(wizardCredentialReady({ authKind: "sdk-login", keyConfigured: true })).toBe(true);
+    expect(wizardCredentialReady({ authKind: "sdk-login", apiKeyDraft: "cursor_x" })).toBe(true);
+    expect(wizardCredentialReady({ authKind: "api-key" })).toBe(true);
+    expect(wizardCredentialReady({ authKind: "cli-binary" })).toBe(true);
   });
 });

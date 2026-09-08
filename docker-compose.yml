@@ -18,6 +18,7 @@ services:
     volumes:
       - glassys-data:/data
       - ${GLASSYS_WORKSPACE:-./workspace}:/workspace
+    restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

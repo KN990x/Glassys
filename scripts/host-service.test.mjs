@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  gatewayListenPort,
+  graphicalEnvFrom,
   nodeMeetsMin,
   renderLaunchdPlist,
   renderSystemdUserUnit,
@@ -53,4 +55,27 @@ test("systemd user unit restarts and uses default.target", () => {
   assert.match(unit, /WorkingDirectory=\/opt\/glassys/);
   assert.match(unit, /ExecStart=\/opt\/homebrew\/bin\/node \/opt\/glassys\/gateway\/dist\/index.js/);
   assert.doesNotMatch(unit, /CURSOR_API_KEY|User=glassys/);
+  assert.doesNotMatch(unit, /Environment=DISPLAY=/);
+});
+
+test("systemd user unit inherits graphical session env when present", () => {
+  const unit = renderSystemdUserUnit({
+    ...opts,
+    graphical: graphicalEnvFrom({
+      DISPLAY: ":0",
+      WAYLAND_DISPLAY: "wayland-0",
+      DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
+      CURSOR_API_KEY: "cursor_secret",
+    }),
+  });
+  assert.match(unit, /Environment=DISPLAY=:0/);
+  assert.match(unit, /Environment=WAYLAND_DISPLAY=wayland-0/);
+  assert.match(unit, /Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=\/run\/user\/1000\/bus/);
+  assert.doesNotMatch(unit, /CURSOR_API_KEY/);
+});
+
+test("gatewayListenPort reads GLASSYS_PORT", () => {
+  assert.equal(gatewayListenPort({}), 8787);
+  assert.equal(gatewayListenPort({ GLASSYS_PORT: "9000" }), 9000);
+  assert.equal(gatewayListenPort({ GLASSYS_PORT: "nope" }), 8787);
 });

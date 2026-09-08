@@ -148,7 +148,8 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
     }
     const adapter = tryGetAdapter(after.agent.adapter);
     if (adapter?.normalizeConfig) after.agent = adapter.normalizeConfig(after.agent);
-    const adapterChanging = isObj(rest.agent) && typeof rest.agent.adapter === "string";
+    const adapterChanging =
+      isObj(rest.agent) && typeof rest.agent.adapter === "string" && rest.agent.adapter !== before.agent.adapter;
     const completing = rest.onboarding?.completed === true;
     if (adapter && (adapterChanging || completing)) {
       const availability = await probeAdapter(adapter);

@@ -13,6 +13,8 @@ import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
+import { CatalogFallbackNotice } from "../components/CatalogFallback";
+import { SdkLoginControls } from "../components/SdkLogin";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, adapterKeyConfigured } from "../adapterOptions";
 
 type StepId = "adapter" | "workspace" | "credential" | "model" | "rules" | "execution" | "acp";
@@ -42,6 +44,16 @@ export function pickWizardAdapter(adapters: AdapterPublicInfo[], preferred?: str
   return adapters.find(adapterSelectable)?.id;
 }
 
+export function wizardCredentialReady(input: {
+  authKind?: string;
+  loggedIn?: boolean;
+  keyConfigured?: boolean;
+  apiKeyDraft?: string;
+}): boolean {
+  if (input.authKind !== "sdk-login") return true;
+  return Boolean(input.loggedIn || input.keyConfigured || input.apiKeyDraft?.trim());
+}
+
 export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; onDone: () => void; onConfig: (c: RedactedConfig) => void }) {
   const t = useT();
   const [step, setStep] = useState(0);
@@ -59,7 +71,6 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   const [options, setOptions] = useState<Record<string, unknown>>(config.agent.options ?? {});
   const [error, setError] = useState("");
   const [adaptersError, setAdaptersError] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [discover, setDiscover] = useState<AdapterDiscoverItem[]>([]);
   const [locale, setLocale] = useState(config.space.locale);
@@ -176,6 +187,18 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
       setError(t("wizard.workspace.required"));
       return;
     }
+    if (
+      id === "credential" &&
+      !wizardCredentialReady({
+        authKind: caps?.auth.kind,
+        loggedIn: auth?.loggedIn,
+        keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
+        apiKeyDraft: apiKey,
+      })
+    ) {
+      setError(t("wizard.cred.required"));
+      return;
+    }
     if (id === "model" && caps?.models !== false && !model.trim()) {
       setError(t("wizard.model.required"));
       return;
@@ -232,6 +255,17 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
           setError(t("wizard.model.required"));
           return;
         }
+        if (
+          !wizardCredentialReady({
+            authKind: caps?.auth.kind,
+            loggedIn: auth?.loggedIn,
+            keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
+            apiKeyDraft: apiKey,
+          })
+        ) {
+          setError(t("wizard.cred.required"));
+          return;
+        }
         await api.saveConfig(
           wizardFinishPatch({ adapterId, cwd, model, modelParams, options }),
         );
@@ -253,6 +287,17 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         }
         if (caps?.models !== false && !model.trim()) {
           setError(t("wizard.model.required"));
+          return;
+        }
+        if (
+          !wizardCredentialReady({
+            authKind: caps?.auth.kind,
+            loggedIn: auth?.loggedIn,
+            keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
+            apiKeyDraft: apiKey,
+          })
+        ) {
+          setError(t("wizard.cred.required"));
           return;
         }
         await api.saveConfig(
@@ -370,53 +415,42 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         {id === "credential" && (
           <div className="stack">
             <p>{t("wizard.cred.body")}</p>
-            {auth?.loggedIn ? (
-              <p className="ok">
-                {t("wizard.cred.signedIn")}
-                {auth.email ? ` (${auth.email})` : ""}
-              </p>
-            ) : (
-              <p className="muted">{t("wizard.cred.signedOut")}</p>
-            )}
+            {caps?.auth.kind === "sdk-login" &&
+              (auth?.loggedIn ? (
+                <p className="ok">
+                  {t("wizard.cred.signedIn")}
+                  {auth.email ? ` (${auth.email})` : ""}
+                </p>
+              ) : (
+                <p className="muted">{t("wizard.cred.signedOut")}</p>
+              ))}
             {(config.secrets.adapters?.[adapterId]?.apiKey.configured ||
               (adapterId === "cursor" && config.secrets.cursorApiKey.configured)) && (
               <p className="ok">{t("wizard.cred.keyConfigured")}</p>
             )}
             {caps?.auth.kind === "sdk-login" && (
-              <button
-                type="button"
-                className="primary"
-                disabled={loginBusy}
-                onClick={async () => {
-                  setError("");
-                  setLoginBusy(true);
-                  try {
-                    await api.adapterLogin(adapterId);
-                    onConfig(await api.config());
-                    await refreshAuth();
-                    const r = await api.models(adapterId).catch(() => null);
-                    if (r) {
-                      setModels(r.models);
-                      setModelSource(r.source);
-                      setModelError(r.error || "");
-                    }
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : String(err));
-                  } finally {
-                    setLoginBusy(false);
+              <SdkLoginControls
+                adapterId={adapterId}
+                onSignedIn={async () => {
+                  onConfig(await api.config());
+                  await refreshAuth();
+                  const r = await api.models(adapterId).catch(() => null);
+                  if (r) {
+                    setModels(r.models);
+                    setModelSource(r.source);
+                    setModelError(r.error || "");
                   }
                 }}
-              >
-                {loginBusy ? t("wizard.cred.loginBusy") : t("wizard.cred.login")}
-              </button>
+              />
             )}
             <p className="muted">
-              {t("wizard.cred.loginHint")}
-              {caps?.auth.envNames?.length ? ` (${caps.auth.envNames.join(", ")})` : ""}
+              {caps?.auth.kind === "sdk-login" ? t("wizard.cred.loginHint") : t("wizard.cred.keyHint")}
+              {caps?.auth.envNames?.length ? ` ${caps.auth.envNames.join(", ")}` : ""}
             </p>
-            {!auth?.loggedIn && !adapterKeyConfigured(config.secrets, adapterId) && (
-              <p className="warn">{t("wizard.cred.unsignedWarn")}</p>
-            )}
+            {caps?.auth.kind === "sdk-login" &&
+              !auth?.loggedIn &&
+              !adapterKeyConfigured(config.secrets, adapterId) &&
+              !apiKey.trim() && <p className="warn">{t("wizard.cred.unsignedWarn")}</p>}
             <details>
               <summary>{t("wizard.cred.optional")}</summary>
               <label>
@@ -431,13 +465,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         {id === "model" && (
           <div className="stack">
             <p>{t("wizard.model.body")}</p>
-            {modelSource === "fallback" && caps?.liveCatalog !== false && (
-              <p className="warn">
-                {t("wizard.model.fallback")}
-                {modelError ? ` (${modelError})` : ""}
-              </p>
-            )}
-            {modelError && caps?.liveCatalog === false && <p className="warn">{modelError}</p>}
+            <CatalogFallbackNotice liveCatalog={caps?.liveCatalog} source={modelSource} error={modelError} />
             <ModelPicker
               models={models}
               modelId={model}
@@ -565,7 +593,23 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               {t("wizard.back")}
             </button>
           )}
-          <button type="button" className="primary" onClick={() => void next()} disabled={!adaptersReady || adapters.length === 0 || submitting}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void next()}
+            disabled={
+              !adaptersReady ||
+              adapters.length === 0 ||
+              submitting ||
+              (id === "credential" &&
+                !wizardCredentialReady({
+                  authKind: caps?.auth.kind,
+                  loggedIn: auth?.loggedIn,
+                  keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
+                  apiKeyDraft: apiKey,
+                }))
+            }
+          >
             {last ? t("wizard.finish") : t("wizard.next")}
           </button>
         </div>
