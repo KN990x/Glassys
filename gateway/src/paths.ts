@@ -19,6 +19,10 @@ export const paths = {
   uploads: () => join(defaultDataDir(), "uploads"),
   adapterStore: (id: string) =>
     id === "cursor" ? join(defaultDataDir(), "cursor-store") : join(defaultDataDir(), `${id}-store`),
+  schedules: () => join(defaultDataDir(), "schedules.json"),
+  pushSubscriptions: () => join(defaultDataDir(), "push-subscriptions.json"),
+  upgradeStatus: () => join(defaultDataDir(), "upgrade-status.json"),
+  upgradeLog: () => join(defaultDataDir(), "upgrade.log"),
 };
 
 export function webDir(): string {

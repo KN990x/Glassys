@@ -62,6 +62,7 @@
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.done" } } },
     { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "run.error" }, "message": { "type": "string" }, "phase": { "enum": ["startup", "run"] } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.cancelled" } } },
+    { "type": "object", "required": ["type", "idleMs"], "properties": { "type": { "const": "run.stalled" }, "idleMs": { "type": "integer" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.usage" }, "inputTokens": { "type": "integer" }, "outputTokens": { "type": "integer" } } },
     { "type": "object", "required": ["type", "profileId", "busy"], "properties": { "type": { "const": "session" }, "profileId": { "type": "string" }, "agentId": { "type": ["string", "null"] }, "busy": { "type": "boolean" }, "threadId": { "type": "string" }, "runStartedAt": { "type": "number" } } },
     { "type": "object", "required": ["type", "items"], "properties": { "type": { "const": "queue.snapshot" }, "items": { "type": "array" } } },

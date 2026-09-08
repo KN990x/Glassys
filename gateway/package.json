@@ -6,7 +6,9 @@
   "bin": {
     "glassys": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
@@ -15,20 +17,23 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@glassys/adapter-acp": "workspace:*",
+    "@glassys/adapter-claude": "workspace:*",
+    "@glassys/adapter-codex": "workspace:*",
     "@glassys/adapter-contract": "workspace:*",
     "@glassys/adapter-cursor": "workspace:*",
-    "@glassys/adapter-claude": "workspace:*",
-    "@glassys/adapter-opencode": "workspace:*",
     "@glassys/adapter-gemini": "workspace:*",
-    "@glassys/adapter-codex": "workspace:*",
-    "@glassys/adapter-acp": "workspace:*",
+    "@glassys/adapter-opencode": "workspace:*",
     "@glassys/protocol": "workspace:*",
+    "croner": "^10.0.1",
     "jose": "^6.1.0",
+    "web-push": "^3.6.7",
     "ws": "^8.18.3",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",

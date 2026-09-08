@@ -53,6 +53,12 @@ describe("ThreadDrawer", () => {
             onRename={async () => undefined}
             onClose={() => undefined}
             git={{ branch: "main", dirty: true }}
+            currentCwd="/opt/stack"
+            pins={["/opt/pinned"]}
+            recents={["/opt/stack", "/tmp/old"]}
+            onOpenCwd={() => undefined}
+            onPin={() => undefined}
+            onUnpin={() => undefined}
           />
         </I18nProvider>,
       );
@@ -60,6 +66,7 @@ describe("ThreadDrawer", () => {
     expect(host.textContent).toContain("/opt/stack");
     expect(host.textContent).toContain("main");
     expect(host.textContent).toContain("dirty");
+    expect(host.textContent).toContain("/opt/pinned");
     expect(host.querySelector("button.primary")?.hasAttribute("disabled")).toBe(true);
     expect(document.body.style.overflow).toBe("hidden");
   });

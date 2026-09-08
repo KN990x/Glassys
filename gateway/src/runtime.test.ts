@@ -112,6 +112,9 @@ describe("runtime queue", () => {
     const { shutdownRuntime, setRunCancelTimeoutForTests, DEFAULT_RUN_CANCEL_TIMEOUT_MS } = await import("./runtime.js");
     await shutdownRuntime();
     setRunCancelTimeoutForTests(DEFAULT_RUN_CANCEL_TIMEOUT_MS);
+    const { setNowForTests, setStallPollMsForTests } = await import("./runtime.js");
+    setNowForTests();
+    setStallPollMsForTests(1000);
   });
 
   it("rejects messages before onboarding is complete", async () => {
@@ -723,6 +726,81 @@ describe("runtime queue", () => {
       await cancelRun();
       await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
       await drainEmit();
+    } finally {
+      fakeAdapter.create = origCreate;
+    }
+  });
+
+  it("emits run.stalled once while the run is still open", async () => {
+    control.hold();
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    cfg.session.stallSeconds = 1;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { hub } = await import("./hub.js");
+    const live: string[] = [];
+    const orig = hub.broadcast.bind(hub);
+    hub.broadcast = (msg) => {
+      live.push(msg.type);
+      orig(msg);
+    };
+    let now = 1_000_000;
+    try {
+      const { enqueueMessage, drainEmit, setNowForTests, setStallPollMsForTests } = await import("./runtime.js");
+      setNowForTests(() => now);
+      setStallPollMsForTests(20);
+      const run = enqueueMessage("stall-me");
+      await waitUntil(() => live.includes("run.start"));
+      now += 1500;
+      await waitUntil(() => live.filter((t) => t === "run.stalled").length === 1);
+      now += 2000;
+      await new Promise((r) => setTimeout(r, 80));
+      expect(live.filter((t) => t === "run.stalled").length).toBe(1);
+      control.go();
+      await run;
+      await drainEmit();
+    } finally {
+      hub.broadcast = orig;
+      const { setNowForTests, setStallPollMsForTests } = await import("./runtime.js");
+      setNowForTests();
+      setStallPollMsForTests(1000);
+    }
+  });
+
+  it("adds run.usage to the all-time ledger and thread summary", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    cfg.session.stallSeconds = 0;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const origCreate = fakeAdapter.create;
+    fakeAdapter.create = async () => ({
+      agentId: "agent-usage",
+      async send(_text, onEvent) {
+        return pendingRun("run-usage", async () => {
+          onEvent({ type: "run.usage", inputTokens: 4, outputTokens: 9 });
+          return "finished";
+        });
+      },
+      async dispose() {
+        /* noop */
+      },
+    });
+    try {
+      const { enqueueMessage, drainEmit, listLiveThreads, readTranscript } = await import("./runtime.js");
+      const { loadState } = await import("./state.js");
+      await enqueueMessage("count tokens");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.usage"));
+      await drainEmit();
+      const state = await loadState();
+      expect(state.usage.inputTokens).toBe(4);
+      expect(state.usage.outputTokens).toBe(9);
+      expect(state.usage.byAdapter.cursor?.outputTokens).toBe(9);
+      const threads = await listLiveThreads();
+      expect(threads[0]?.usage).toEqual({ inputTokens: 4, outputTokens: 9 });
     } finally {
       fakeAdapter.create = origCreate;
     }

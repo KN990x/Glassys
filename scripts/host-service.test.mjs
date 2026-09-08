@@ -7,6 +7,7 @@ import {
   renderLaunchdPlist,
   renderSystemdUserUnit,
   systemdQuote,
+  upgradeRepo,
   xmlEscape,
 } from "./host-service.mjs";
 
@@ -44,12 +45,14 @@ test("launchd plist keeps the process alive and does not embed secrets", () => {
   assert.match(xml, /<key>KeepAlive<\/key>\s*<true\/>/);
   assert.match(xml, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(xml, /<string>\/opt\/homebrew\/bin\/node<\/string>/);
+  assert.match(xml, /<key>GLASSYS_SERVICE<\/key>\s*<string>1<\/string>/);
   assert.match(xml, /<key>GLASSYS_DATA_DIR<\/key>\s*<string>\/opt\/glassys\/data<\/string>/);
   assert.doesNotMatch(xml, /CURSOR_API_KEY|ANTHROPIC_API_KEY|password/i);
 });
 
 test("systemd user unit restarts and uses default.target", () => {
   const unit = renderSystemdUserUnit(opts);
+  assert.match(unit, /Environment=GLASSYS_SERVICE=1/);
   assert.match(unit, /Restart=always/);
   assert.match(unit, /WantedBy=default.target/);
   assert.match(unit, /WorkingDirectory=\/opt\/glassys/);
@@ -93,4 +96,27 @@ test("unit and plist inject GLASSYS_PORT from listenEnv", () => {
   });
   assert.match(xml, /<key>GLASSYS_PORT<\/key>\s*<string>9000<\/string>/);
   assert.match(xml, /<key>GLASSYS_BIND<\/key>\s*<string>127.0.0.1<\/string>/);
+});
+
+test("strict git pull failure does not install or build", () => {
+  let installed = false;
+  let built = false;
+  assert.throws(
+    () =>
+      upgradeRepo("/tmp", {
+        strict: true,
+        gitPull: () => ({ status: 1, stderr: "not ff", stdout: "" }),
+        pnpmInstall: () => {
+          installed = true;
+          return { status: 0 };
+        },
+        pnpmBuild: () => {
+          built = true;
+          return { status: 0 };
+        },
+      }),
+    /ff-only/,
+  );
+  assert.equal(installed, false);
+  assert.equal(built, false);
 });

@@ -33,6 +33,23 @@ export function cwdBasename(cwd: string): string {
   return parts[parts.length - 1] || cwd || "";
 }
 
+export function isImageMime(mime: string): boolean {
+  const n = mime === "image/jpg" ? "image/jpeg" : mime;
+  return n === "image/jpeg" || n === "image/png" || n === "image/webp" || n === "image/gif";
+}
+
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 102.4) / 10} KB`;
+  return `${Math.round(n / 1024 / 102.4) / 10} MB`;
+}
+
+export function slashQuery(text: string): string | null {
+  if (!text.startsWith("/")) return null;
+  if (text.includes("\n")) return null;
+  return text.slice(1);
+}
+
 export function blockMatchesQuery(
   block: { kind: string; text?: string; title?: string; path?: string; command?: string; chunk?: string },
   query: string,

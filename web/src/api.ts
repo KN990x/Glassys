@@ -69,16 +69,66 @@ export const api = {
       git?: { branch: string; dirty: boolean };
     }>("/api/reachability"),
   workspaces: (root?: string) =>
-    req<{ recents: string[]; workspaces: { path: string; name: string }[] }>(
+    req<{ recents: string[]; pins: string[]; workspaces: { path: string; name: string }[] }>(
       root ? `/api/workspaces?root=${encodeURIComponent(root)}` : "/api/workspaces",
     ),
+  pinWorkspaces: (pins: string[]) => req<{ pins: string[] }>("/api/workspaces/pins", { method: "PUT", body: JSON.stringify({ pins }) }),
+  openWorkspace: (cwd: string) =>
+    req<{ threads: ThreadSummary[]; currentId: string | null; config: RedactedConfig }>("/api/workspaces/open", {
+      method: "POST",
+      body: JSON.stringify({ cwd }),
+    }),
+  usage: () =>
+    req<{
+      inputTokens: number;
+      outputTokens: number;
+      byAdapter: Record<string, { inputTokens: number; outputTokens: number }>;
+      updatedAt: string;
+    }>("/api/usage"),
+  vapid: () => req<{ publicKey: string; subject: string }>("/api/push/vapid"),
+  pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    req<{ ok: boolean }>("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) }),
+  pushUnsubscribe: (endpoint: string) =>
+    req<{ ok: boolean }>("/api/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) }),
+  schedules: () =>
+    req<{
+      schedules: Array<{
+        id: string;
+        text: string;
+        cwd: string;
+        threadId?: string;
+        cron?: string;
+        at?: string;
+        enabled: boolean;
+        nextRun: string | null;
+      }>;
+    }>("/api/schedules"),
+  createSchedule: (body: { text: string; cwd?: string; threadId?: string; cron?: string; at?: string; enabled?: boolean }) =>
+    req<{ id: string; nextRun: string | null }>("/api/schedules", { method: "POST", body: JSON.stringify(body) }),
+  patchSchedule: (id: string, body: Record<string, unknown>) =>
+    req<{ id: string; nextRun: string | null }>(`/api/schedules/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteSchedule: (id: string) => req<{ ok: boolean }>(`/api/schedules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  adminUpdate: () =>
+    req<{
+      version: string;
+      protocolVersion: number;
+      git?: { sha: string; branch: string; dirty: boolean };
+      service: "launchd" | "systemd" | "none";
+      upgrading?: { phase: string; error?: string };
+    }>("/api/admin/update"),
+  adminUpdateCheck: () =>
+    req<{ behind: number; sha: string; branch: string; dirty: boolean }>("/api/admin/update/check", { method: "POST" }),
+  upgrade: () => req<{ ok: boolean; upgrading: boolean }>("/api/admin/upgrade", { method: "POST" }),
   upload: async (file: File) => {
     const token = getToken();
     const res = await fetch(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
       method: "POST",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        "Content-Type": file.type || "image/png",
+        "Content-Type": file.type || "application/octet-stream",
       },
       credentials: "include",
       body: file,

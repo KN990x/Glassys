@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockMatchesQuery, cwdBasename, formatRelativeTime, groupThreadsByCwd } from "./format";
+import { blockMatchesQuery, cwdBasename, formatRelativeTime, groupThreadsByCwd, slashQuery } from "./format";
 
 describe("format", () => {
   it("formats relative times", () => {
@@ -26,5 +26,11 @@ describe("format", () => {
   it("filters transcript blocks by query", () => {
     expect(blockMatchesQuery({ kind: "user", text: "restart nginx" }, "nginx")).toBe(true);
     expect(blockMatchesQuery({ kind: "tool", title: "bash", command: "systemctl status" }, "nginx")).toBe(false);
+  });
+
+  it("only treats a leading slash as a palette query", () => {
+    expect(slashQuery("/status")).toBe("status");
+    expect(slashQuery("hello /status")).toBeNull();
+    expect(slashQuery("/status\nmore")).toBeNull();
   });
 });

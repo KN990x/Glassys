@@ -9,11 +9,18 @@ const withSecretsLock = createMutex();
 
 const scrypt = promisify(scryptCb);
 
+export interface VapidKeys {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+}
+
 export interface SecretsFile {
   jwtSecret: string;
   operatorPasswordHash: string;
   jwtEpoch: number;
   adapters: Record<string, { apiKey: string }>;
+  vapid?: VapidKeys;
 }
 
 const ENV_BY_ADAPTER: Record<string, string[]> = {
@@ -35,7 +42,7 @@ async function readDisk(): Promise<SecretsFile> {
     const adapters = { ...(parsed.adapters ?? {}) };
     if (parsed.cursorApiKey && !adapters.cursor?.apiKey) adapters.cursor = { apiKey: parsed.cursorApiKey };
     const jwtEpoch = typeof parsed.jwtEpoch === "number" && Number.isInteger(parsed.jwtEpoch) ? parsed.jwtEpoch : 0;
-    return { ...empty(), ...parsed, jwtEpoch, adapters };
+    return { ...empty(), ...parsed, jwtEpoch, adapters, vapid: parsed.vapid };
   } catch {
     return empty();
   }
@@ -57,6 +64,7 @@ function applyEnv(file: SecretsFile): SecretsFile {
     operatorPasswordHash: process.env.GLASSYS_OPERATOR_PASSWORD_HASH || file.operatorPasswordHash,
     jwtEpoch: file.jwtEpoch ?? 0,
     adapters,
+    vapid: file.vapid,
   };
 }
 
@@ -76,6 +84,7 @@ async function writeSecrets(next: SecretsFile): Promise<void> {
     operatorPasswordHash: next.operatorPasswordHash,
     jwtEpoch: next.jwtEpoch ?? 0,
     adapters: next.adapters,
+    ...(next.vapid ? { vapid: next.vapid } : {}),
   };
   await writeFile(tmp, JSON.stringify(disk, null, 2), { mode: 0o600 });
   await rename(tmp, paths.secrets());
@@ -107,6 +116,7 @@ export async function patchSecrets(patch: {
   operatorPasswordHash?: string;
   jwtEpoch?: number;
   adapterApiKey?: { adapter: string; value: string };
+  vapid?: VapidKeys;
 }): Promise<SecretsFile> {
   return withSecretsLock(async () => {
     const disk = await readDisk();
@@ -115,6 +125,7 @@ export async function patchSecrets(patch: {
       operatorPasswordHash: patch.operatorPasswordHash ?? disk.operatorPasswordHash,
       jwtEpoch: patch.jwtEpoch ?? disk.jwtEpoch ?? 0,
       adapters: { ...disk.adapters },
+      vapid: patch.vapid ?? disk.vapid,
     };
     if (patch.adapterApiKey) {
       const { adapter, value } = patch.adapterApiKey;
@@ -166,6 +177,7 @@ export function secretsFlags(s: SecretsFile): {
   operatorPassword: boolean;
   adapters: Record<string, { apiKey: boolean }>;
   cursorApiKey: boolean;
+  vapidConfigured: boolean;
 } {
   const adapters: Record<string, { apiKey: boolean }> = {};
   for (const [id, rec] of Object.entries(s.adapters)) {
@@ -175,5 +187,6 @@ export function secretsFlags(s: SecretsFile): {
     operatorPassword: s.operatorPasswordHash.trim().length > 0,
     adapters,
     cursorApiKey: Boolean(s.adapters.cursor?.apiKey?.trim()),
+    vapidConfigured: Boolean(s.vapid?.publicKey && s.vapid?.privateKey),
   };
 }

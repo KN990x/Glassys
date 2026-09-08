@@ -13,6 +13,7 @@ const socket = vi.hoisted(() => {
   let onEvent: ((msg: ServerMessage) => void) | undefined;
   let onState: ((s: string) => void) | undefined;
   return {
+    sent: [] as unknown[],
     emit(msg: ServerMessage) {
       onEvent?.(msg);
     },
@@ -74,6 +75,11 @@ vi.mock("./api", () => ({
       hostname: "box",
       user: "ops",
     })),
+    workspaces: vi.fn(async () => ({ recents: [], pins: [], workspaces: [] })),
+    pinWorkspaces: vi.fn(async (pins: string[]) => ({ pins })),
+    openWorkspace: vi.fn(async () => ({ threads: [], currentId: null, config: {} })),
+    createSchedule: vi.fn(async () => ({ id: "s1", nextRun: null })),
+    upgrade: vi.fn(async () => ({ ok: true, upgrading: true })),
   },
   clearToken: vi.fn(),
   getToken: () => "tok",
@@ -93,7 +99,10 @@ vi.mock("./socket", () => ({
   openSocket: (handlers: { onEvent: (msg: ServerMessage) => void; onState: (s: string) => void }) => {
     socket.bind(handlers);
     return {
-      send: () => true,
+      send: (msg: unknown) => {
+        socket.sent.push(msg);
+        return true;
+      },
       close: () => undefined,
       setKeepalive: () => undefined,
     };
@@ -132,6 +141,7 @@ describe("Chat composer and layout", () => {
     act(() => root.unmount());
     host.remove();
     saveConfig.mockReset();
+    socket.sent.length = 0;
     vi.unstubAllGlobals();
   });
 
@@ -357,5 +367,23 @@ describe("Chat composer and layout", () => {
       textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     expect(textarea.value).toBe("hello");
+  });
+
+  it("opens slash templates at the start of the composer and inserts without sending", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    await typeIn(textarea, "hello /status");
+    expect(host.querySelector(".palette-inline")).toBeNull();
+    await typeIn(textarea, "/status");
+    expect(host.querySelector(".palette-inline")).toBeTruthy();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
+    expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
   });
 });

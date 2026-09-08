@@ -91,6 +91,7 @@ export function renderSystemdUserUnit(opts) {
     `PATH=${opts.path}`,
     `GLASSYS_DATA_DIR=${opts.dataDir}`,
     `GLASSYS_WEB_DIR=${opts.webDir}`,
+    `GLASSYS_SERVICE=1`,
   ];
   for (const [key, value] of Object.entries(opts.graphical ?? {})) {
     env.push(`${key}=${value}`);
@@ -135,6 +136,7 @@ export function renderLaunchdPlist(opts) {
     PATH: opts.path,
     GLASSYS_DATA_DIR: opts.dataDir,
     GLASSYS_WEB_DIR: opts.webDir,
+    GLASSYS_SERVICE: "1",
     ...(opts.graphical ?? {}),
     ...(opts.listenEnv ?? {}),
   };
@@ -391,10 +393,19 @@ print       write the unit/plist to stdout (no install)
   }
 
   if (cmd === "upgrade") {
-    upgradeRepo(root);
-    mkdirSync(opts.dataDir, { recursive: true });
-    if (platform === "darwin") installDarwin(opts);
-    else installLinux(opts);
+    const strict = process.env.GLASSYS_UPGRADE_STRICT === "1";
+    writeUpgradeStatus(opts.dataDir, "pulling");
+    try {
+      upgradeRepo(root, { strict, dataDir: opts.dataDir });
+      writeUpgradeStatus(opts.dataDir, "restart");
+      mkdirSync(opts.dataDir, { recursive: true });
+      if (platform === "darwin") installDarwin(opts);
+      else installLinux(opts);
+      writeUpgradeStatus(opts.dataDir, "idle");
+    } catch (err) {
+      writeUpgradeStatus(opts.dataDir, "error", err instanceof Error ? err.message : String(err));
+      throw err;
+    }
     return;
   }
 
@@ -406,16 +417,45 @@ print       write the unit/plist to stdout (no install)
   else installLinux(opts);
 }
 
-function upgradeRepo(root) {
-  const pull = run("git", ["pull", "--ff-only"], { cwd: root });
+function writeUpgradeStatus(dataDir, phase, error) {
+  try {
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, "upgrade-status.json"),
+      JSON.stringify({ phase, error, startedAt: new Date().toISOString() }, null, 2),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function upgradeRepo(root, { strict = false, dataDir, gitPull, pnpmInstall, pnpmBuild } = {}) {
+  const pull = gitPull ? gitPull() : run("git", ["pull", "--ff-only"], { cwd: root });
   if (pull.status !== 0) {
+    const detail = (pull.stderr || pull.stdout || "git pull --ff-only failed").trim();
+    if (strict || process.env.GLASSYS_UPGRADE_STRICT === "1") {
+      if (dataDir) writeUpgradeStatus(dataDir, "error", detail);
+      throw new Error(`git pull --ff-only failed:\n${detail}`);
+    }
     console.warn("git pull --ff-only failed; continuing with the current clone.");
     if (pull.stderr) console.warn(pull.stderr.trim());
   }
-  const inst = spawnSync("pnpm", ["install"], { cwd: root, stdio: "inherit" });
-  if (inst.status !== 0) fail("pnpm install failed.");
-  const built = spawnSync("pnpm", ["run", "build"], { cwd: root, stdio: "inherit" });
-  if (built.status !== 0) fail("pnpm run build failed.");
+  if (dataDir) writeUpgradeStatus(dataDir, "install");
+  const inst = pnpmInstall
+    ? pnpmInstall()
+    : spawnSync("pnpm", ["install"], { cwd: root, stdio: "inherit" });
+  if (inst.status !== 0) {
+    if (dataDir) writeUpgradeStatus(dataDir, "error", "pnpm install failed.");
+    throw new Error("pnpm install failed.");
+  }
+  if (dataDir) writeUpgradeStatus(dataDir, "build");
+  const built = pnpmBuild
+    ? pnpmBuild()
+    : spawnSync("pnpm", ["run", "build"], { cwd: root, stdio: "inherit" });
+  if (built.status !== 0) {
+    if (dataDir) writeUpgradeStatus(dataDir, "error", "pnpm run build failed.");
+    throw new Error("pnpm run build failed.");
+  }
 }
 
 function isMainModule() {

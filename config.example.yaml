@@ -55,3 +55,20 @@ session:
   # Gateway process start only. Switching threads / the next send still resume when the adapter can.
   resumeOnStart: true
   queue: fifo
+  stallSeconds: 180 # No run events for this long → run.stalled. 0 disables.
+  notifyOnComplete: true # Web Push when a run finishes, errors, stalls, or a tool is denied.
+
+prompts:
+  templates:
+    - id: status
+      slash: status
+      title: Host status
+      text: Check systemd/launchd failed units, disk usage, and memory. Summarize what needs attention.
+    - id: disk
+      slash: disk
+      title: Disk usage
+      text: Report filesystem usage and large directories that look abnormal.
+    - id: failed-units
+      slash: failed-units
+      title: Failed units
+      text: List failed or degraded services and recent journal errors.

@@ -107,7 +107,7 @@ export function promptWithAttachments(
 ): string {
   if (!attachments?.length) return text;
   const lines = attachments.map((a) => `- ${a.name} (${a.mime}): ${a.path}`);
-  const note = `The user attached ${attachments.length} image(s) at these absolute paths:\n${lines.join("\n")}`;
+  const note = `The user attached ${attachments.length} file(s) at these absolute paths:\n${lines.join("\n")}`;
   return text.trim() ? `${text.trim()}\n\n${note}` : note;
 }
 
@@ -116,6 +116,6 @@ export function imagePartsFromAttachments(
 ): Array<{ mime: string; name: string; data: string }> {
   if (!attachments?.length) return [];
   return attachments
-    .filter((a) => a.body && a.body.length > 0)
+    .filter((a) => a.body && a.body.length > 0 && a.mime.startsWith("image/"))
     .map((a) => ({ mime: a.mime, name: a.name, data: a.body!.toString("base64") }));
 }

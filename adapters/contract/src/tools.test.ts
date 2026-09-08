@@ -46,7 +46,7 @@ describe("extractDiff", () => {
 
   it("appends attachment paths to the user prompt", () => {
     expect(promptWithAttachments("hi", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("/tmp/a.png");
-    expect(promptWithAttachments("", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("image(s)");
+    expect(promptWithAttachments("", [{ path: "/tmp/a.png", mime: "image/png", name: "a.png" }])).toContain("file(s)");
   });
 
   it("encodes native image parts from attachment bytes", () => {
@@ -54,5 +54,8 @@ describe("extractDiff", () => {
     expect(imagePartsFromAttachments([{ mime: "image/png", name: "a.png", body: Buffer.from("hi") }])).toEqual([
       { mime: "image/png", name: "a.png", data: Buffer.from("hi").toString("base64") },
     ]);
+    expect(
+      imagePartsFromAttachments([{ mime: "text/plain", name: "a.log", body: Buffer.from("log") }]),
+    ).toEqual([]);
   });
 });

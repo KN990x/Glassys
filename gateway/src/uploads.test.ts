@@ -24,6 +24,15 @@ describe("uploads", () => {
     expect(() => assertImageMime("application/pdf")).toThrow(/jpeg/);
   });
 
+  it("allows text and log uploads and rejects binaries", async () => {
+    const log = await saveUpload(Buffer.from("unit failed"), "text/plain", "app.log");
+    expect(log.mime).toBe("text/plain");
+    const named = await saveUpload(Buffer.from("{}"), "application/octet-stream", "notes.json");
+    expect(named.mime).toBe("application/json");
+    await expect(saveUpload(Buffer.from("MZ"), "application/octet-stream", "a.exe")).rejects.toThrow(/jpeg/);
+    await expect(saveUpload(Buffer.from("a\0b"), "text/plain", "a.txt")).rejects.toThrow(/jpeg/);
+  });
+
   it("stores bytes off the transcript and resolves them by id", async () => {
     const att = await saveUpload(Buffer.from("png-bytes"), "image/png", "shot.png");
     expect(att.mime).toBe("image/png");

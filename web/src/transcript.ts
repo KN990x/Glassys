@@ -178,6 +178,9 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       return closeOpenWork(next);
     case "run.done":
       return closeOpenWork(next);
+    case "run.stalled":
+      next.push({ id: nid("stall"), kind: "banner", text: "stalled", tone: "info" });
+      return next;
     case "run.usage":
       next.push({ id: nid("use"), kind: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens });
       return next;

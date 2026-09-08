@@ -33,6 +33,8 @@ import {
   listAdapterInfo,
   listLiveThreads,
   listModels,
+  openWorkspace,
+  pinWorkspaces,
   renameLiveThread,
   startNewLiveThread,
   switchLiveThread,
@@ -42,6 +44,9 @@ import { listWorkspaces } from "./workspaces.js";
 import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
 import { liveThreadId } from "./threads.js";
 import { readGitContext } from "./host-git.js";
+import { ensureVapidKeys, removePushSubscription, savePushSubscription } from "./push.js";
+import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNextRun } from "./schedules.js";
+import { adminUpdateSnapshot, fetchBehind, startUpgrade } from "./admin-update.js";
 
 const GATEWAY_VERSION = (() => {
   try {
@@ -372,6 +377,155 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     return true;
   }
 
+  if (method === "GET" && path === "/api/admin/update") {
+    if (!(await requireAuth(req, res))) return true;
+    send(res, 200, await adminUpdateSnapshot());
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/admin/update/check") {
+    if (!(await requireAuth(req, res))) return true;
+    try {
+      send(res, 200, await fetchBehind());
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/admin/upgrade") {
+    if (!(await requireAuth(req, res))) return true;
+    try {
+      await startUpgrade();
+      send(res, 202, { ok: true, upgrading: true });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "GET" && path === "/api/push/vapid") {
+    if (!(await requireAuth(req, res))) return true;
+    send(res, 200, await ensureVapidKeys());
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/push/subscribe") {
+    if (!(await requireAuth(req, res))) return true;
+    const body = (await readJson(req)) as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+    try {
+      await savePushSubscription({
+        endpoint: String(body.endpoint || ""),
+        keys: { p256dh: String(body.keys?.p256dh || ""), auth: String(body.keys?.auth || "") },
+      });
+      send(res, 200, { ok: true });
+    } catch (err) {
+      send(res, 400, { error: err instanceof Error ? err.message : "invalid subscription" });
+    }
+    return true;
+  }
+
+  if (method === "DELETE" && path === "/api/push/subscribe") {
+    if (!(await requireAuth(req, res))) return true;
+    const body = (await readJson(req)) as { endpoint?: string };
+    await removePushSubscription(String(body.endpoint || ""));
+    send(res, 200, { ok: true });
+    return true;
+  }
+
+  if (method === "GET" && path === "/api/usage") {
+    if (!(await requireAuth(req, res))) return true;
+    const state = await loadState();
+    send(res, 200, state.usage);
+    return true;
+  }
+
+  if (method === "GET" && path === "/api/schedules") {
+    if (!(await requireAuth(req, res))) return true;
+    const jobs = await listSchedules();
+    send(res, 200, { schedules: jobs.map((j) => ({ ...j, nextRun: previewNextRun(j) })) });
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/schedules") {
+    if (!(await requireAuth(req, res))) return true;
+    const body = (await readJson(req)) as {
+      text?: string;
+      cwd?: string;
+      threadId?: string;
+      cron?: string;
+      at?: string;
+      enabled?: boolean;
+    };
+    try {
+      const cfg = await loadConfig();
+      const job = await createSchedule({
+        text: String(body.text || ""),
+        cwd: String(body.cwd || cfg.agent.cwd),
+        threadId: body.threadId,
+        cron: body.cron,
+        at: body.at,
+        enabled: body.enabled,
+      });
+      send(res, 200, { ...job, nextRun: previewNextRun(job) });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "PATCH" && path.startsWith("/api/schedules/")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/schedules/".length));
+    const body = (await readJson(req)) as Partial<{
+      text: string;
+      cwd: string;
+      threadId: string;
+      cron: string;
+      at: string;
+      enabled: boolean;
+    }>;
+    try {
+      const job = await patchSchedule(id, body);
+      send(res, 200, { ...job, nextRun: previewNextRun(job) });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "DELETE" && path.startsWith("/api/schedules/")) {
+    if (!(await requireAuth(req, res))) return true;
+    const id = decodeURIComponent(path.slice("/api/schedules/".length));
+    try {
+      await deleteSchedule(id);
+      send(res, 200, { ok: true });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
   if (method === "GET" && path === "/api/threads") {
     if (!(await requireAuth(req, res))) return true;
     send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
@@ -486,8 +640,41 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     try {
       send(res, 200, {
         recents: state.recentCwds || [],
+        pins: state.pinnedCwds || [],
         workspaces: root ? await listWorkspaces(root) : [],
       });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "PUT" && path === "/api/workspaces/pins") {
+    if (!(await requireAuth(req, res))) return true;
+    const body = (await readJson(req)) as { pins?: string[] };
+    try {
+      const pins = await pinWorkspaces(Array.isArray(body.pins) ? body.pins : []);
+      send(res, 200, { pins });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      throw err;
+    }
+    return true;
+  }
+
+  if (method === "POST" && path === "/api/workspaces/open") {
+    if (!(await requireAuth(req, res))) return true;
+    const body = (await readJson(req)) as { cwd?: string };
+    try {
+      await openWorkspace(String(body.cwd || ""));
+      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId(), config: await redacted() });
     } catch (err) {
       if (err instanceof HttpError) {
         send(res, err.status, { error: err.message });

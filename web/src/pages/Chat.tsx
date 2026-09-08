@@ -24,8 +24,9 @@ import { PermissionChip } from "../components/PermissionChip";
 import { Settings } from "./Settings";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
-import { blockMatchesQuery, cwdBasename } from "../format";
+import { blockMatchesQuery, cwdBasename, isImageMime, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
+import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 
 const COMPOSER_MAX_PX = 160;
 
@@ -107,6 +108,12 @@ export function Chat({
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [pins, setPins] = useState<string[]>([]);
+  const [recents, setRecents] = useState<string[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [restartNote, setRestartNote] = useState("");
   const sendRef = useRef<(msg: ClientMessage) => boolean>(() => false);
   const keepaliveRef = useRef<(seconds: number) => void>(() => undefined);
@@ -247,6 +254,13 @@ export function Chat({
         setGit(r.git);
       })
       .catch(() => undefined);
+    api
+      .workspaces()
+      .then((r) => {
+        setRecents(r.recents || []);
+        setPins(r.pins || []);
+      })
+      .catch(() => undefined);
   }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd]);
 
   useEffect(() => {
@@ -312,13 +326,25 @@ export function Chat({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSlashOpen(false);
+        setPaletteQuery("");
+        setPaletteOpen((v) => !v);
+        return;
+      }
       if (e.key !== "Escape") return;
+      if (paletteOpen || slashOpen) {
+        setPaletteOpen(false);
+        setSlashOpen(false);
+        return;
+      }
       if (settings) return;
       if (threadOpen) closeThreads();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settings, threadOpen, closeThreads]);
+  }, [settings, threadOpen, closeThreads, paletteOpen, slashOpen]);
 
   useEffect(() => {
     function onPop() {
@@ -336,6 +362,20 @@ export function Chat({
   }, [busy]);
 
   const waiting = queueItems.length > 0 || queued;
+  const liveUsage = (() => {
+    const meta = threads.find((th) => th.id === currentThreadId)?.usage;
+    if (meta && (meta.inputTokens || meta.outputTokens)) return meta;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    for (const b of blocks) {
+      if (b.kind === "usage") {
+        inputTokens += b.inputTokens || 0;
+        outputTokens += b.outputTokens || 0;
+      }
+    }
+    if (!inputTokens && !outputTokens) return null;
+    return { inputTokens, outputTokens };
+  })();
   const visibleBlocks = search.trim() ? blocks.filter((b) => blockMatchesQuery(b, search)) : blocks;
   const canSend = Boolean(text.trim() || drafts.length) && conn === "connected" && snapshotReady && protocolError === null;
   const queuedIds = new Set(queueItems.map((item) => item.id));
@@ -464,6 +504,137 @@ export function Chat({
     }
   }
 
+  async function refreshSites() {
+    try {
+      const r = await api.workspaces();
+      setRecents(r.recents || []);
+      setPins(r.pins || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function onOpenCwd(cwd: string) {
+    if (cwd === config.agent.cwd) {
+      closeThreads();
+      return;
+    }
+    if (busy || waiting) {
+      setSendError(t("threads.busy"));
+      return;
+    }
+    const hasThread = threads.some((th) => th.cwd === cwd);
+    if (!hasThread && !window.confirm(t("settings.archiveConfirm"))) return;
+    const prevBlocks = blocks;
+    try {
+      beginThreadChange();
+      const r = await api.openWorkspace(cwd);
+      applyThreadList(r);
+      onConfig(r.config);
+      closeThreads();
+      setSendError("");
+      await refreshSites();
+    } catch (err) {
+      snapshotReadyRef.current = true;
+      setSnapshotReady(true);
+      setBlocks(prevBlocks);
+      setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
+    }
+  }
+
+  async function onPin(cwd: string) {
+    try {
+      const next = Array.from(new Set([...pins, cwd]));
+      setPins((await api.pinWorkspaces(next)).pins);
+    } catch (err) {
+      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+    }
+  }
+
+  async function onUnpin(cwd: string) {
+    try {
+      setPins((await api.pinWorkspaces(pins.filter((p) => p !== cwd))).pins);
+    } catch (err) {
+      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+    }
+  }
+
+  function insertTemplate(body: string) {
+    setText(body);
+    setSlashOpen(false);
+    setPaletteOpen(false);
+    queueMicrotask(() => {
+      if (composer.current) {
+        composer.current.value = body;
+        resizeComposer(composer.current);
+        composer.current.focus();
+      }
+    });
+  }
+
+  const paletteItems: PaletteItem[] = [
+    { id: "new", group: "product", label: t("palette.newThread"), run: () => void onNewThread() },
+    { id: "cancel", group: "product", label: t("palette.cancel"), run: () => { sendRef.current({ type: "run.cancel" }); } },
+    { id: "export", group: "product", label: t("palette.export"), run: () => void onExport() },
+    {
+      id: "settings",
+      group: "product",
+      label: t("palette.settings"),
+      run: () => {
+        pushOverlay("settings");
+        setSettings(true);
+      },
+    },
+    {
+      id: "search",
+      group: "product",
+      label: t("palette.search"),
+      run: () => searchRef.current?.focus(),
+    },
+    { id: "restart", group: "product", label: t("palette.restart"), run: () => void onRestart() },
+    {
+      id: "upgrade",
+      group: "product",
+      label: t("palette.upgrade"),
+      run: () => {
+        void api.upgrade().catch((err) => {
+          setSendError(operatorError(err instanceof Error ? err.message : t("settings.updateFailed"), t));
+        });
+      },
+    },
+    {
+      id: "schedule",
+      group: "product",
+      label: t("palette.schedule"),
+      run: () => {
+        const body = text.trim();
+        if (!body) return;
+        void api
+          .createSchedule({
+            text: body,
+            cwd: config.agent.cwd,
+            threadId: currentThreadId || undefined,
+            at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          })
+          .then(() => {
+            pushOverlay("settings");
+            setSettings(true);
+          })
+          .catch((err) => {
+            setSendError(operatorError(err instanceof Error ? err.message : t("chat.sendFailed"), t));
+          });
+      },
+    },
+    ...pins.concat(recents.filter((c) => !pins.includes(c))).map((cwd) => ({
+      id: `cwd:${cwd}`,
+      group: "product" as const,
+      label: cwdBasename(cwd),
+      hint: cwd,
+      run: () => void onOpenCwd(cwd),
+    })),
+    ...templatePaletteItems(config.prompts?.templates ?? [], t, insertTemplate),
+  ];
+
   async function onAttach(files: FileList | File[] | null) {
     if (!files || !files.length) return;
     setAttachError("");
@@ -569,6 +740,11 @@ export function Chat({
               <span className={`status ${statusClass}`} aria-live="polite">
                 {t(statusKey)}
               </span>
+              {liveUsage && (
+                  <span className="muted usage-chip">
+                    {t("chat.usageTotal")} ↓{liveUsage.inputTokens} ↑{liveUsage.outputTokens}
+                  </span>
+                )}
             </div>
           </div>
           <div className="top-actions">
@@ -616,6 +792,12 @@ export function Chat({
           onRename={onRenameThread}
           onClose={closeThreads}
           git={git}
+          currentCwd={config.agent.cwd}
+          pins={pins}
+          recents={recents}
+          onOpenCwd={(cwd) => void onOpenCwd(cwd)}
+          onPin={(cwd) => void onPin(cwd)}
+          onUnpin={(cwd) => void onUnpin(cwd)}
         />
       )}
       <main className="chat-main">
@@ -652,6 +834,11 @@ export function Chat({
           {restartNote ? ` ${restartNote}` : ""}
         </p>
       )}
+      {restartNote && !config.restartRequired && (
+        <p className="banner info" role="status">
+          {restartNote}
+        </p>
+      )}
       {sendError && (
         <p className="banner error" role="alert">
           {sendError}
@@ -685,6 +872,7 @@ export function Chat({
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("chat.search")}
             aria-label={t("chat.search")}
+            ref={searchRef}
           />
           <button type="button" className="ghost tiny" onClick={() => void onExport()} disabled={!currentThreadId}>
             {t("chat.export")}
@@ -710,9 +898,15 @@ export function Chat({
               >
                 {b.attachments && b.attachments.length > 0 && (
                   <div className="thumbs">
-                    {b.attachments.map((a) => (
-                      <img key={a.id} src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
-                    ))}
+                    {b.attachments.map((a) =>
+                      isImageMime(a.mime) ? (
+                        <img key={a.id} src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
+                      ) : (
+                        <span key={a.id} className="file-chip">
+                          {a.name}
+                        </span>
+                      ),
+                    )}
                   </div>
                 )}
                 {b.text}
@@ -767,6 +961,13 @@ export function Chat({
               </p>
             );
           }
+          if (b.kind === "banner" && b.text === "stalled") {
+            return (
+              <p key={b.id} className="banner warn" role="status">
+                {t("chat.stalled")}
+              </p>
+            );
+          }
           if (b.kind === "banner") {
             return (
               <p key={b.id} className={`banner ${b.tone}`} role={b.tone === "error" ? "alert" : "status"}>
@@ -802,19 +1003,27 @@ export function Chat({
         className="composer"
         onSubmit={submit}
         onPaste={(e) => {
-          const images = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
-          if (!images.length) return;
-          e.preventDefault();
-          void onAttach(images);
+          const files = [...(e.clipboardData?.files ?? [])];
+          const fromFiles = files.filter((f) => attachableFile(f));
+          if (fromFiles.length) {
+            e.preventDefault();
+            void onAttach(fromFiles);
+            return;
+          }
+          const pasted = e.clipboardData?.getData("text/plain") || "";
+          if (pasted.length > 2048) {
+            e.preventDefault();
+            void onAttach([new File([pasted], "paste.txt", { type: "text/plain" })]);
+          }
         }}
         onDragOver={(e) => {
           if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
         }}
         onDrop={(e) => {
-          const images = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
-          if (!images.length) return;
+          const files = [...e.dataTransfer.files].filter((f) => attachableFile(f));
+          if (!files.length) return;
           e.preventDefault();
-          void onAttach(images);
+          void onAttach(files);
         }}
       >
         <div className="composer-inner">
@@ -841,7 +1050,10 @@ export function Chat({
               <ul className="queue-list" aria-label={t("chat.queueList")}>
                 {queueItems.map((item) => (
                   <li key={item.id}>
-                    <span>{item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}</span>
+                    <span>
+                      {item.source === "schedule" ? `${t("chat.queueSchedule")}: ` : ""}
+                      {item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}
+                    </span>
                     <button
                       type="button"
                       className="ghost tiny"
@@ -872,7 +1084,11 @@ export function Chat({
                   aria-label={`${t("chat.removeAttach")} ${a.name}`}
                   onClick={() => setDrafts((cur) => cur.filter((d) => d.id !== a.id))}
                 >
-                  <img src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
+                  {isImageMime(a.mime) ? (
+                    <img src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
+                  ) : (
+                    <span className="file-chip">{a.name}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -889,7 +1105,7 @@ export function Chat({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.log,.txt,.md,.json,.jsonl,.service,.conf,.journal,text/plain"
               multiple
               hidden
               onChange={(e) => void onAttach(e.target.files)}
@@ -902,16 +1118,36 @@ export function Chat({
               aria-label={t("chat.placeholder")}
               enterKeyHint="send"
               onChange={(e) => {
-                setText(e.target.value);
+                const next = e.target.value;
+                setText(next);
+                const q = slashQuery(next);
+                setSlashOpen(q !== null);
+                if (q !== null) setPaletteQuery(q);
                 resizeComposer(e.currentTarget);
               }}
               onKeyDown={(e) => {
+                if (slashOpen || paletteOpen) {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
+                    e.preventDefault();
+                  }
+                  return;
+                }
                 if (shouldSubmitOnEnter(e)) {
                   e.preventDefault();
                   submit(e);
                 }
               }}
             />
+            {slashOpen && (
+              <CommandPalette
+                open
+                inline
+                hideSearch
+                query={slashQuery(text) ?? ""}
+                items={templatePaletteItems(config.prompts?.templates ?? [], t, insertTemplate)}
+                onClose={() => setSlashOpen(false)}
+              />
+            )}
             {busy && caps?.cancel !== false && (
               <button
                 type="button"
@@ -933,6 +1169,13 @@ export function Chat({
       {settings && (
         <Settings config={config} onClose={closeSettings} onConfig={onConfig} onLogout={onLogout} />
       )}
+      <CommandPalette
+        open={paletteOpen}
+        query={paletteQuery}
+        items={paletteItems}
+        onClose={() => setPaletteOpen(false)}
+        onQuery={setPaletteQuery}
+      />
     </div>
   );
 }
@@ -965,4 +1208,18 @@ function StopIcon() {
       <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />
     </svg>
   );
+}
+
+function attachableFile(file: File): boolean {
+  if (isImageMime(file.type)) return true;
+  if (
+    file.type === "text/plain" ||
+    file.type === "text/markdown" ||
+    file.type === "text/x-log" ||
+    file.type === "application/json" ||
+    file.type === "application/x-ndjson"
+  ) {
+    return true;
+  }
+  return /\.(log|txt|md|json|jsonl|service|conf|journal)$/i.test(file.name);
 }
