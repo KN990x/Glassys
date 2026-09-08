@@ -19,6 +19,20 @@ import { ToolCard } from "../components/ToolCard";
 import { ModelPicker } from "../components/ModelPicker";
 import { Settings } from "./Settings";
 
+const COMPOSER_MAX_PX = 160;
+
+export function resizeComposer(el: HTMLTextAreaElement, maxPx = COMPOSER_MAX_PX): void {
+  if (!el.value) {
+    el.style.height = "";
+    el.style.overflowY = "";
+    return;
+  }
+  el.style.height = "0px";
+  const next = Math.min(el.scrollHeight, maxPx);
+  el.style.height = `${next}px`;
+  el.style.overflowY = el.scrollHeight > maxPx ? "auto" : "hidden";
+}
+
 export function Chat({
   config,
   onConfig,
@@ -191,7 +205,7 @@ export function Chat({
     }
     setSendError("");
     setText("");
-    if (composer.current) composer.current.style.height = "";
+    if (composer.current) resizeComposer(composer.current);
   }
 
   async function changeModel(id: string, params: ModelParam[]) {
@@ -271,7 +285,7 @@ export function Chat({
         }}
       >
         <div className="transcript-inner">
-        {blocks.length === 0 && <p className="empty">{t("chat.empty")}</p>}
+        {blocks.length === 0 && snapshotReady && <p className="empty">{t("chat.empty")}</p>}
         {blocks.map((b) => {
           if (b.kind === "user") {
             return (
@@ -361,9 +375,7 @@ export function Chat({
               aria-label={t("chat.placeholder")}
               onChange={(e) => {
                 setText(e.target.value);
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                resizeComposer(e.currentTarget);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {

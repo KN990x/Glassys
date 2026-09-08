@@ -45,4 +45,17 @@ describe("paramsForSelection", () => {
     });
     expect(params.find((p) => p.id === "fast")?.value).toBe("true");
   });
+
+  it("fills extra defaults when preferred only has variant params", () => {
+    const params = paramsForSelection(grok, {
+      id: "grok-4.6",
+      params: [{ id: "effort", value: "xhigh" }],
+    });
+    expect(params).toEqual(
+      expect.arrayContaining([
+        { id: "effort", value: "xhigh" },
+        { id: "fast", value: "false" },
+      ]),
+    );
+  });
 });

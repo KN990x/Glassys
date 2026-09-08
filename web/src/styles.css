@@ -432,13 +432,17 @@ details label { margin-top: 0.35rem; }
 .composer-box textarea {
   flex: 1;
   resize: none;
+  height: var(--composer-btn);
   min-height: var(--composer-btn);
+  max-height: 160px;
   min-width: 0;
   width: auto;
+  line-height: 1.375;
   background: transparent;
   border: 0;
-  padding: var(--composer-pad) 0.9rem;
+  padding: calc((var(--composer-btn) - 1.375em) / 2) 0.9rem;
   border-radius: 0;
+  overflow-y: hidden;
 }
 .composer-box textarea:focus { outline: none; }
 .composer-box .composer-send:focus-visible {

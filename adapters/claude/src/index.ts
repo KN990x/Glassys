@@ -3,6 +3,7 @@ import {
   AdapterError,
   errorMessage,
   pendingRun,
+  requireHostCommand,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -273,6 +274,7 @@ export const claudeAdapter: Adapter = {
 
   async probe() {
     await loadSdk();
+    await requireHostCommand("claude", "Claude CLI is not on PATH. Install the Claude Code CLI on this host.");
   },
 
   async create(opts) {

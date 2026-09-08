@@ -72,6 +72,33 @@ describe("cursor catalog", () => {
     expect(result.models.map((m) => m.id)).toContain("composer-2.5");
   });
 
+  it("collapses a live Grok cartesian catalog into labeled effort plus Fast", () => {
+    const efforts = ["xhigh", "high", "medium", "low"] as const;
+    const listed = [
+      {
+        id: "grok-4.6",
+        displayName: "Cursor Grok 4.6",
+        parameters: CURSOR_STATIC_CATALOG[0]?.parameters,
+        variants: efforts.flatMap((effort) =>
+          (["false", "true"] as const).map((fast) => ({
+            displayName: "Cursor Grok 4.6",
+            params: [
+              { id: "effort", value: effort },
+              { id: "fast", value: fast },
+            ],
+          })),
+        ),
+      },
+    ];
+    const result = cursorCatalogFromListed(listed);
+    expect(result.source).toBe("live");
+    const grok = result.models.find((m) => m.id === CURSOR_FLAGSHIP_MODEL_ID);
+    expect(grok?.variants).toHaveLength(4);
+    expect(grok?.variants?.map((v) => v.displayName)).toEqual(["Extra high", "High", "Medium", "Low"]);
+    expect(grok?.variants?.some((v) => v.displayName === "Cursor Grok 4.6")).toBe(false);
+    expect(grok?.parameters?.some((p) => p.id === "fast")).toBe(true);
+  });
+
   it("defaults grok to extra high", () => {
     expect(cursorParamsForFlagship(CURSOR_STATIC_CATALOG[0]!)).toEqual([{ id: "effort", value: "xhigh" }]);
     expect(CURSOR_STATIC_CATALOG[0]?.variants?.find((v) => v.isDefault)?.params).toEqual([{ id: "effort", value: "xhigh" }]);

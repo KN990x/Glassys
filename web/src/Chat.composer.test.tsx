@@ -159,8 +159,20 @@ describe("Chat composer and layout", () => {
     expect(host.querySelector(".topbar-inner")).toBeTruthy();
     expect(host.querySelector(".transcript-inner")).toBeTruthy();
     expect(host.querySelector(".transcript-inner .bubble.user")?.textContent).toBe("hi");
-    const textarea = host.querySelector("textarea");
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
     expect(textarea?.getAttribute("rows")).toBe("1");
+    expect(textarea.style.height).toBe("");
+  });
+
+  it("resets composer height when the input is cleared", async () => {
+    const { resizeComposer } = await import("./pages/Chat");
+    const el = document.createElement("textarea");
+    el.value = "hello\nworld";
+    resizeComposer(el);
+    expect(el.style.height).not.toBe("");
+    el.value = "";
+    resizeComposer(el);
+    expect(el.style.height).toBe("");
   });
 
   it("does not enable send until the transcript snapshot arrives", async () => {
@@ -172,9 +184,11 @@ describe("Chat composer and layout", () => {
     const send = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
     await typeIn(textarea, "hello");
     expect(send().disabled).toBe(true);
+    expect(host.querySelector(".empty")).toBeNull();
     await act(async () => {
       socket.emit({ type: "transcript.snapshot", events: [] });
     });
+    expect(host.querySelector(".empty")?.textContent).toBeTruthy();
     await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "hello");
     expect(send().disabled).toBe(false);
   });

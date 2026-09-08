@@ -51,6 +51,28 @@ export function setOption(
   return { ...(options ?? {}), [key]: value };
 }
 
+/** Keep Claude permissionMode in lockstep with the auto-run checkbox. */
+export function setAutoRun(
+  options: Record<string, unknown> | undefined,
+  autoRun: boolean,
+  toolConfirmation?: string,
+): Record<string, unknown> {
+  let next = setOption(options, "autoRun", autoRun);
+  if (toolConfirmation !== "permission-mode") return next;
+  const mode = optionString(next, "permissionMode", autoRun ? "bypassPermissions" : "dontAsk");
+  if (autoRun && mode !== "bypassPermissions") next = setOption(next, "permissionMode", "bypassPermissions");
+  if (!autoRun && mode === "bypassPermissions") next = setOption(next, "permissionMode", "dontAsk");
+  return next;
+}
+
+export function setPermissionMode(
+  options: Record<string, unknown> | undefined,
+  mode: string,
+): Record<string, unknown> {
+  const next = setOption(options, "permissionMode", mode);
+  return setOption(next, "autoRun", mode === "bypassPermissions");
+}
+
 export function adapterKeyConfigured(
   secrets: { adapters?: Record<string, { apiKey?: { configured?: boolean } }>; cursorApiKey?: { configured?: boolean } },
   adapterId: string,

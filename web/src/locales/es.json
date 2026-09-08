@@ -41,7 +41,7 @@
   "wizard.workspace.required": "Introduce una ruta absoluta de workspace en este host.",
   "wizard.acp.commandRequired": "ACP necesita un comando (o un agente del registro) antes de entrar al chat.",
   "wizard.workspace.path": "Ruta del workspace",
-  "wizard.cred.body": "Usa el login del CLI o del SDK de este host cuando exista. La API key es opcional (Docker, CI o un override).",
+  "wizard.cred.body": "Usa el login del CLI o del SDK de este host cuando exista. La API key es opcional (CI o un override).",
   "wizard.cred.key": "API key (opcional)",
   "wizard.cred.login": "Iniciar sesión con el SDK de Cursor",
   "wizard.cred.loginBusy": "Esperando el login del navegador…",

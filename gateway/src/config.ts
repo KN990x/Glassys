@@ -10,6 +10,7 @@ import {
   type RedactedConfig,
   clampKeepaliveSeconds,
   defaultConfig,
+  optionString,
 } from "@glassys/protocol";
 import { paths } from "./paths.js";
 import {
@@ -155,6 +156,13 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
       const availability = await probeAdapter(adapter);
       if (!availability.ok) throw new HttpError(400, availability.error);
     }
+    if (typeof operatorPassword === "string" && operatorPassword.length > 0) {
+      const passwordErr = operatorPasswordError(operatorPassword);
+      if (passwordErr) throw new HttpError(400, passwordErr);
+    }
+    if (completing && adapter?.id === "acp" && !optionString(after.agent.options, "command", "").trim()) {
+      throw new HttpError(400, "ACP adapter needs agent.options.command (or a registry pick)");
+    }
     await saveConfig(after);
     if (cursorApiKey !== undefined) {
       await patchSecrets({ adapterApiKey: { adapter: "cursor", value: typeof cursorApiKey === "string" ? cursorApiKey.trim() : "" } });
@@ -165,8 +173,6 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
       });
     }
     if (typeof operatorPassword === "string" && operatorPassword.length > 0) {
-      const passwordErr = operatorPasswordError(operatorPassword);
-      if (passwordErr) throw new HttpError(400, passwordErr);
       const secrets = await loadSecrets();
       await patchSecrets({
         operatorPasswordHash: await hashPassword(operatorPassword),

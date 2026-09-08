@@ -33,7 +33,7 @@ Host install one-liner (README / `docs/deploy/host.md`): `git clone … && cd gl
 | `adapters/<id>/` | One package per CLI/SDK |
 | `gateway/` | Auth, WebSocket, queue, static PWA |
 | `web/` | Dumb PWA |
-| `docs/deploy/` | Host (A), Compose (B), Caddy, Cloudflare |
+| `docs/deploy/` | Host, Caddy, Cloudflare |
 
 `adapters/cursor` is the only package that may import `@cursor/sdk`.
 
