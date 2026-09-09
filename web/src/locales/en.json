@@ -337,5 +337,15 @@
   "confirm.archive": "Archive and continue",
   "confirm.restart": "Restart",
   "confirm.discard": "Discard changes",
-  "confirm.update": "Update now"
+  "confirm.update": "Update now",
+  "settings.tab.appearance": "Appearance",
+  "settings.tab.agent": "Agent",
+  "settings.tab.session": "Session",
+  "settings.tab.prompts": "Templates",
+  "settings.tab.schedules": "Schedules",
+  "settings.tab.updates": "Updates",
+  "settings.tab.phone": "Phone",
+  "settings.tab.usage": "Usage",
+  "settings.unsaved": "Unsaved changes",
+  "settings.usageEmpty": "No usage recorded yet."
 }

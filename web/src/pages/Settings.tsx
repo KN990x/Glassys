@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -8,18 +8,43 @@ import type {
   RedactedConfig,
   SettingSource,
 } from "@glassys/protocol";
-import { pickDefaultSelection, adapterSelectable, isTheme } from "@glassys/protocol";
+import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api, clearToken } from "../api";
 import { useT } from "../i18n";
-import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
-import { CatalogFallbackNotice } from "../components/CatalogFallback";
-import { SdkLoginControls } from "../components/SdkLogin";
-import { WorkspacePicker } from "../components/WorkspacePicker";
-import { ReachabilityCard } from "../components/Reachability";
-import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode, archivesLiveThread } from "../adapterOptions";
+import { paramsForSelection } from "../components/ModelPicker";
+import { defaultOptionsFor, optionString, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { enableWebPush, disableWebPush } from "../push";
 import { useConfirm } from "../components/ConfirmDialog";
+import {
+  IconChart,
+  IconClock,
+  IconClose,
+  IconCommand,
+  IconPalette,
+  IconPhone,
+  IconRefresh,
+  IconServer,
+  IconTerminal,
+} from "../components/Icon";
+import { AppearanceTab } from "./settings/AppearanceTab";
+import { AgentTab } from "./settings/AgentTab";
+import { SessionTab } from "./settings/SessionTab";
+import { PromptsTab } from "./settings/PromptsTab";
+import { SchedulesTab, type ScheduleJob } from "./settings/SchedulesTab";
+import { UpdatesTab, type UpdateInfo } from "./settings/UpdatesTab";
+import { PhoneTab } from "./settings/PhoneTab";
+import { UsageTab } from "./settings/UsageTab";
+
+export type SettingsTab =
+  | "appearance"
+  | "agent"
+  | "session"
+  | "prompts"
+  | "schedules"
+  | "updates"
+  | "phone"
+  | "usage";
 
 export function Settings({
   config,
@@ -40,6 +65,7 @@ export function Settings({
 }) {
   const t = useT();
   const { confirm, confirmDialog } = useConfirm();
+  const [tab, setTab] = useState<SettingsTab>(focusSection ?? "appearance");
   const [draft, setDraft] = useState(config);
   const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -61,31 +87,12 @@ export function Settings({
     byAdapter: Record<string, { inputTokens: number; outputTokens: number }>;
   } | null>(null);
   const [threadUsage, setThreadUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
-  const [schedules, setSchedules] = useState<
-    Array<{
-      id: string;
-      text: string;
-      cwd: string;
-      threadId?: string;
-      cron?: string;
-      at?: string;
-      enabled: boolean;
-      nextRun: string | null;
-      lastRun?: string;
-      lastError?: string;
-    }>
-  >([]);
+  const [schedules, setSchedules] = useState<ScheduleJob[]>([]);
   const [scheduleTz, setScheduleTz] = useState("");
   const [scheduleText, setScheduleText] = useState("");
   const [scheduleCron, setScheduleCron] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
-  const [update, setUpdate] = useState<{
-    version: string;
-    protocolVersion: number;
-    git?: { sha: string; branch: string; dirty: boolean };
-    service: "launchd" | "systemd" | "none";
-    upgrading?: { phase: string; error?: string };
-  } | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [behind, setBehind] = useState<number | null>(null);
   const [notifyNote, setNotifyNote] = useState("");
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -130,8 +137,7 @@ export function Settings({
 
   useEffect(() => {
     if (!focusSection) return;
-    const id = focusSection === "schedules" ? "settings-schedules" : "settings-updates";
-    document.getElementById(id)?.scrollIntoView({ block: "start" });
+    setTab(focusSection);
   }, [focusSection]);
 
   useEffect(() => {
@@ -410,6 +416,18 @@ export function Settings({
   const keyConfigured =
     draft.secrets.adapters?.[draft.agent.adapter]?.apiKey.configured ||
     (draft.agent.adapter === "cursor" && draft.secrets.cursorApiKey.configured);
+  /* The strip needs one word per tab; the panel heading keeps the longer,
+     descriptive string. */
+  const tabs: Array<{ id: SettingsTab; label: string; heading: string; glyph: ReactNode }> = [
+    { id: "appearance", label: t("settings.tab.appearance"), heading: t("settings.appearance"), glyph: <IconPalette size={16} /> },
+    { id: "agent", label: t("settings.tab.agent"), heading: t("settings.agent"), glyph: <IconTerminal size={16} /> },
+    { id: "session", label: t("settings.tab.session"), heading: t("settings.session"), glyph: <IconServer size={16} /> },
+    { id: "prompts", label: t("settings.tab.prompts"), heading: t("settings.prompts"), glyph: <IconCommand size={16} /> },
+    { id: "schedules", label: t("settings.tab.schedules"), heading: t("settings.schedules"), glyph: <IconClock size={16} /> },
+    { id: "updates", label: t("settings.tab.updates"), heading: t("settings.update"), glyph: <IconRefresh size={16} /> },
+    { id: "phone", label: t("settings.tab.phone"), heading: t("settings.phone"), glyph: <IconPhone size={16} /> },
+    { id: "usage", label: t("settings.tab.usage"), heading: t("settings.usage"), glyph: <IconChart size={16} /> },
+  ];
 
   return (
     <div className="settings-overlay" onClick={() => void requestClose()}>
@@ -422,674 +440,146 @@ export function Settings({
       >
         <header>
           <h2 id="settings-title">{t("settings.title")}</h2>
-          <button ref={closeRef} className="ghost" type="button" onClick={() => void requestClose()}>
-            {t("settings.close")}
+          <button
+            ref={closeRef}
+            className="icon-btn"
+            type="button"
+            aria-label={t("settings.close")}
+            title={t("settings.close")}
+            onClick={() => void requestClose()}
+          >
+            <IconClose size={16} />
           </button>
         </header>
-        <div className="settings-body">
-          <nav className="settings-toc" aria-label={t("settings.title")}>
-            <a href="#settings-appearance">{t("settings.appearance")}</a>
-            <a href="#settings-agent">{t("settings.agent")}</a>
-            <a href="#settings-session">{t("settings.session")}</a>
-            <a href="#settings-prompts">{t("settings.prompts")}</a>
-            <a href="#settings-schedules">{t("settings.schedules")}</a>
-            <a href="#settings-updates">{t("settings.update")}</a>
-            <a href="#settings-phone">{t("settings.phone")}</a>
-          </nav>
-          {config.restartRequired && (
-            <p className="warn">
-              {t("settings.restartRequired")}{" "}
+        <div className="settings-layout">
+          {/* Eight sections stacked in a 520px column needed an anchor index to
+              navigate. Tabs remove the need for one. */}
+          <nav className="settings-tabs" aria-label={t("settings.title")}>
+            {tabs.map((item) => (
               <button
+                key={item.id}
                 type="button"
-                className="ghost tiny"
-                onClick={() => {
-                  setRestartNote(t("settings.restarting"));
-                  void api.restart().catch((err) => {
-                    setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-                  });
-                }}
+                className={`settings-tab${tab === item.id ? " current" : ""}`}
+                aria-current={tab === item.id ? "true" : undefined}
+                onClick={() => setTab(item.id)}
               >
-                {t("settings.restart")}
+                {item.glyph}
+                <span>{item.label}</span>
               </button>
-              {restartNote ? ` ${restartNote}` : ""}
-            </p>
-          )}
-          <section className="settings-section" id="settings-appearance">
-            <h3>{t("settings.appearance")}</h3>
-            <label>
-              {t("settings.locale")}
-              <select
-                value={draft.space.locale}
-                onChange={(e) => setDraft({ ...draft, space: { ...draft.space, locale: e.target.value } })}
-              >
-                <option value="en">English</option>
-                <option value="es">Español</option>
-              </select>
-            </label>
-            <label>
-              {t("settings.theme")}
-              <select
-                value={draft.space.theme}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  if (!isTheme(next)) return;
-                  setDraft({ ...draft, space: { ...draft.space, theme: next } });
-                }}
-              >
-                <option value="dark">{t("settings.theme.dark")}</option>
-                <option value="light">{t("settings.theme.light")}</option>
-                <option value="system">{t("settings.theme.system")}</option>
-              </select>
-            </label>
-            <label>
-              {t("settings.hostLabel")}
-              <input
-                value={draft.space.name}
-                maxLength={40}
-                onChange={(e) => setDraft({ ...draft, space: { ...draft.space, name: e.target.value } })}
-              />
-            </label>
-            <p className="muted">{t("settings.hostLabelHint")}</p>
-            <label>
-              {t("settings.thinking")}
-              <select
-                value={draft.display.thinkingDefault}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    display: { ...draft.display, thinkingDefault: e.target.value as "collapsed" | "expanded" },
-                  })
-                }
-              >
-                <option value="collapsed">{t("settings.thinking.collapsed")}</option>
-                <option value="expanded">{t("settings.thinking.expanded")}</option>
-              </select>
-            </label>
-            <label className="choice">
-              <input
-                type="checkbox"
-                checked={draft.display.diffPreview}
-                onChange={(e) => setDraft({ ...draft, display: { ...draft.display, diffPreview: e.target.checked } })}
-              />
-              {t("settings.diffs")}
-            </label>
-            <label>
-              {t("settings.shellLines")}
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={Number.isFinite(draft.display.shellLinesVisible) ? draft.display.shellLinesVisible : 12}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10);
-                  setDraft({
-                    ...draft,
-                    display: {
-                      ...draft.display,
-                      shellLinesVisible: Number.isFinite(n) ? Math.max(1, Math.min(200, n)) : draft.display.shellLinesVisible,
-                    },
-                  });
-                }}
-              />
-            </label>
-          </section>
-
-          <section className="settings-section" id="settings-agent">
-            <h3>{t("settings.agent")}</h3>
-            <p className="warn">{t("settings.newThread")}</p>
-            <label>
-              {t("wizard.step.adapter")}
-              <select value={draft.agent.adapter} onChange={(e) => pickAdapter(e.target.value)}>
-                {adapters.map((a) => (
-                  <option key={a.id} value={a.id} disabled={!adapterSelectable(a) && a.id !== draft.agent.adapter}>
-                    {a.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {currentAdapter && !adapterSelectable(currentAdapter) && currentAdapter.available && !currentAdapter.available.ok && (
+            ))}
+          </nav>
+          <div className="settings-body">
+            {config.restartRequired && (
               <p className="warn">
-                {t("wizard.adapter.unavailable")} {currentAdapter.available.error}
-              </p>
-            )}
-            {adaptersError && (
-              <p className="error-text">
-                {adaptersError}{" "}
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => {
-                    setAdaptersError("");
-                    api
-                      .adapters()
-                      .then((r) => {
-                        setAdapters(r.adapters);
-                        setAdaptersError(r.adapters.length ? "" : t("wizard.adapters.empty"));
-                      })
-                      .catch(() => setAdaptersError(t("wizard.adapters.failed")));
-                  }}
-                >
-                  {t("wizard.adapters.retry")}
-                </button>
-              </p>
-            )}
-            {currentAdapter?.description && <p className="muted">{currentAdapter.description}</p>}
-            <WorkspacePicker
-              value={draft.agent.cwd}
-              onChange={(cwd) => setDraft({ ...draft, agent: { ...draft.agent, cwd } })}
-            />
-            <CatalogFallbackNotice liveCatalog={caps?.liveCatalog} source={modelSource} error={modelError} />
-            {caps?.models !== false && (
-              <ModelPicker
-                models={models}
-                modelId={draft.agent.model}
-                params={draft.agent.modelParams ?? []}
-                preferred={caps?.defaultModel}
-                onChange={(model, modelParams) => setDraft({ ...draft, agent: { ...draft.agent, model, modelParams } })}
-              />
-            )}
-            {caps?.settingSources &&
-              (["project", "user", "plugins"] as SettingSource[]).map((s) => (
-                <label key={s} className="choice">
-                  <input
-                    type="checkbox"
-                    checked={optionStringArray(draft.agent.options, "settingSources", ["project", "user"]).includes(s)}
-                    onChange={(e) => toggleSource(s, e.target.checked)}
-                  />
-                  {t(`wizard.rules.${s}`)}
-                </label>
-              ))}
-            {caps?.sandbox && (
-              <label className="choice">
-                <input
-                  type="checkbox"
-                  checked={optionBool(draft.agent.options, "sandbox", false)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, agent: { ...draft.agent, options: setOption(draft.agent.options, "sandbox", e.target.checked) } })
-                  }
-                />
-                {t("wizard.exec.sandbox")}
-              </label>
-            )}
-            {caps?.autoRun && (
-              <label className="choice">
-                <input
-                  type="checkbox"
-                  checked={optionBool(draft.agent.options, "autoRun", true)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, agent: { ...draft.agent, options: setAutoRun(draft.agent.options, e.target.checked, caps?.toolConfirmation) } })
-                  }
-                />
-                {t("wizard.exec.autoRun")}
-              </label>
-            )}
-            {caps?.toolConfirmation === "auto-review-deny" && <p className="muted">{t("wizard.exec.danger")}</p>}
-            {caps?.toolConfirmation === "none" && <p className="muted">{t("wizard.exec.unattended")}</p>}
-            {caps?.toolConfirmation === "permission-mode" && (
-              <>
-                <label>
-                  {t("wizard.exec.permissionMode")}
-                  <select
-                    value={optionString(draft.agent.options, "permissionMode", "bypassPermissions")}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        agent: { ...draft.agent, options: setPermissionMode(draft.agent.options, e.target.value) },
-                      })
-                    }
-                  >
-                    <option value="bypassPermissions">{t("wizard.exec.permission.bypass")}</option>
-                    <option value="dontAsk">{t("wizard.exec.permission.dontAsk")}</option>
-                    <option value="acceptEdits">{t("wizard.exec.permission.acceptEdits")}</option>
-                  </select>
-                </label>
-                <p className="muted">{t("wizard.exec.permission.hint")}</p>
-              </>
-            )}
-            {caps?.discover && (
-              <>
-                {discover.length > 0 && (
-                  <label>
-                    {t("wizard.acp.registry")}
-                    <select
-                      value={optionString(draft.agent.options, "registryId", "")}
-                      onChange={(e) => {
-                        const item = discover.find((d) => d.id === e.target.value);
-                        setDraft({
-                          ...draft,
-                          agent: {
-                            ...draft.agent,
-                            options: {
-                              ...draft.agent.options,
-                              registryId: e.target.value,
-                              command: item?.command || optionString(draft.agent.options, "command", ""),
-                              args: item?.args || optionStringArray(draft.agent.options, "args", []),
-                            },
-                          },
-                        });
-                      }}
-                    >
-                      <option value="">{t("wizard.acp.custom")}</option>
-                      {discover.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <label>
-                  {t("wizard.acp.command")}
-                  <input
-                    value={optionString(draft.agent.options, "command", "")}
-                    onChange={(e) =>
-                      setDraft({ ...draft, agent: { ...draft.agent, options: setOption(draft.agent.options, "command", e.target.value) } })
-                    }
-                  />
-                </label>
-                <label>
-                  {t("wizard.acp.args")}
-                  <input
-                    value={optionStringArray(draft.agent.options, "args", []).join(" ")}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        agent: {
-                          ...draft.agent,
-                          options: setOption(
-                            draft.agent.options,
-                            "args",
-                            e.target.value.split(/\s+/).filter(Boolean),
-                          ),
-                        },
-                      })
-                    }
-                  />
-                </label>
-              </>
-            )}
-            {caps?.auth.kind === "sdk-login" &&
-              (auth?.loggedIn ? (
-                <p className="ok">
-                  {t("wizard.cred.signedIn")}
-                  {auth.email ? ` (${auth.email})` : ""}
-                </p>
-              ) : (
-                <p className="muted">{t("wizard.cred.signedOut")}</p>
-              ))}
-            {caps?.auth.kind === "sdk-login" && (
-              <SdkLoginControls
-                adapterId={draft.agent.adapter}
-                onSignedIn={async () => {
-                  setAuth(await api.adapterStatus(draft.agent.adapter));
-                  await loadModels(draft.agent.adapter);
-                }}
-              />
-            )}
-            {keyConfigured && <p className="ok">{t("wizard.cred.keyConfigured")}</p>}
-            {keyFromEnv && <p className="warn">{t("settings.cred.fromEnv")}</p>}
-            <details>
-              <summary>{t("wizard.cred.optional")}</summary>
-              <label>
-                {t("wizard.cred.rotate")}
-                <input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-              </label>
-              <p className="muted">
-                {t("wizard.cred.keyHint")}
-                {caps?.auth.envNames?.length ? ` (${caps.auth.envNames.join(", ")})` : ""}
-              </p>
-              {keyConfigured && (
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => {
-                    setClearKey(true);
-                    setApiKey("");
-                  }}
-                >
-                  {t("wizard.cred.clearKey")}
-                </button>
-              )}
-              {clearKey && <p className="warn">{t("settings.clearKeyWarn")}</p>}
-            </details>
-          </section>
-
-          <section className="settings-section" id="settings-session">
-            <h3>{t("settings.session")}</h3>
-            {caps?.resume && (
-            <label className="choice">
-              <input
-                type="checkbox"
-                checked={draft.session.resumeOnStart}
-                onChange={(e) => setDraft({ ...draft, session: { ...draft.session, resumeOnStart: e.target.checked } })}
-              />
-              {t("settings.resume")}
-            </label>
-            )}
-            <label>
-              {t("settings.stall")}
-              <select
-                value={draft.session.stallSeconds}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    session: { ...draft.session, stallSeconds: Number.parseInt(e.target.value, 10) || 0 },
-                  })
-                }
-              >
-                <option value={0}>{t("settings.stall.off")}</option>
-                <option value={60}>{t("settings.stall.60")}</option>
-                <option value={180}>{t("settings.stall.180")}</option>
-                <option value={300}>{t("settings.stall.300")}</option>
-              </select>
-            </label>
-            <label className="choice">
-              <input
-                type="checkbox"
-                checked={draft.session.notifyOnComplete}
-                onChange={(e) => void enableNotify(e.target.checked)}
-              />
-              {t("settings.notify")}
-            </label>
-            <p className="muted">{t("settings.notifyHint")}</p>
-            {notifyNote && <p className="warn">{notifyNote}</p>}
-            <label>
-              {t("settings.password")}
-              <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            </label>
-            <p className="muted">{t("settings.passwordHint")}</p>
-          </section>
-
-          <section className="settings-section">
-            <h3>{t("settings.usage")}</h3>
-            {threadUsage && (
-              <p>
-                {t("settings.usageThread")}: ↓{threadUsage.inputTokens} ↑{threadUsage.outputTokens}
-              </p>
-            )}
-            {usage && (
-              <>
-                <p>
-                  {t("settings.usageAll")}: ↓{usage.inputTokens} ↑{usage.outputTokens}
-                </p>
-                {Object.entries(usage.byAdapter).map(([id, tot]) => (
-                  <p key={id} className="muted">
-                    {id}: ↓{tot.inputTokens} ↑{tot.outputTokens}
-                  </p>
-                ))}
-              </>
-            )}
-          </section>
-
-          <section className="settings-section" id="settings-prompts">
-            <h3>{t("settings.prompts")}</h3>
-            <p className="muted">{t("settings.promptsHint")}</p>
-            {templates.map((tpl, i) => (
-              <div key={tpl.id} className="prompt-row">
-                <label>
-                  {t("settings.promptSlash")}
-                  <input
-                    value={tpl.slash}
-                    onChange={(e) => {
-                      const next = templates.slice();
-                      next[i] = { ...tpl, slash: e.target.value, id: tpl.id || e.target.value };
-                      setTemplates(next);
-                    }}
-                  />
-                </label>
-                <label>
-                  {t("settings.promptTitle")}
-                  <input
-                    value={tpl.title}
-                    onChange={(e) => {
-                      const next = templates.slice();
-                      next[i] = { ...tpl, title: e.target.value };
-                      setTemplates(next);
-                    }}
-                  />
-                </label>
-                <label>
-                  {t("settings.promptText")}
-                  <textarea
-                    rows={3}
-                    value={tpl.text}
-                    onChange={(e) => {
-                      const next = templates.slice();
-                      next[i] = { ...tpl, text: e.target.value };
-                      setTemplates(next);
-                    }}
-                  />
-                </label>
+                {t("settings.restartRequired")}{" "}
                 <button
                   type="button"
                   className="ghost tiny"
-                  onClick={() => setTemplates(templates.filter((_, j) => j !== i))}
+                  onClick={() => {
+                    setRestartNote(t("settings.restarting"));
+                    void api.restart().catch((err) => {
+                      setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
+                    });
+                  }}
                 >
-                  {t("settings.promptRemove")}
+                  {t("settings.restart")}
                 </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="ghost"
-              onClick={() =>
-                setTemplates([
-                  ...templates,
-                  { id: `tpl-${templates.length + 1}`, slash: "", title: "", text: "" },
-                ])
-              }
-            >
-              {t("settings.promptAdd")}
-            </button>
-          </section>
-
-          <section className="settings-section" id="settings-schedules">
-            <h3>{t("settings.schedules")}</h3>
-            <p className="muted">{t("settings.schedulesHint")}</p>
-            {scheduleTz && (
-              <p className="muted">
-                {t("settings.scheduleTz")}: {scheduleTz}
+                {restartNote ? ` ${restartNote}` : ""}
               </p>
             )}
-            <p className="muted">{t("settings.scheduleCatchUp")}</p>
-            <label>
-              {t("settings.scheduleText")}
-              <textarea rows={3} value={scheduleText} onChange={(e) => setScheduleText(e.target.value)} />
-            </label>
-            <label>
-              {t("settings.scheduleCron")}
-              <input
-                value={scheduleCron}
-                placeholder="0 6 * * *"
-                onChange={(e) => {
-                  setScheduleCron(e.target.value);
-                  if (e.target.value) setScheduleAt("");
-                }}
-              />
-            </label>
-            <label>
-              {t("settings.scheduleAt")}
-              <input
-                type="datetime-local"
-                value={scheduleAt}
-                onChange={(e) => {
-                  setScheduleAt(e.target.value);
-                  if (e.target.value) setScheduleCron("");
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                void (async () => {
-                  try {
-                    await api.createSchedule({
-                      text: scheduleText,
-                      cwd: draft.agent.cwd,
-                      threadId: currentThreadId || undefined,
-                      cron: scheduleCron.trim() || undefined,
-                      at: scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
-                    });
-                    setScheduleText("");
-                    setScheduleCron("");
-                    setScheduleAt("");
-                    await refreshSchedules();
-                  } catch (err) {
-                    setError(operatorError(err instanceof Error ? err.message : String(err), t));
-                  }
-                })();
-              }}
-            >
-              {t("settings.scheduleAdd")}
-            </button>
-            {schedules.length === 0 && <p className="muted">{t("settings.scheduleEmpty")}</p>}
-            <ul className="schedule-list">
-              {schedules.map((job) => (
-                <li key={job.id}>
-                  <p>{job.text}</p>
-                  <p className="muted">
-                    {job.cron || job.at} · {t("settings.scheduleNext")} {job.nextRun || "—"} · {job.cwd}
-                  </p>
-                  {job.lastRun && (
-                    <p className="muted">
-                      {t("settings.scheduleLast")}: {job.lastRun}
-                    </p>
-                  )}
-                  {job.lastError && (
-                    <p className="warn">
-                      {t("settings.scheduleLastError")}: {job.lastError}
-                    </p>
-                  )}
-                  <label className="choice">
-                    <input
-                      type="checkbox"
-                      checked={job.enabled}
-                      onChange={(e) => {
-                        void api
-                          .patchSchedule(job.id, { enabled: e.target.checked })
-                          .then(() => refreshSchedules())
-                          .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
-                      }}
-                    />
-                    {t("settings.scheduleEnable")}
-                  </label>
-                  <button
-                    type="button"
-                    className="ghost tiny"
-                    onClick={() => {
-                      void api
-                        .deleteSchedule(job.id)
-                        .then(() => refreshSchedules())
-                        .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
-                    }}
-                  >
-                    {t("settings.promptRemove")}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="settings-section" id="settings-updates">
-            <h3>{t("settings.update")}</h3>
-            {update && (
-              <>
-                <p>
-                  {t("settings.updateVersion")}: {update.version}
-                  {update.git ? ` · ${update.git.branch} ${update.git.sha.slice(0, 7)}${update.git.dirty ? "*" : ""}` : ""}
-                </p>
-                <p className="muted">{t("settings.updateService")}: {update.service}</p>
-                {behind !== null && (
-                  <p>
-                    {behind} {t("settings.updateBehind")}
-                  </p>
-                )}
-                {update.upgrading?.phase && update.upgrading.phase !== "idle" && (
-                  <p className="warn" role="status">
-                    {update.upgrading.phase === "error"
-                      ? `${t("settings.updateFailed")} ${update.upgrading.error || ""}`
-                      : t("settings.updating")}
-                  </p>
-                )}
-              </>
-            )}
-            <div className="row">
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  void api
-                    .adminUpdateCheck()
-                    .then((r) => setBehind(r.behind))
-                    .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
-                }}
-              >
-                {t("settings.updateCheck")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  void (async () => {
-                    if (update?.git?.dirty) {
-                      setError(t("settings.updateDirty"));
-                      return;
-                    }
-                    if (!(await confirm({ message: t("settings.updateConfirm"), confirmLabel: t("confirm.update") })))
-                      return;
-                    try {
-                      await api.upgrade();
-                      setUpdate(await api.adminUpdate());
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : "";
-                      setError(msg.includes("user service") ? t("settings.updateNeedService") : operatorError(msg, t));
-                    }
-                  })();
-                }}
-              >
-                {t("settings.updateNow")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  setRestartNote(t("settings.restarting"));
-                  void api.restart().catch((err) => {
-                    setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-                  });
-                }}
-              >
-                {t("settings.restart")}
-              </button>
-              {restartNote ? <span className="muted">{restartNote}</span> : null}
-            </div>
-            {update?.service === "none" && <p className="muted">{t("settings.updateNeedService")}</p>}
-          </section>
-
-          <section className="settings-section" id="settings-phone">
-            <h3>{t("settings.phone")}</h3>
-            <ReachabilityCard />
-          </section>
-
-          {error && <p className="error-text">{error}</p>}
-          {saved && <p className="ok">{saved}</p>}
+            <section className="settings-section" id={`settings-${tab}`}>
+              <h3>{tabs.find((item) => item.id === tab)?.heading}</h3>
+              {tab === "appearance" && <AppearanceTab draft={draft} setDraft={setDraft} />}
+              {tab === "agent" && (
+                <AgentTab
+                  draft={draft}
+                  setDraft={setDraft}
+                  adapters={adapters}
+                  setAdapters={setAdapters}
+                  adaptersError={adaptersError}
+                  setAdaptersError={setAdaptersError}
+                  currentAdapter={currentAdapter}
+                  models={models}
+                  modelSource={modelSource}
+                  modelError={modelError}
+                  auth={auth}
+                  setAuth={setAuth}
+                  discover={discover}
+                  apiKey={apiKey}
+                  setApiKey={setApiKey}
+                  clearKey={clearKey}
+                  setClearKey={setClearKey}
+                  keyConfigured={Boolean(keyConfigured)}
+                  keyFromEnv={keyFromEnv}
+                  loadModels={loadModels}
+                  pickAdapter={pickAdapter}
+                  toggleSource={toggleSource}
+                />
+              )}
+              {tab === "session" && (
+                <SessionTab
+                  draft={draft}
+                  setDraft={setDraft}
+                  caps={caps}
+                  password={password}
+                  setPassword={setPassword}
+                  notifyNote={notifyNote}
+                  enableNotify={enableNotify}
+                  onLogout={() => {
+                    void (async () => {
+                      await api.logout();
+                      clearToken();
+                      onLogout();
+                    })();
+                  }}
+                />
+              )}
+              {tab === "prompts" && <PromptsTab templates={templates} setTemplates={setTemplates} />}
+              {tab === "schedules" && (
+                <SchedulesTab
+                  draft={draft}
+                  schedules={schedules}
+                  scheduleTz={scheduleTz}
+                  scheduleText={scheduleText}
+                  setScheduleText={setScheduleText}
+                  scheduleCron={scheduleCron}
+                  setScheduleCron={setScheduleCron}
+                  scheduleAt={scheduleAt}
+                  setScheduleAt={setScheduleAt}
+                  currentThreadId={currentThreadId}
+                  refreshSchedules={refreshSchedules}
+                  setError={setError}
+                />
+              )}
+              {tab === "updates" && (
+                <UpdatesTab
+                  update={update}
+                  setUpdate={setUpdate}
+                  behind={behind}
+                  setBehind={setBehind}
+                  restartNote={restartNote}
+                  setRestartNote={setRestartNote}
+                  setError={setError}
+                  confirm={confirm}
+                />
+              )}
+              {tab === "phone" && <PhoneTab />}
+              {tab === "usage" && <UsageTab usage={usage} threadUsage={threadUsage} locale={draft.space.locale} />}
+            </section>
+            {error && <p className="error-text">{error}</p>}
+            {saved && <p className="ok">{saved}</p>}
+          </div>
         </div>
         <footer>
-          <button
-            type="button"
-            className="ghost"
-            onClick={async () => {
-              await api.logout();
-              clearToken();
-              onLogout();
-            }}
-          >
-            {t("settings.logout")}
-          </button>
-          <button type="button" className="primary" onClick={() => void save()} disabled={submitting}>
-            {t("settings.save")}
-          </button>
+          <span className="muted settings-dirty">{dirty ? t("settings.unsaved") : ""}</span>
+          <div className="row">
+            <button type="button" className="ghost" onClick={() => void requestClose()}>
+              {t("confirm.cancel")}
+            </button>
+            <button type="button" className="primary" onClick={() => void save()} disabled={submitting || !dirty}>
+              {t("settings.save")}
+            </button>
+          </div>
         </footer>
       </div>
       {confirmDialog}

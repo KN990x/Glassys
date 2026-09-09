@@ -155,6 +155,15 @@ describe("Settings notify and schedules", () => {
     });
   }
 
+  /** Settings is tabbed, so a section is only mounted while its tab is open. */
+  async function openTab(label: string) {
+    await act(async () => {
+      [...host.querySelectorAll<HTMLButtonElement>(".settings-tab")]
+        .find((b) => b.textContent === label)
+        ?.click();
+    });
+  }
+
   it("unsubscribes push when notify is turned off", async () => {
     saveConfig.mockImplementation(async (patch: { session?: { notifyOnComplete?: boolean } }) => ({
       ...cfg(),
@@ -162,6 +171,7 @@ describe("Settings notify and schedules", () => {
     }));
     pushUnsubscribe.mockResolvedValue({ ok: true });
     await renderSettings();
+    await openTab("Session");
     const notify = [...host.querySelectorAll("label")].find((el) => el.textContent?.includes("Notify when a run finishes"));
     const box = notify?.querySelector("input[type='checkbox']") as HTMLInputElement;
     expect(box?.checked).toBe(true);
@@ -179,6 +189,7 @@ describe("Settings notify and schedules", () => {
   it("creates a schedule with the live thread id", async () => {
     createSchedule.mockResolvedValue({ id: "s1", nextRun: null });
     await renderSettings();
+    await openTab("Schedules");
     const section = host.querySelector("#settings-schedules") as HTMLElement;
     const prompt = section.querySelector("textarea") as HTMLTextAreaElement;
     const cron = [...section.querySelectorAll("input")].find((el) => el.getAttribute("placeholder") === "0 6 * * *") as HTMLInputElement;
