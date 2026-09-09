@@ -62,8 +62,8 @@ function onStroke(x, y, l, t, w, h, r, sw) {
 function iconPixel(size, x, y) {
   const s = size / 64;
   if (!inRoundRect(x, y, 0, 0, size, size, 14 * s)) return [0, 0, 0, 0];
-  if (onStroke(x, y, 15 * s, 15 * s, 28 * s, 28 * s, 4 * s, 1.5 * s)) return [250, 250, 250, 255];
-  if (onStroke(x, y, 21 * s, 21 * s, 28 * s, 28 * s, 4 * s, 1.5 * s)) return [250, 250, 250, 255];
+  if (onStroke(x, y, 22 * s, 22 * s, 30 * s, 30 * s, 8 * s, 3 * s)) return [250, 250, 250, 255];
+  if (onStroke(x, y, 12 * s, 12 * s, 30 * s, 30 * s, 8 * s, 3 * s)) return [153, 153, 153, 255];
   return [10, 10, 10, 255];
 }
 
