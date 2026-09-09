@@ -382,18 +382,18 @@ describe("Chat composer and layout", () => {
     expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
   });
 
-  it("shows ops chips on an empty composer and inserts without sending", async () => {
+  it("offers saved operations on the empty transcript and inserts without sending", async () => {
     await renderChat();
     await act(async () => {
       socket.setConnected();
       socket.emit({ type: "transcript.snapshot", events: [] });
     });
-    const chips = host.querySelector(".ops-chips");
+    const chips = host.querySelector(".empty-actions");
     expect(chips?.textContent).toContain("/status");
     expect(chips?.textContent).toContain("/disk");
     expect(chips?.textContent).toContain("/failed-units");
     await act(async () => {
-      [...chips!.querySelectorAll("button")].find((b) => b.textContent === "/status")?.click();
+      [...chips!.querySelectorAll("button")].find((b) => b.textContent?.endsWith("/status"))?.click();
     });
     expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
     expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);

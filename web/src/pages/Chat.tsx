@@ -27,7 +27,17 @@ import { operatorError, shouldSubmitOnEnter } from "../operatorError";
 import { blockMatchesQuery, cwdBasename, formatTokens, isImageMime, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
-import { GlassysMark, IconArrowDown, IconAttach, IconExport, IconSearch, IconSend, IconStop, IconThreads } from "../components/Icon";
+import {
+  GlassysMark,
+  IconArrowDown,
+  IconAttach,
+  IconClose,
+  IconExport,
+  IconSearch,
+  IconSend,
+  IconStop,
+  IconThreads,
+} from "../components/Icon";
 import { Sidebar } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
 import { HostContext, type HostInfo } from "../components/HostContext";
@@ -1087,6 +1097,38 @@ export function Chat({
         }}
       >
         <div className="composer-inner">
+          {queueItems.length > 0 && (
+            /* The queue was a bare list wedged among the composer hints; it now
+               has its own band with a count, above the input. */
+            <div className="queue-band">
+              <p className="eyebrow">
+                {t("chat.queueList")} · <span className="nums">{queueItems.length}</span>
+              </p>
+              <ul className="queue-list" aria-label={t("chat.queueList")}>
+                {queueItems.map((item) => (
+                  <li key={item.id}>
+                    <span className="truncate">
+                      {item.source === "schedule" ? `${t("chat.queueSchedule")}: ` : ""}
+                      {item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn sm"
+                      aria-label={t("chat.queueRemove")}
+                      title={t("chat.queueRemove")}
+                      onClick={() => {
+                        if (!sendRef.current({ type: "queue.cancel", id: item.id })) setSendError(t("chat.sendFailed"));
+                      }}
+                    >
+                      <IconClose size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* One row that scrolls sideways rather than a stack that changes the
+              composer height every time a hint appears. */}
           <div className="composer-meta">
             {caps?.models !== false && (
               <ModelPicker
@@ -1099,34 +1141,17 @@ export function Chat({
               />
             )}
             {modelSource === "fallback" && caps?.liveCatalog !== false && caps && (
-              <p className="warn" title={catalogError || undefined}>
+              <p className="warn" title={catalogError || t("wizard.model.fallbackShort")}>
                 {t("wizard.model.fallbackShort")}
               </p>
             )}
             <PermissionChip config={config} caps={caps} onConfig={onConfig} />
-            {caps?.attachments === false && <p className="muted composer-hint">{t("chat.attachPathOnly")}</p>}
-            {waiting && <p className="muted composer-hint">{t("chat.queuedHint")}</p>}
-            {queueItems.length > 0 && (
-              <ul className="queue-list" aria-label={t("chat.queueList")}>
-                {queueItems.map((item) => (
-                  <li key={item.id}>
-                    <span>
-                      {item.source === "schedule" ? `${t("chat.queueSchedule")}: ` : ""}
-                      {item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}
-                    </span>
-                    <button
-                      type="button"
-                      className="ghost tiny"
-                      onClick={() => {
-                        if (!sendRef.current({ type: "queue.cancel", id: item.id })) setSendError(t("chat.sendFailed"));
-                      }}
-                    >
-                      {t("chat.queueRemove")}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {caps?.attachments === false && (
+              <p className="muted composer-hint" title={t("chat.attachPathOnly")}>
+                {t("chat.attachPathOnly")}
+              </p>
             )}
+            {waiting && <p className="muted composer-hint">{t("chat.queuedHint")}</p>}
           </div>
           {drafts.length > 0 && (
             <div className="thumbs draft-thumbs">
@@ -1136,6 +1161,7 @@ export function Chat({
                   type="button"
                   className="thumb-remove"
                   aria-label={`${t("chat.removeAttach")} ${a.name}`}
+                  title={`${t("chat.removeAttach")} ${a.name}`}
                   onClick={() => setDrafts((cur) => cur.filter((d) => d.id !== a.id))}
                 >
                   {isImageMime(a.mime) ? (
@@ -1143,27 +1169,12 @@ export function Chat({
                   ) : (
                     <span className="file-chip">{a.name}</span>
                   )}
+                  {/* Without this badge nothing said the thumbnail was removable. */}
+                  <span className="thumb-badge" aria-hidden="true">
+                    <IconClose size={11} />
+                  </span>
                 </button>
               ))}
-            </div>
-          )}
-          {snapshotReady && !text.trim() && !slashOpen && opsChips.length > 0 && (
-            <div className="ops-chips" role="group" aria-label={t("chat.opsChips")}>
-              {opsChips.map((tpl) => {
-                const slash = tpl.slash.replace(/^\//, "");
-                const label = t(`prompt.${tpl.id}`);
-                return (
-                  <button
-                    key={tpl.id}
-                    type="button"
-                    className="ghost tiny"
-                    aria-label={label !== `prompt.${tpl.id}` ? label : tpl.title}
-                    onClick={() => insertTemplate(tpl.text)}
-                  >
-                    /{slash}
-                  </button>
-                );
-              })}
             </div>
           )}
           <div className="composer-box">
@@ -1237,7 +1248,7 @@ export function Chat({
               <IconSend />
             </button>
           </div>
-          <p className="muted composer-hint">{t("palette.hint")}</p>
+          <p className="muted composer-hint composer-shortcut">{t("palette.hint")}</p>
         </div>
       </form>
       </div>
