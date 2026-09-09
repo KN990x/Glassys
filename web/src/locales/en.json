@@ -328,5 +328,6 @@
   "host.folder": "Working directory",
   "host.branch": "Branch",
   "host.agent": "Agent",
-  "alert.dismiss": "Dismiss"
+  "alert.dismiss": "Dismiss",
+  "chat.emptyTitle": "Ready on this host"
 }

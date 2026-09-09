@@ -632,20 +632,64 @@ button.host-copy:hover { color: var(--text); }
 .transcript-inner {
   width: min(var(--content-max), 100%);
   display: grid;
-  gap: var(--s-5);
+  gap: var(--s-3);
   align-content: start;
   min-width: 0;
 }
+/* A user message opens a turn, so it gets the wider gap; everything the agent
+   emits in reply stays tight against it. */
+.transcript-inner > .bubble.user { margin-top: var(--s-4); }
+.transcript-inner > .bubble.user:first-child { margin-top: 0; }
 .transcript-toolbar {
+  align-self: center;
   width: min(var(--content-max), 100%);
   display: flex;
   gap: var(--s-2);
   align-items: center;
-  margin-bottom: var(--s-4);
+  box-sizing: border-box;
+  padding: var(--s-3) calc(var(--page-gutter) + env(safe-area-inset-right)) 0
+           calc(var(--page-gutter) + env(safe-area-inset-left));
 }
-.transcript-toolbar input[type="search"] { flex: 1; min-width: 0; }
+.search-field { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
+.search-field svg { position: absolute; left: var(--s-3); color: var(--faint); pointer-events: none; }
+.search-field input[type="search"] { width: 100%; padding-left: var(--s-7); }
+.chat-main > .alert-stack { align-self: center; }
 .bubble, .thinking, .tool, .banner, .empty { width: 100%; min-width: 0; }
-.empty { color: var(--muted); text-align: center; margin-top: var(--s-8); }
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  text-align: center;
+  color: var(--muted);
+  margin: var(--s-8) 0 var(--s-4);
+  padding: var(--s-6) var(--s-4);
+}
+.empty h2 { margin: var(--s-2) 0 0; font-size: var(--fs-xl); font-weight: 650; color: var(--text); }
+.empty p { margin: 0; }
+.empty-host { font-size: var(--fs-xs); font-family: var(--mono); overflow-wrap: anywhere; }
+.empty-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s-2);
+  width: 100%;
+  margin-top: var(--s-4);
+}
+.empty-action {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  text-align: left;
+  min-height: 58px;
+  padding: var(--s-3);
+  border-radius: var(--r-lg);
+  justify-content: stretch;
+}
+.empty-action strong { font-weight: 500; color: var(--text); }
+.empty-action span { font-size: var(--fs-xs); font-family: var(--mono); }
+
+.working { display: flex; align-items: center; gap: var(--s-2); color: var(--muted); font-size: var(--fs-sm); }
+.working .pulse { justify-self: auto; flex: none; background: var(--accent); }
+.working-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .bubble.user {
   justify-self: end;
@@ -746,12 +790,16 @@ button.host-copy:hover { color: var(--text); }
   transition: border-color var(--dur) var(--ease);
 }
 .tool.error { border-color: color-mix(in srgb, var(--danger) 40%, var(--stroke)); }
-.tool-head-row { display: flex; align-items: stretch; gap: var(--s-1); }
+.tool-head-row { display: flex; align-items: stretch; }
 .tool-head-row .tool-head { flex: 1; min-width: 0; }
-.tool-copy { align-self: center; flex: none; margin-right: var(--s-3); }
+.tool-copy { align-self: center; flex: none; margin-right: var(--s-2); }
+.tool-copy.failed { color: var(--warn); }
+.tool-glyph { display: grid; place-items: center; color: var(--muted); }
+.tool-kind-glyph { color: var(--faint); }
 .tool-head {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px 16px minmax(0, 1fr) auto auto;
   gap: var(--s-2);
   align-items: center;
   background: transparent;
@@ -1230,7 +1278,8 @@ button.host-copy:hover { color: var(--text); }
   border-left: 2px solid var(--stroke-strong);
   color: var(--muted);
 }
-.md table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); margin: 0 0 var(--s-3); }
+.table-wrap { overflow-x: auto; margin: 0 0 var(--s-3); border-radius: var(--r-md); }
+.md table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); margin: 0; }
 .md th, .md td { border: 1px solid var(--stroke); padding: var(--s-2); text-align: left; }
 .md th { background: var(--bg-muted); font-weight: 600; }
 .md :not(pre) > code {

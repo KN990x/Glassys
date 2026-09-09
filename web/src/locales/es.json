@@ -328,5 +328,6 @@
   "host.folder": "Directorio de trabajo",
   "host.branch": "Rama",
   "host.agent": "Agente",
-  "alert.dismiss": "Descartar"
+  "alert.dismiss": "Descartar",
+  "chat.emptyTitle": "Listo en este host"
 }

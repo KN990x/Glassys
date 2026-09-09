@@ -1,6 +1,41 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import type { ToolBlock } from "../transcript";
+import {
+  IconAlert,
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconCopy,
+  IconError,
+  IconFile,
+  IconFileEdit,
+  IconFolder,
+  IconSearch,
+  IconTerminal,
+} from "./Icon";
+
+const KIND_GLYPH: Record<string, ReactNode> = {
+  shell: <IconTerminal size={16} />,
+  read: <IconFile size={16} />,
+  write: <IconFileEdit size={16} />,
+  edit: <IconFileEdit size={16} />,
+  grep: <IconSearch size={16} />,
+  glob: <IconSearch size={16} />,
+  semsearch: <IconSearch size={16} />,
+  ls: <IconFolder size={16} />,
+};
+
+function StatusPill({ status, label }: { status: string; label: string }) {
+  const glyph =
+    status === "running" ? null : status === "done" ? <IconCheck size={12} /> : status === "denied" ? <IconAlert size={12} /> : <IconError size={12} />;
+  return (
+    <span className={`pill ${status}`}>
+      {glyph}
+      {label}
+    </span>
+  );
+}
 
 export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; shellLines: number; showDiff: boolean }) {
   const t = useT();
@@ -8,7 +43,12 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const open = userOpen ?? (block.status === "running" || block.toolKind !== "shell");
+  /* Reads and greps used to open by default, so a run that touched a dozen
+     files buried the answer. Only unfinished, failed and diff-bearing calls
+     open themselves now. */
+  const open =
+    userOpen ??
+    (block.status === "running" || block.status === "error" || block.status === "denied" || Boolean(showDiff && block.diff));
   const hunks = useMemo(() => (showDiff && block.diff ? splitHunks(block.diff) : []), [block.diff, showDiff]);
   const chunkLines = block.chunk ? block.chunk.split("\n").length : 0;
   const canExpand = chunkLines > shellLines;
@@ -27,42 +67,57 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
     }
   }
 
+  const statusLabel =
+    block.status === "running"
+      ? t("tool.running")
+      : block.status === "denied"
+        ? t("tool.denied")
+        : block.status === "error"
+          ? t("tool.error")
+          : t("tool.done");
+
   return (
     <article className={`tool ${block.status}`}>
       <div className="tool-head-row">
         <button className="tool-head" type="button" aria-expanded={open} onClick={() => setUserOpen((v) => !(v ?? open))}>
-          <span className="kind">{label(block.toolKind, t)}</span>
+          <span className="tool-glyph" aria-hidden="true">
+            {open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+          </span>
+          <span className="tool-glyph tool-kind-glyph" title={label(block.toolKind, t)}>
+            {KIND_GLYPH[block.toolKind] ?? <IconTerminal size={16} />}
+            <span className="visually-hidden kind">{label(block.toolKind, t)}</span>
+          </span>
           <span className="title">
             <span>{block.title}</span>
             {block.path && block.path !== block.title ? <span className="tool-path">{block.path}</span> : null}
           </span>
           {block.stats && (
             <span className="stats">
-              +{block.stats.add} −{block.stats.del}
+              <span className="add">+{block.stats.add}</span> <span className="del">−{block.stats.del}</span>
             </span>
           )}
-          <span className={`pill ${block.status}`}>
-            {block.status === "running"
-              ? t("tool.running")
-              : block.status === "denied"
-                ? t("tool.denied")
-                : block.status === "error"
-                  ? t("tool.error")
-                  : t("tool.done")}
-          </span>
+          <StatusPill status={block.status} label={statusLabel} />
         </button>
         {block.command && (
-          <button type="button" className="ghost tiny tool-copy" onClick={(e) => void copyCommand(e)}>
-            {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
+          <button
+            type="button"
+            className={`icon-btn sm tool-copy${copyFailed ? " failed" : ""}`}
+            aria-label={t("tool.copyCommand")}
+            title={t("tool.copyCommand")}
+            onClick={(e) => void copyCommand(e)}
+          >
+            {copied ? <IconCheck size={15} /> : copyFailed ? <IconAlert size={15} /> : <IconCopy size={15} />}
+            {/* The label left the button face, so the outcome is announced instead. */}
+            <span className="visually-hidden" aria-live="polite">
+              {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
+            </span>
           </button>
         )}
       </div>
       {open && (
         <div className="tool-body">
           {block.command && block.toolKind === "shell" && <pre className="shell-cmd">{block.command}</pre>}
-          {block.chunk && (
-            <pre className="shell-out">{expanded ? block.chunk : tail(block.chunk, shellLines)}</pre>
-          )}
+          {block.chunk && <pre className="shell-out">{expanded ? block.chunk : tail(block.chunk, shellLines)}</pre>}
           {canExpand && (
             <button type="button" className="ghost tiny" onClick={() => setExpanded((v) => !v)}>
               {expanded ? t("tool.showLess") : t("tool.showMore")}
@@ -99,15 +154,21 @@ function splitHunks(diff: string): string[] {
 
 function Hunk({ hunk, emptyLabel }: { hunk: string; emptyLabel: string }) {
   const [open, setOpen] = useState(true);
-  const header = hunk.split("\n")[0] ?? "";
+  const lines = hunk.split("\n");
+  const header = lines[0] ?? "";
+  const hasHeader = header.startsWith("@@");
+  /* The header already sits in the toggle; repeating it inside the block made
+     every hunk render its @@ line twice. */
+  const body = hasHeader ? lines.slice(1) : lines;
   return (
     <div className="hunk">
       <button type="button" className="hunk-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        {header.startsWith("@@") ? header : emptyLabel}
+        {open ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+        {hasHeader ? header : emptyLabel}
       </button>
       {open && (
         <pre className="diff">
-          {hunk.split("\n").map((line, i) => (
+          {body.map((line, i) => (
             <span
               key={i}
               className={
