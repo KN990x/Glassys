@@ -35,7 +35,11 @@
 </p>
 
 <p align="center">
-  <img src="./docs/assets/chat.png" alt="Glassys chat: thinking, tools, and streamed text" width="100%">
+  <img src="./docs/assets/chat.png" alt="Glassys on the desktop: thread rail, thinking, tool cards, and a diff" width="100%">
+</p>
+
+<p align="center">
+  <img src="./docs/assets/mobile.png" alt="Glassys on a phone: the same thread with a bottom tab bar" width="270">
 </p>
 
 <a id="english"></a>
@@ -52,7 +56,7 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 - **UI language:** English by default; Spanish (`es`) is available in Settings.
 - **Distribution:** self-hosted. Every operator runs their own instance. Not a Glassys SaaS.
 - **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet), Codex SDK (needs the `codex` binary), plus a generic ACP host. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; Gemini, Codex, and ACP use a documented static fallback.
-- **v1:** one profile / one agent / **one live thread** / one run at a time (FIFO queue). The thread drawer lists archived transcripts; only one thread is live.
+- **v1:** one profile / one agent / **one live thread** / one run at a time (FIFO queue). The thread list includes archived transcripts; only one thread is live.
 
 **Agent / adapter** is the product on the host. **Transport** is how Glassys talks to it (SDK or ACP — never print-mode). **CLI** is the vendor’s terminal app: it may stay installed; its login does not authenticate Glassys. Codex and OpenCode still need their binary on PATH.
 
@@ -64,6 +68,27 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 - Not OpenClaw, Open WebUI, or a PTY/xterm product.
 - Not a Cloudflare product. Tunnel and Access are optional recipes.
 - Not a wrapper of `cursor-agent -p --output-format stream-json` (print mode suppresses thinking).
+
+## Interface
+
+The PWA is one surface at two sizes. Wide screens get a persistent rail with the
+thread list, the workspaces you pinned, and the host facts: user, working
+directory, git branch, adapter. Phones get the same thread list as a sheet plus
+a bottom tab bar, and the composer clears the home indicator.
+
+- **Transcript** — thinking blocks, tool cards with the command, output, and a
+  coloured diff, and text painted from the first token.
+- **Command palette** — `⌘K` / `Ctrl+K` for threads, export, restart, upgrade,
+  workspaces, and your saved prompts. Typing `/` in the composer filters the
+  same prompts inline.
+- **Saved operations** — slash templates you define in Settings. The empty
+  transcript offers them as cards, so a fresh thread starts with one tap.
+- **Scheduled prompts** — cron or a one-shot time, queued when the gateway is
+  idle.
+- **Settings** — appearance, agent, session, templates, schedules, updates,
+  phone access, and token usage, in tabs.
+- **Themes and language** — dark, light, or follow the system; English and
+  Spanish.
 
 ## Requirements
 
@@ -176,7 +201,7 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 - **Idioma de la UI:** inglés por defecto; español (`es`) en Ajustes.
 - **Distribución:** self-hosted. Cada operador monta la suya. No hay SaaS de Glassys.
 - **Adaptadores:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + servidor local, Gemini CLI SDK (aún no en npm), Codex SDK (hace falta el binario `codex`), más un host ACP genérico. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del runtime; Gemini, Codex y ACP usan un fallback estático documentado.
-- **v1:** un perfil / un agente / **un hilo vivo** / un run a la vez (cola FIFO). El cajón lista transcripts archivados; solo un hilo está vivo.
+- **v1:** un perfil / un agente / **un hilo vivo** / un run a la vez (cola FIFO). La lista de hilos incluye los transcripts archivados; solo un hilo está vivo.
 
 **Agente / adaptador** es el producto en el host. **Transporte** es cómo le habla Glassys (SDK o ACP — nunca print-mode). **CLI** es el programa de terminal del vendor: puede seguir instalado; su login no autentica Glassys. Codex y OpenCode sí necesitan su binario en el PATH.
 
@@ -188,6 +213,28 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 - No es OpenClaw, Open WebUI ni un producto PTY/xterm.
 - No es un producto de Cloudflare. Tunnel y Access son recetas opcionales.
 - No es un wrapper de `cursor-agent -p --output-format stream-json` (el print mode oculta el thinking).
+
+## Interfaz
+
+La PWA es una sola superficie a dos tamaños. En pantalla ancha hay un rail fijo
+con la lista de hilos, los workspaces que hayas fijado y los datos del host:
+usuario, directorio de trabajo, rama de git y adaptador. En el teléfono la misma
+lista aparece como hoja, con una barra inferior, y el composer respeta el
+indicador de inicio.
+
+- **Transcript** — bloques de razonamiento, tarjetas de herramienta con el
+  comando, la salida y el diff en color, y texto pintado desde el primer token.
+- **Paleta de comandos** — `⌘K` / `Ctrl+K` para hilos, exportar, reiniciar,
+  actualizar, workspaces y tus prompts guardados. Escribir `/` en el composer
+  filtra esos mismos prompts en línea.
+- **Operaciones guardadas** — plantillas slash que defines en Ajustes. El
+  transcript vacío las ofrece como tarjetas, así un hilo nuevo arranca de un
+  toque.
+- **Prompts programados** — cron o una hora única, encolados cuando la pasarela
+  está libre.
+- **Ajustes** — apariencia, agente, sesión, plantillas, programaciones,
+  actualizaciones, acceso desde el teléfono y uso de tokens, en pestañas.
+- **Temas e idioma** — oscuro, claro o seguir al sistema; inglés y español.
 
 ## Requisitos
 

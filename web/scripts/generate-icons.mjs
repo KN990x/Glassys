@@ -59,11 +59,39 @@ function onStroke(x, y, l, t, w, h, r, sw) {
   return inRoundRect(x, y, l, t, w, h, r) && !inRoundRect(x, y, l + sw, t + sw, w - sw * 2, h - sw * 2, Math.max(0, r - sw));
 }
 
+function inCircle(x, y, cx, cy, r) {
+  const dx = x - cx;
+  const dy = y - cy;
+  return dx * dx + dy * dy <= r * r;
+}
+
+/**
+ * The mark is a viewfinder: a rounded-square outline interrupted on both
+ * diagonals, plus a solid focus point. Authored in a 48 unit box and placed in
+ * the 64 unit plate at 0.85 scale, matching web/public/icon.svg.
+ */
 function iconPixel(size, x, y) {
   const s = size / 64;
   if (!inRoundRect(x, y, 0, 0, size, size, 14 * s)) return [0, 0, 0, 0];
-  if (onStroke(x, y, 22 * s, 22 * s, 30 * s, 30 * s, 8 * s, 3 * s)) return [250, 250, 250, 255];
-  if (onStroke(x, y, 12 * s, 12 * s, 30 * s, 30 * s, 8 * s, 3 * s)) return [153, 153, 153, 255];
+
+  const cx = 32 * s;
+  const cy = 32 * s;
+  if (inCircle(x, y, cx, cy, 3.57 * s)) return [250, 250, 250, 255];
+
+  // Outline of the rounded square, stroke centred on the 18.4..45.6 path.
+  const sw = 2.89 * s;
+  const l = 16.955 * s;
+  const w = 30.09 * s;
+  const r = 10.795 * s;
+  if (onStroke(x, y, l, l, w, w, r, sw)) {
+    // Cut the stroke where it crosses either diagonal, leaving two brackets.
+    const u = x - cx;
+    const v = y - cy;
+    const len = Math.hypot(u, v);
+    if (len === 0) return [10, 10, 10, 255];
+    const alongDiagonal = Math.abs(u - v) / (Math.SQRT2 * len);
+    if (alongDiagonal <= 0.789) return [250, 250, 250, 255];
+  }
   return [10, 10, 10, 255];
 }
 

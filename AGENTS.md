@@ -50,7 +50,7 @@ Default bind is `127.0.0.1`. Binding `0.0.0.0` is an explicit operator choice in
 | `adapters/codex/` | Codex SDK (`runStreamed` / `resumeThread`), not print-mode `exec --json`. |
 | `adapters/acp/` | Generic ACP JSON-RPC host (auto-apply when auto-run is on). |
 | `gateway/` | Long-lived Node process: auth, WS, queue, persistence, static PWA, adapter registry. |
-| `web/` | Dumb PWA: paint protocol, store display prefs, speak WS. Settings/wizard render from capabilities. |
+| `web/` | Dumb PWA: paint protocol, store display prefs, speak WS. Settings/wizard render from capabilities. All styling comes from the tokens at the top of `web/src/styles.css` (spacing, type, radii, elevation, motion) — no loose `rem`/`px` in component rules. Icons come from `web/src/components/Icon.tsx`, never inline SVG. Desktop is a persistent rail; below 1024px it is a bottom tab bar plus a thread sheet. |
 | `data/` | Runtime state (`GLASSYS_DATA_DIR`). Not committed. |
 
 Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageManager` is pinned in the root `package.json`. Do not add a `package-lock.json` or use `npm install`.
