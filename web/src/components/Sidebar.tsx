@@ -56,7 +56,7 @@ export function Sidebar({
           onClick={onNew}
           disabled={threads.busy || threads.waiting}
         >
-          <IconPlus size={16} />
+          <IconPlus />
           {t("threads.new")}
         </button>
         <button
@@ -67,7 +67,7 @@ export function Sidebar({
           aria-label={t("chat.export")}
           title={t("chat.export")}
         >
-          <IconExport size={16} />
+          <IconExport />
         </button>
       </div>
 
@@ -78,7 +78,7 @@ export function Sidebar({
       <div className="sidebar-foot">
         <HostContext info={host} variant="rows" onCopyFailed={onCopyFailed} />
         <button ref={settingsRef} type="button" className="ghost sidebar-settings" onClick={onSettings}>
-          <IconSettings size={16} />
+          <IconSettings />
           {t("nav.settings")}
         </button>
       </div>

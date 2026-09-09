@@ -88,7 +88,7 @@ export function ThreadList({
                     title={t("threads.unpin")}
                     onClick={() => onUnpin?.(cwd)}
                   >
-                    <IconPinOff size={15} />
+                    <IconPinOff />
                   </button>
                 </span>
               </li>
@@ -121,7 +121,7 @@ export function ThreadList({
                     title={t("threads.pin")}
                     onClick={() => onPin?.(cwd)}
                   >
-                    <IconPin size={15} />
+                    <IconPin />
                   </button>
                 </span>
               </li>
@@ -192,7 +192,7 @@ export function ThreadList({
                           setDraftTitle(th.title);
                         }}
                       >
-                        <IconRename size={15} />
+                        <IconRename />
                       </button>
                       <button
                         type="button"
@@ -201,7 +201,7 @@ export function ThreadList({
                         title={t("threads.delete")}
                         onClick={(e) => void onDelete(th.id, e)}
                       >
-                        <IconTrash size={15} />
+                        <IconTrash />
                       </button>
                     </span>
                   </>

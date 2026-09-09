@@ -14,9 +14,9 @@ export type Alert = {
 };
 
 function Glyph({ tone }: { tone: AlertTone }) {
-  if (tone === "error") return <IconError size={16} />;
-  if (tone === "warn") return <IconAlert size={16} />;
-  return <IconInfo size={16} />;
+  if (tone === "error") return <IconError />;
+  if (tone === "warn") return <IconAlert />;
+  return <IconInfo />;
 }
 
 /**
@@ -54,7 +54,7 @@ export function AlertStack({ alerts }: { alerts: Alert[] }) {
               title={t("alert.dismiss")}
               onClick={alert.onDismiss}
             >
-              <IconClose size={15} />
+              <IconClose />
             </button>
           )}
         </div>
