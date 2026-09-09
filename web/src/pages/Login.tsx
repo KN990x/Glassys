@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { api, setToken } from "../api";
 import { useT, type Locale } from "../i18n";
 import { LocaleSwitch } from "../components/LocaleSwitch";
+import { GlassysMark } from "../components/Icon";
 
 export function Login({
   onDone,
@@ -44,7 +45,7 @@ export function Login({
     <main className="gate">
       <div className="panel">
         <div className="brand">
-          <img src="/icon.svg" alt="" width={40} height={40} />
+          <GlassysMark size={36} />
           <div>
             <h1>{t("app.name")}</h1>
             <p className="muted">{t("app.tagline")}</p>
