@@ -143,6 +143,7 @@ describe("Chat composer and layout", () => {
     saveConfig.mockReset();
     socket.sent.length = 0;
     vi.unstubAllGlobals();
+    sessionStorage.removeItem("glassys.hideLoopback");
   });
 
   async function renderChat() {
@@ -385,5 +386,89 @@ describe("Chat composer and layout", () => {
     });
     expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
     expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
+  });
+
+  it("shows ops chips on an empty composer and inserts without sending", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const chips = host.querySelector(".ops-chips");
+    expect(chips?.textContent).toContain("/status");
+    expect(chips?.textContent).toContain("/disk");
+    expect(chips?.textContent).toContain("/failed-units");
+    await act(async () => {
+      [...chips!.querySelectorAll("button")].find((b) => b.textContent === "/status")?.click();
+    });
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
+    expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
+  });
+
+  it("dismisses the loopback banner for the tab", async () => {
+    await renderChat();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).toMatch(/loopback/i);
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "Dismiss")?.click();
+    });
+    expect(host.textContent).not.toMatch(/loopback/i);
+    expect(sessionStorage.getItem("glassys.hideLoopback")).toBe("1");
+  });
+
+  it("shows a truncated transcript banner", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [], truncated: true });
+    });
+    expect(host.textContent).toMatch(/omitted/i);
+  });
+
+  it("caps attachments at four before upload", async () => {
+    const { api } = await import("./api");
+    vi.mocked(api.upload).mockClear();
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const files = [1, 2, 3, 4, 5].map((n) => new File([`x${n}`], `f${n}.txt`, { type: "text/plain" }));
+    const form = host.querySelector("form.composer") as HTMLFormElement;
+    await act(async () => {
+      const ev = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "dataTransfer", { value: { files, types: ["Files"] } });
+      form.dispatchEvent(ev);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(vi.mocked(api.upload).mock.calls.length).toBe(4);
+    expect(host.textContent).toMatch(/too many attachments/i);
+  });
+
+  it("opens Settings for upgrade instead of calling the API from the palette", async () => {
+    const { api } = await import("./api");
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    });
+    expect(host.querySelector(".palette-overlay")).toBeTruthy();
+    await act(async () => {
+      const btn = [...host.querySelectorAll<HTMLButtonElement>(".palette-list button")].find((b) =>
+        b.textContent?.includes("Upgrade Glassys"),
+      );
+      btn?.click();
+    });
+    expect(api.upgrade).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="settings-stub"]')).toBeTruthy();
   });
 });

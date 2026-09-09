@@ -17,6 +17,12 @@ function shouldHandle(url) {
   return true;
 }
 
+function isNavigation(req) {
+  if (req.mode === "navigate") return true;
+  const accept = req.headers.get("accept") || "";
+  return accept.includes("text/html");
+}
+
 function isHtml(req, res) {
   if (new URL(req.url).pathname === "/" || req.url.endsWith(".html")) return true;
   const type = res?.headers.get("content-type") || "";
@@ -69,7 +75,14 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const hit = clients.find((c) => "focus" in c);
+      const origin = self.location.origin;
+      const hit = clients.find((c) => {
+        try {
+          return new URL(c.url).origin === origin;
+        } catch {
+          return false;
+        }
+      });
       if (hit) return hit.focus();
       return self.clients.openWindow("/");
     }),
@@ -85,16 +98,27 @@ self.addEventListener("fetch", (event) => {
     fetch(req)
       .then((res) => {
         if (res.ok) {
-          caches.open(CACHE).then((cache) => {
-            cache.put(req, res.clone());
-            if (isHtml(req, res)) {
-              cache.put("/", res.clone());
-              cache.put("/index.html", res.clone());
-            }
-          });
+          const forCache = res.clone();
+          event.waitUntil(
+            caches.open(CACHE).then((cache) => {
+              const tasks = [cache.put(req, forCache)];
+              if (isHtml(req, res) && isNavigation(req)) {
+                tasks.push(cache.put("/", res.clone()));
+                tasks.push(cache.put("/index.html", res.clone()));
+              }
+              return Promise.all(tasks);
+            }),
+          );
         }
         return res;
       })
-      .catch(() => caches.match(req).then((hit) => hit || caches.match("/") || caches.match("/index.html"))),
+      .catch(async () => {
+        const hit = await caches.match(req);
+        if (hit) return hit;
+        if (isNavigation(req)) {
+          return (await caches.match("/")) || (await caches.match("/index.html")) || Response.error();
+        }
+        return Response.error();
+      }),
   );
 });

@@ -109,7 +109,15 @@ describe("runtime queue", () => {
   afterEach(async () => {
     control.go();
     control.goSend();
-    const { shutdownRuntime, setRunCancelTimeoutForTests, DEFAULT_RUN_CANCEL_TIMEOUT_MS } = await import("./runtime.js");
+    const {
+      shutdownRuntime,
+      setRunCancelTimeoutForTests,
+      DEFAULT_RUN_CANCEL_TIMEOUT_MS,
+      setRotatingForTests,
+      setEnqueueRotatingRetriesForTests,
+    } = await import("./runtime.js");
+    setRotatingForTests(false);
+    setEnqueueRotatingRetriesForTests();
     await shutdownRuntime();
     setRunCancelTimeoutForTests(DEFAULT_RUN_CANCEL_TIMEOUT_MS);
     const { setNowForTests, setStallPollMsForTests } = await import("./runtime.js");
@@ -632,14 +640,28 @@ describe("runtime queue", () => {
   });
 
   it("errors when none of the attachment ids can be resolved", async () => {
-    const { enqueueMessage, readTranscript, drainEmit } = await import("./runtime.js");
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = dir;
+    cfg.agent.adapter = "cursor";
+    cfg.session.stallSeconds = 1;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    let now = 1_000_000;
+    const { enqueueMessage, readTranscript, drainEmit, setNowForTests, setStallPollMsForTests, snapshotRuntime } =
+      await import("./runtime.js");
+    setNowForTests(() => now);
+    setStallPollMsForTests(20);
     await enqueueMessage("see this", [{ id: "missing", mime: "image/png", name: "x.png" }]);
     await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.error"));
+    now += 1500;
+    await new Promise((r) => setTimeout(r, 80));
     await drainEmit();
     const events = await readTranscript();
     expect(events.some((e) => e.type === "run.error" && "message" in e && /Attachments/.test(String(e.message)))).toBe(
       true,
     );
+    expect(events.some((e) => e.type === "run.stalled")).toBe(false);
+    expect(snapshotRuntime().busy).toBe(false);
   });
 
   it("broadcasts threads.snapshot when identity archives the live thread", async () => {
@@ -804,5 +826,17 @@ describe("runtime queue", () => {
     } finally {
       fakeAdapter.create = origCreate;
     }
+  });
+
+  it("emits run.error when enqueue retries are exhausted while rotating", async () => {
+    const { enqueueMessage, readTranscript, setRotatingForTests, setEnqueueRotatingRetriesForTests } =
+      await import("./runtime.js");
+    setRotatingForTests(true);
+    setEnqueueRotatingRetriesForTests(3);
+    const queued = await enqueueMessage("blocked");
+    expect(queued).toBe(false);
+    const events = await readTranscript();
+    expect(events.some((e) => e.type === "run.error" && "message" in e && /busy/i.test(String(e.message)))).toBe(true);
+    expect(events.some((e) => e.type === "user.message")).toBe(false);
   });
 });

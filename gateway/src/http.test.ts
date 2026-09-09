@@ -49,8 +49,9 @@ describe("http api", () => {
     resetLiveThreadCache();
     setRuntimeBusyForTests(false);
     setRestartHandler(async () => undefined);
-    const { setDetectServiceForTests } = await import("./admin-update.js");
+    const { setDetectServiceForTests, setInstallGitForTests } = await import("./admin-update.js");
     setDetectServiceForTests(null);
+    setInstallGitForTests(undefined);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
@@ -249,5 +250,77 @@ describe("http api", () => {
     expect(res.status).toBe(202);
     await new Promise((r) => setTimeout(r, 80));
     expect(restart).toHaveBeenCalled();
+  });
+
+  it("serves push, schedules, and admin update for an operator", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const auth = { Authorization: `Bearer ${token}` };
+
+    const status = await fetch(`${base}/api/admin/update`, { headers: auth });
+    expect(status.status).toBe(200);
+    const snap = (await status.json()) as { service: string; upgrading?: { phase: string } };
+    expect(["none", "launchd", "systemd"]).toContain(snap.service);
+    expect(snap.upgrading === undefined || snap.upgrading.phase === "idle").toBe(true);
+
+    const vapid = await fetch(`${base}/api/push/vapid`, { headers: auth });
+    expect(vapid.status).toBe(200);
+    const keys = (await vapid.json()) as { publicKey: string; subject: string };
+    expect(keys.publicKey.length).toBeGreaterThan(20);
+    expect(keys.subject).toMatch(/^(mailto:|https:)/);
+
+    const badSub = await fetch(`${base}/api/push/subscribe`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: "" }),
+    });
+    expect(badSub.status).toBe(400);
+
+    const sub = await fetch(`${base}/api/push/subscribe`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: "https://push.example/a", keys: { p256dh: "p", auth: "a" } }),
+    });
+    expect(sub.status).toBe(200);
+    const unsub = await fetch(`${base}/api/push/subscribe`, {
+      method: "DELETE",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: "https://push.example/a" }),
+    });
+    expect(unsub.status).toBe(200);
+
+    const listed = (await (await fetch(`${base}/api/threads`, { headers: auth })).json()) as { currentId: string };
+    const schedules = await fetch(`${base}/api/schedules`, { headers: auth });
+    expect(schedules.status).toBe(200);
+    const schedBody = (await schedules.json()) as { timezone: string; schedules: unknown[] };
+    expect(schedBody.timezone).toBeTruthy();
+    expect(schedBody.schedules).toEqual([]);
+
+    const created = await fetch(`${base}/api/schedules`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: "status",
+        cwd: dir,
+        threadId: listed.currentId,
+        cron: "0 6 * * *",
+      }),
+    });
+    expect(created.status).toBe(200);
+    const job = (await created.json()) as { threadId?: string; cron?: string };
+    expect(job.threadId).toBe(listed.currentId);
+    expect(job.cron).toBe("0 6 * * *");
+
+    const { setDetectServiceForTests, setInstallGitForTests } = await import("./admin-update.js");
+    setDetectServiceForTests("launchd");
+    setInstallGitForTests({ sha: "abc", branch: "main", dirty: true });
+    const dirty = await fetch(`${base}/api/admin/upgrade`, { method: "POST", headers: auth });
+    expect(dirty.status).toBe(409);
+    expect(((await dirty.json()) as { error: string }).error).toMatch(/dirty/i);
   });
 });

@@ -17,10 +17,12 @@ export interface ScheduleJob {
   at?: string;
   enabled: boolean;
   createdAt: string;
+  lastRun?: string;
+  lastError?: string;
 }
 
 export interface ScheduleHooks {
-  enqueue: (text: string, source: "schedule") => Promise<void>;
+  enqueue: (text: string, source: "schedule") => Promise<boolean>;
   isIdle: () => boolean;
   liveThreadId: () => string | null;
   liveCwd: () => Promise<string>;
@@ -34,9 +36,18 @@ let hooks: ScheduleHooks | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let firing = false;
 let idlePollMs = 500;
+let idleWaitMaxMs = 180_000;
 
 export function setScheduleIdlePollMsForTests(ms: number): void {
   idlePollMs = ms;
+}
+
+export function setScheduleIdleWaitMsForTests(ms?: number): void {
+  idleWaitMaxMs = ms ?? 180_000;
+}
+
+export function scheduleTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 function nowMs(): number {
@@ -200,9 +211,21 @@ function armTimer(): void {
   })();
 }
 
+async function patchJob(id: string, patch: Partial<ScheduleJob>): Promise<void> {
+  await withSchedules(async () => {
+    const jobs = await readJobs();
+    await writeJobs(jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+  });
+}
+
 async function fireJob(job: ScheduleJob): Promise<void> {
   if (!hooks) return;
+  const deadline = nowMs() + idleWaitMaxMs;
   while (!hooks.isIdle()) {
+    if (nowMs() >= deadline) {
+      await patchJob(job.id, { lastError: "Gateway stayed busy" });
+      return;
+    }
     await new Promise((r) => setTimeout(r, idlePollMs));
     if (!hooks) return;
   }
@@ -218,16 +241,19 @@ async function fireJob(job: ScheduleJob): Promise<void> {
       const cwd = await hooks.liveCwd();
       if (job.cwd && cwd !== job.cwd) await hooks.applyCwd(job.cwd);
     }
-    await hooks.enqueue(job.text, "schedule");
+    const queued = await hooks.enqueue(job.text, "schedule");
+    if (!queued) {
+      await patchJob(job.id, { lastError: "Message was not queued" });
+      return;
+    }
+    await patchJob(job.id, {
+      lastRun: new Date(nowMs()).toISOString(),
+      lastError: undefined,
+      enabled: job.at ? false : job.enabled,
+    });
   } catch (err) {
     log("warn", "schedule fire failed", { id: job.id, error: String(err) });
-    return;
-  }
-  if (job.at) {
-    await withSchedules(async () => {
-      const jobs = await readJobs();
-      await writeJobs(jobs.map((j) => (j.id === job.id ? { ...j, enabled: false } : j)));
-    });
+    await patchJob(job.id, { lastError: err instanceof Error ? err.message : String(err) });
   }
 }
 

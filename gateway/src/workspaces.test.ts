@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listWorkspaces } from "./workspaces.js";
 
@@ -8,6 +8,14 @@ describe("listWorkspaces", () => {
   it("rejects non-absolute and filesystem-root scans", async () => {
     await expect(listWorkspaces("relative")).rejects.toThrow(/absolute/);
     await expect(listWorkspaces("/")).rejects.toThrow(/working directory/);
+  });
+
+  it("narrows /Users and /home to the operator home", async () => {
+    const home = homedir();
+    const hitsUsers = await listWorkspaces("/Users");
+    const hitsHome = await listWorkspaces("/home");
+    expect(hitsUsers).toEqual([{ path: home, name: basename(home) }]);
+    expect(hitsHome).toEqual([{ path: home, name: basename(home) }]);
   });
 
   it("finds git repos two levels down", async () => {

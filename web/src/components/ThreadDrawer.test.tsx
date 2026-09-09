@@ -70,4 +70,39 @@ describe("ThreadDrawer", () => {
     expect(host.querySelector("button.primary")?.hasAttribute("disabled")).toBe(true);
     expect(document.body.style.overflow).toBe("hidden");
   });
+
+  it("filters threads by title", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <ThreadDrawer
+            threads={threads}
+            currentId="t1"
+            locale="en"
+            busy={false}
+            waiting={false}
+            onNew={() => undefined}
+            onSwitch={() => undefined}
+            onDelete={() => undefined}
+            onRename={async () => undefined}
+            onClose={() => undefined}
+            onExport={() => undefined}
+          />
+        </I18nProvider>,
+      );
+    });
+    expect(host.textContent).toContain("Live");
+    expect(host.textContent).toContain("Old");
+    const search = host.querySelector('input[type="search"]') as HTMLInputElement;
+    await act(async () => {
+      const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+      proto?.set?.call(search, "old");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const titles = [...host.querySelectorAll(".thread-list .picker-item strong")].map((el) => el.textContent);
+    expect(titles).toEqual(["Old"]);
+  });
 });

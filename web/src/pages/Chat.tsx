@@ -11,7 +11,7 @@ import type {
   ServerMessage,
   ThreadSummary,
 } from "@glassys/protocol";
-import { PROTOCOL_VERSION, isTranscriptEvent } from "@glassys/protocol";
+import { PROTOCOL_VERSION, MAX_ATTACHMENTS, isTranscriptEvent } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { api, clearToken } from "../api";
 import { openSocket, type ConnState } from "../socket";
@@ -29,6 +29,8 @@ import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 
 const COMPOSER_MAX_PX = 160;
+const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
+const OPS_CHIP_IDS = ["status", "disk", "failed-units"] as const;
 
 export { shouldSubmitOnEnter };
 
@@ -52,6 +54,21 @@ export function formatElapsed(ms: number): string {
   const m = Math.floor(s / 60);
   const rem = s % 60;
   return m > 0 ? `${m}:${String(rem).padStart(2, "0")}` : `${s}s`;
+}
+
+function RunElapsed({ startedAt, lastTool }: { startedAt: number; lastTool?: string }) {
+  const t = useT();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <p className="muted live-line">
+      {t("chat.elapsed")} {formatElapsed(now - startedAt)}
+      {lastTool ? ` · ${t("chat.lastTool")}: ${lastTool}` : ""}
+    </p>
+  );
 }
 
 export function resizeComposer(el: HTMLTextAreaElement, maxPx = COMPOSER_MAX_PX): void {
@@ -84,7 +101,6 @@ export function Chat({
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [threadOpen, setThreadOpen] = useState(false);
   const [runStartedAt, setRunStartedAt] = useState<number | undefined>();
-  const [now, setNow] = useState(Date.now());
   const [drafts, setDrafts] = useState<MessageAttachment[]>([]);
   const [attachError, setAttachError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -103,14 +119,24 @@ export function Chat({
   const [adaptersError, setAdaptersError] = useState("");
   const [hostLabel, setHostLabel] = useState("");
   const [loopback, setLoopback] = useState(false);
+  const [hideLoopback, setHideLoopback] = useState(() => {
+    try {
+      return sessionStorage.getItem(LOOPBACK_DISMISS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [git, setGit] = useState<{ branch: string; dirty: boolean } | undefined>();
   const [hostCopied, setHostCopied] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
+  const [transcriptTruncated, setTranscriptTruncated] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [slashOpen, setSlashOpen] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState<"schedules" | "updates" | undefined>();
+  const [schedulePrefill, setSchedulePrefill] = useState("");
   const [pins, setPins] = useState<string[]>([]);
   const [recents, setRecents] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -125,6 +151,8 @@ export function Chat({
   const loadedDraftFor = useRef<string | null>(null);
   const closeSettings = useCallback(() => {
     setSettings(false);
+    setSettingsFocus(undefined);
+    setSchedulePrefill("");
     popOverlay();
     queueMicrotask(() => settingsBtn.current?.focus());
   }, []);
@@ -187,6 +215,7 @@ export function Chat({
         if (msg.type === "transcript.snapshot") {
           snapshotReadyRef.current = true;
           setSnapshotReady(true);
+          setTranscriptTruncated(Boolean(msg.truncated));
           setBlocks(replay(msg.events));
           return;
         }
@@ -349,17 +378,13 @@ export function Chat({
   useEffect(() => {
     function onPop() {
       setSettings(false);
+      setSettingsFocus(undefined);
+      setSchedulePrefill("");
       setThreadOpen(false);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-
-  useEffect(() => {
-    if (!busy) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [busy]);
 
   const waiting = queueItems.length > 0 || queued;
   const liveUsage = (() => {
@@ -380,7 +405,10 @@ export function Chat({
   const canSend = Boolean(text.trim() || drafts.length) && conn === "connected" && snapshotReady && protocolError === null;
   const queuedIds = new Set(queueItems.map((item) => item.id));
   const lastTool = [...blocks].reverse().find((b) => b.kind === "tool" && b.status === "running");
-  const elapsed = busy && runStartedAt ? formatElapsed(now - runStartedAt) : "";
+  const opsChipSet = new Set<string>(OPS_CHIP_IDS);
+  const opsChips = (config.prompts?.templates ?? []).filter((tpl) => {
+    return opsChipSet.has(tpl.id) || opsChipSet.has(tpl.slash.replace(/^\//, ""));
+  });
 
   const statusClass =
     protocolError || conn === "error"
@@ -496,12 +524,20 @@ export function Chat({
   }
 
   async function onRestart() {
+    if (!window.confirm(t("settings.restartConfirm"))) return;
     try {
       setRestartNote(t("settings.restarting"));
       await api.restart();
     } catch (err) {
       setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
     }
+  }
+
+  function openSettings(section?: "schedules" | "updates", prefill?: string) {
+    setSettingsFocus(section);
+    if (prefill !== undefined) setSchedulePrefill(prefill);
+    pushOverlay("settings");
+    setSettings(true);
   }
 
   async function refreshSites() {
@@ -580,10 +616,7 @@ export function Chat({
       id: "settings",
       group: "product",
       label: t("palette.settings"),
-      run: () => {
-        pushOverlay("settings");
-        setSettings(true);
-      },
+      run: () => openSettings(),
     },
     {
       id: "search",
@@ -596,11 +629,7 @@ export function Chat({
       id: "upgrade",
       group: "product",
       label: t("palette.upgrade"),
-      run: () => {
-        void api.upgrade().catch((err) => {
-          setSendError(operatorError(err instanceof Error ? err.message : t("settings.updateFailed"), t));
-        });
-      },
+      run: () => openSettings("updates"),
     },
     {
       id: "schedule",
@@ -609,25 +638,12 @@ export function Chat({
       run: () => {
         const body = text.trim();
         if (!body) return;
-        void api
-          .createSchedule({
-            text: body,
-            cwd: config.agent.cwd,
-            threadId: currentThreadId || undefined,
-            at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-          })
-          .then(() => {
-            pushOverlay("settings");
-            setSettings(true);
-          })
-          .catch((err) => {
-            setSendError(operatorError(err instanceof Error ? err.message : t("chat.sendFailed"), t));
-          });
+        openSettings("schedules", body);
       },
     },
     ...pins.concat(recents.filter((c) => !pins.includes(c))).map((cwd) => ({
       id: `cwd:${cwd}`,
-      group: "product" as const,
+      group: "workspace" as const,
       label: cwdBasename(cwd),
       hint: cwd,
       run: () => void onOpenCwd(cwd),
@@ -638,8 +654,16 @@ export function Chat({
   async function onAttach(files: FileList | File[] | null) {
     if (!files || !files.length) return;
     setAttachError("");
+    const incoming = Array.from(files);
+    const room = Math.max(0, MAX_ATTACHMENTS - drafts.length);
+    const list = incoming.slice(0, room);
+    if (incoming.length > room) setAttachError(t("error.tooManyAttachments"));
+    if (!list.length) {
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     try {
-      for (const file of Array.from(files)) {
+      for (const file of list) {
         const att = await api.upload(file);
         setDrafts((cur) => [...cur, att]);
       }
@@ -798,6 +822,7 @@ export function Chat({
           onOpenCwd={(cwd) => void onOpenCwd(cwd)}
           onPin={(cwd) => void onPin(cwd)}
           onUnpin={(cwd) => void onUnpin(cwd)}
+          onExport={() => void onExport()}
         />
       )}
       <main className="chat-main">
@@ -812,9 +837,23 @@ export function Chat({
           {configError}
         </p>
       )}
-      {loopback && (
+      {loopback && !hideLoopback && (
         <p className="banner warn" role="status">
-          {t("reach.loopback")}
+          {t("reach.loopback")}{" "}
+          <button
+            type="button"
+            className="ghost tiny"
+            onClick={() => {
+              try {
+                sessionStorage.setItem(LOOPBACK_DISMISS_KEY, "1");
+              } catch {
+                /* ignore */
+              }
+              setHideLoopback(true);
+            }}
+          >
+            {t("reach.dismiss")}
+          </button>
         </p>
       )}
       {adaptersError && (
@@ -878,6 +917,14 @@ export function Chat({
             {t("chat.export")}
           </button>
         </div>
+        {transcriptTruncated && (
+          <p className="banner warn" role="status">
+            {t("chat.transcriptTruncated")}{" "}
+            <button type="button" className="ghost tiny" onClick={() => void onExport()} disabled={!currentThreadId}>
+              {t("chat.export")}
+            </button>
+          </p>
+        )}
         <div className="transcript-inner">
         {!snapshotReady && (
           <p className="empty" aria-live="polite">
@@ -1067,11 +1114,8 @@ export function Chat({
                 ))}
               </ul>
             )}
-            {busy && elapsed && (
-              <p className="muted live-line">
-                {t("chat.elapsed")} {elapsed}
-                {lastTool && lastTool.kind === "tool" ? ` · ${t("chat.lastTool")}: ${lastTool.title}` : ""}
-              </p>
+            {busy && runStartedAt && (
+              <RunElapsed startedAt={runStartedAt} lastTool={lastTool && lastTool.kind === "tool" ? lastTool.title : undefined} />
             )}
           </div>
           {drafts.length > 0 && (
@@ -1091,6 +1135,25 @@ export function Chat({
                   )}
                 </button>
               ))}
+            </div>
+          )}
+          {snapshotReady && !text.trim() && !slashOpen && opsChips.length > 0 && (
+            <div className="ops-chips" role="group" aria-label={t("chat.opsChips")}>
+              {opsChips.map((tpl) => {
+                const slash = tpl.slash.replace(/^\//, "");
+                const label = t(`prompt.${tpl.id}`);
+                return (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    className="ghost tiny"
+                    aria-label={label !== `prompt.${tpl.id}` ? label : tpl.title}
+                    onClick={() => insertTemplate(tpl.text)}
+                  >
+                    /{slash}
+                  </button>
+                );
+              })}
             </div>
           )}
           <div className="composer-box">
@@ -1164,10 +1227,19 @@ export function Chat({
               <SendIcon />
             </button>
           </div>
+          <p className="muted composer-hint">{t("palette.hint")}</p>
         </div>
       </form>
       {settings && (
-        <Settings config={config} onClose={closeSettings} onConfig={onConfig} onLogout={onLogout} />
+        <Settings
+          config={config}
+          onClose={closeSettings}
+          onConfig={onConfig}
+          onLogout={onLogout}
+          currentThreadId={currentThreadId}
+          focusSection={settingsFocus}
+          schedulePrefill={schedulePrefill}
+        />
       )}
       <CommandPalette
         open={paletteOpen}

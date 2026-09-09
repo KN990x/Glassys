@@ -20,9 +20,14 @@ export type ServiceKind = "launchd" | "systemd" | "none";
 export type UpgradePhase = "idle" | "starting" | "pulling" | "install" | "build" | "restart" | "error";
 
 let detectOverride: ServiceKind | null = null;
+let gitInfoOverride: { sha: string; branch: string; dirty: boolean } | null | undefined;
 
 export function setDetectServiceForTests(kind: ServiceKind | null): void {
   detectOverride = kind;
+}
+
+export function setInstallGitForTests(info: { sha: string; branch: string; dirty: boolean } | null | undefined): void {
+  gitInfoOverride = info;
 }
 
 export interface UpgradeStatus {
@@ -59,8 +64,8 @@ export function detectService(env = process.env, platform = process.platform): S
     if (printed.status === 0) return "launchd";
   }
   if (platform === "linux") {
-    const st = spawnSync("systemctl", ["--user", "is-active", SYSTEMD_UNIT], { encoding: "utf8", timeout: 2000 });
-    if (st.status === 0 && String(st.stdout).trim() === "active") return "systemd";
+    const cat = spawnSync("systemctl", ["--user", "cat", SYSTEMD_UNIT], { encoding: "utf8", timeout: 2000 });
+    if (cat.status === 0) return "systemd";
   }
   return "none";
 }
@@ -74,6 +79,7 @@ async function git(args: string[], timeout = GIT_TIMEOUT_MS): Promise<string> {
 }
 
 export async function readInstallGit(): Promise<{ sha: string; branch: string; dirty: boolean } | undefined> {
+  if (gitInfoOverride !== undefined) return gitInfoOverride ?? undefined;
   if (!existsSync(join(repoRoot(), ".git"))) return undefined;
   try {
     const sha = await git(["rev-parse", "HEAD"]);
@@ -135,10 +141,20 @@ export async function adminUpdateSnapshot(): Promise<{
   };
 }
 
+let spawnUpgrade = spawn;
+
+export function setUpgradeSpawnForTests(fn: typeof spawn | null): void {
+  spawnUpgrade = fn ?? spawn;
+}
+
 export async function startUpgrade(): Promise<void> {
   const service = detectService();
   if (service === "none") {
     throw new HttpError(409, "Upgrade from the PWA needs the user service (pnpm run service:install). Use pnpm run service:upgrade in the clone.");
+  }
+  const gitInfo = await readInstallGit();
+  if (gitInfo?.dirty) {
+    throw new HttpError(409, "Working tree is dirty");
   }
   const cur = await readUpgradeStatus();
   if (cur.phase !== "idle" && cur.phase !== "error") {
@@ -148,13 +164,40 @@ export async function startUpgrade(): Promise<void> {
   const script = join(repoRoot(), "scripts", "host-service.mjs");
   const logPath = paths.upgradeLog();
   await mkdir(dirname(logPath), { recursive: true });
-  const out = await import("node:fs").then((fs) => fs.openSync(logPath, "a"));
-  const child = spawn(process.execPath, [script, "upgrade"], {
-    cwd: repoRoot(),
-    detached: true,
-    stdio: ["ignore", out, out],
-    env: { ...process.env, GLASSYS_UPGRADE_STRICT: "1" },
-  });
-  child.unref();
-  log("info", "upgrade spawned", { pid: child.pid });
+  const fs = await import("node:fs");
+  const out = fs.openSync(logPath, "a");
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawnUpgrade(process.execPath, [script, "upgrade"], {
+        cwd: repoRoot(),
+        detached: true,
+        stdio: ["ignore", out, out],
+        env: { ...process.env, GLASSYS_UPGRADE_STRICT: "1" },
+      });
+      const fail = (err: Error) => {
+        try {
+          fs.closeSync(out);
+        } catch {
+          /* already closed */
+        }
+        reject(err);
+      };
+      child.once("error", fail);
+      child.once("spawn", () => {
+        child.removeListener("error", fail);
+        try {
+          fs.closeSync(out);
+        } catch {
+          /* already closed */
+        }
+        child.unref();
+        resolve();
+      });
+    });
+    log("info", "upgrade spawned");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await writeUpgradeStatus({ phase: "error", error: message, startedAt: new Date().toISOString() });
+    throw new HttpError(500, message);
+  }
 }

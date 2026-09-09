@@ -12,6 +12,10 @@ describe("operatorError", () => {
     expect(operatorError("payload too large", t)).toBe("i18n:error.payloadTooLarge");
     expect(operatorError("Workspace path does not exist", t)).toBe("i18n:error.cwdMissing");
     expect(operatorError("Queue is full", t)).toBe("i18n:error.queueFull");
+    expect(operatorError("Gateway is busy, try again", t)).toBe("i18n:error.gatewayBusy");
+    expect(operatorError("invalid subscription", t)).toBe("i18n:error.invalidSubscription");
+    expect(operatorError("Too many schedules", t)).toBe("i18n:error.tooManySchedules");
+    expect(operatorError("Invalid cron expression", t)).toBe("i18n:error.invalidCron");
     expect(operatorError("model said something", t)).toBe("model said something");
   });
 });

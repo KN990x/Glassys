@@ -45,7 +45,7 @@ import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
 import { liveThreadId } from "./threads.js";
 import { readGitContext } from "./host-git.js";
 import { ensureVapidKeys, removePushSubscription, savePushSubscription } from "./push.js";
-import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNextRun } from "./schedules.js";
+import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNextRun, scheduleTimezone } from "./schedules.js";
 import { adminUpdateSnapshot, fetchBehind, startUpgrade } from "./admin-update.js";
 
 const GATEWAY_VERSION = (() => {
@@ -451,7 +451,10 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   if (method === "GET" && path === "/api/schedules") {
     if (!(await requireAuth(req, res))) return true;
     const jobs = await listSchedules();
-    send(res, 200, { schedules: jobs.map((j) => ({ ...j, nextRun: previewNextRun(j) })) });
+    send(res, 200, {
+      timezone: scheduleTimezone(),
+      schedules: jobs.map((j) => ({ ...j, nextRun: previewNextRun(j) })),
+    });
     return true;
   }
 

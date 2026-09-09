@@ -92,6 +92,7 @@ export const api = {
     req<{ ok: boolean }>("/api/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) }),
   schedules: () =>
     req<{
+      timezone?: string;
       schedules: Array<{
         id: string;
         text: string;
@@ -101,6 +102,8 @@ export const api = {
         at?: string;
         enabled: boolean;
         nextRun: string | null;
+        lastRun?: string;
+        lastError?: string;
       }>;
     }>("/api/schedules"),
   createSchedule: (body: { text: string; cwd?: string; threadId?: string; cron?: string; at?: string; enabled?: boolean }) =>

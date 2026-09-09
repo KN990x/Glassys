@@ -57,6 +57,8 @@ session:
   queue: fifo
   stallSeconds: 180 # No run events for this long → run.stalled. 0 disables.
   notifyOnComplete: true # Web Push when a run finishes, errors, stalls, or a tool is denied.
+  # Schedules and push subscriptions live in the data dir (schedules.json, push-subscriptions.json), not here.
+  # Cron does not catch up after downtime; one-shot `at` jobs that are already due do fire.
 
 prompts:
   templates:

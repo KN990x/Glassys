@@ -14,6 +14,16 @@
 12. Composer chip shows sandbox / auto-run / permission mode and **confirms** before saving (that archives the live thread). The thread drawer updates from `threads.snapshot` without a reload. A denied tool shows a Denied pill, including ACP `cancelled` when auto-run off. Attach or **paste** an image with sandbox on; the agent must be able to read `$cwd/.glassys-uploads/` (bytes also stay under `data/uploads/`). File picker is gallery + camera, not capture-only.
 13. Queue a follow-up while a run is in flight; the topbar shows Working · queued, not only Queued. Remove the follow-up from the queue; the retracted user bubble stays in the transcript. `run.cancel` does not drop later queued messages. Changing cwd/adapter/options while something is queued retracts those jobs. The thread drawer shows adapter + cwd and can delete a thread. On a phone, Enter does not send (use the send button); Back closes Settings / the thread drawer instead of leaving the PWA.
 14. Bind/port change (yaml) surfaces a restart banner with **Restart now** (`POST /api/admin/restart`).
+15. Command palette (`⌘K` / `Ctrl+K`): groups (commands / workspaces / ops templates) are visible. **Upgrade** opens Settings → Updates and does not POST until you confirm. Restart asks for confirm. Slash `/` only lists templates.
+16. Empty composer shows `/status` `/disk` `/failed-units` chips; they insert the same text as slash, without sending.
+17. Loopback banner is dismissible for the tab (does not cover the transcript after dismiss). A reconnect on a huge transcript may show “older messages omitted”; **Export** still has the full file.
+18. Settings: the notify checkbox subscribes or unsubscribes immediately (the flag is saved with that click). Creating a schedule sends the live `threadId`. Times show the gateway timezone; `lastRun` / `lastError` appear after a fire.
+19. Upgrade with a dirty git tree is refused (PWA copy + HTTP 409) before spawn. `GET /api/admin/update` still reports status when the service is installed even if the unit is failed.
+20. A run that fails on unreadable attachments must not later emit `run.stalled`. After a cancel timeout, the next send does not collide with a leftover adapter `wait()`.
+21. File picker / paste / drop refuses a 5th attachment before upload. Thread drawer can filter by title and export the current thread.
+22. Workspace picker: browsing `/Users` or `/home` returns only the operator home, not other users. Health after `service:install` probes loopback and then `GLASSYS_BIND` if that is a LAN IP.
+
+On a phone viewport, also: chips wrap, drawer filter is usable, loopback dismiss works, palette hint is visible under the composer.
 
 Cursor is the golden path for steps 4, 7, and 8. Other adapters must not advertise `source: "live"` unless they listed models from the runtime, and must not advertise `resume` / `autoRun` unless the runtime honors them. Gemini, Codex, and ACP use a static catalog (`liveCatalog: false`); that is not a failure. Gemini’s SDK (`@google/gemini-cli-sdk`) is not published on npm yet — `GET /api/adapters` marks it `available.ok: false`, the wizard/Settings radio is disabled, and `config.set` rejects selecting it or completing onboarding with it. Link the SDK on the host to make Gemini selectable.
 

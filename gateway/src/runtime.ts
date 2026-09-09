@@ -13,7 +13,13 @@ import type {
   ServerMessage,
   TranscriptEvent,
 } from "@glassys/protocol";
-import { MAX_PINNED_CWDS, PROFILE_ID, isMessageId, isPersistedTranscriptEvent } from "@glassys/protocol";
+import {
+  MAX_ATTACHMENTS,
+  MAX_PINNED_CWDS,
+  PROFILE_ID,
+  isMessageId,
+  isPersistedTranscriptEvent,
+} from "@glassys/protocol";
 import { agentFingerprint, applyPatch, loadConfig, redacted } from "./config.js";
 import { adapterApiKey, loadSecrets, secretsFlags } from "./secrets.js";
 import { getAdapter, listAdapters, probeAdapter } from "./adapters.js";
@@ -21,7 +27,7 @@ import { cancelLoginJob, snapshotLoginJob, startLoginJob } from "./adapter-login
 import { hub } from "./hub.js";
 import { log, paths } from "./paths.js";
 import { loadState, saveState, addUsageTotals } from "./state.js";
-import { appendTranscript, readTranscript } from "./transcript.js";
+import { appendTranscript, readTranscript, readTranscriptSnapshot } from "./transcript.js";
 import { HttpError, isActiveRunError } from "./errors.js";
 import { createMutex } from "./lock.js";
 import {
@@ -86,12 +92,22 @@ let rotating = false;
 const withQueueLock = createMutex();
 
 export const MAX_QUEUE = 32;
-export const MAX_ATTACHMENTS = 4;
+export { MAX_ATTACHMENTS };
 export const DEFAULT_RUN_CANCEL_TIMEOUT_MS = 15_000;
+export const DEFAULT_ENQUEUE_ROTATING_RETRIES = 200;
 let runCancelTimeoutMs = DEFAULT_RUN_CANCEL_TIMEOUT_MS;
+let enqueueRotatingRetries = DEFAULT_ENQUEUE_ROTATING_RETRIES;
 
 export function setRunCancelTimeoutForTests(ms: number): void {
   runCancelTimeoutMs = ms;
+}
+
+export function setRotatingForTests(value: boolean): void {
+  rotating = value;
+}
+
+export function setEnqueueRotatingRetriesForTests(n?: number): void {
+  enqueueRotatingRetries = n ?? DEFAULT_ENQUEUE_ROTATING_RETRIES;
 }
 
 let nowFn = () => Date.now();
@@ -271,9 +287,18 @@ async function restoreQueuedUserMessages(current?: QueueJob): Promise<void> {
     log("error", "emit failed", { error: String(err) });
   });
   await done;
-  hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+  await broadcastTranscriptSnapshot();
   await broadcastQueue();
   await broadcastThreads();
+}
+
+async function broadcastTranscriptSnapshot(): Promise<void> {
+  const snap = await readTranscriptSnapshot();
+  hub.broadcast({
+    type: "transcript.snapshot",
+    events: snap.events,
+    ...(snap.truncated ? { truncated: true } : {}),
+  });
 }
 
 async function rotateToNewThread(previousAgentId: string | null): Promise<void> {
@@ -377,6 +402,11 @@ function delay(ms: number): Promise<"timeout"> {
   return new Promise((resolve) => setTimeout(() => resolve("timeout"), ms));
 }
 
+async function abandonTimedOutRun(): Promise<"cancelled"> {
+  await disposeSession();
+  return "cancelled";
+}
+
 async function waitRunRespectingCancel(
   run: AdapterRun,
   gen: number,
@@ -384,13 +414,13 @@ async function waitRunRespectingCancel(
   const waited = waitRun(run);
   if (cancelGeneration !== gen) {
     const raced = await Promise.race([waited, delay(runCancelTimeoutMs)]);
-    return raced === "timeout" ? "cancelled" : raced;
+    return raced === "timeout" ? abandonTimedOutRun() : raced;
   }
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const onCancelTimeout = new Promise<"cancelled">((resolve) => {
+  const onCancelTimeout = new Promise<"timeout">((resolve) => {
     const poll = () => {
       if (cancelGeneration !== gen) {
-        timer = setTimeout(() => resolve("cancelled"), runCancelTimeoutMs);
+        timer = setTimeout(() => resolve("timeout"), runCancelTimeoutMs);
         return;
       }
       timer = setTimeout(poll, 50);
@@ -399,7 +429,7 @@ async function waitRunRespectingCancel(
   });
   try {
     const raced = await Promise.race([waited, onCancelTimeout]);
-    return raced;
+    return raced === "timeout" ? abandonTimedOutRun() : raced;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -412,7 +442,7 @@ async function cancelAndWait(run: AdapterRun): Promise<"finished" | "error" | "c
     /* ignore */
   }
   const raced = await Promise.race([waitRun(run), delay(runCancelTimeoutMs)]);
-  return raced === "timeout" ? "cancelled" : raced;
+  return raced === "timeout" ? abandonTimedOutRun() : raced;
 }
 
 async function processQueue(): Promise<void> {
@@ -513,130 +543,132 @@ async function processQueue(): Promise<void> {
 }
 
 async function runOnce(job: QueueJob, gen: number): Promise<void> {
-  let handle: AdapterSession;
-  try {
-    handle = await ensureSession(job);
-  } catch (err) {
-    await emit({ type: "run.error", message: err instanceof Error ? err.message : String(err), phase: "startup" });
-    return;
-  }
-
-  if (cancelGeneration !== gen) {
-    await emit({ type: "run.cancelled" });
-    return;
-  }
-
-  let sawRunError = false;
-  let thinkingOpen = false;
-  let thinkingStarted = 0;
-  let lastEventAt = nowFn();
-  let stalledEmitted = false;
   let stallTimer: ReturnType<typeof setInterval> | undefined;
-  const onEvent = (event: ServerMessage) => {
-    lastEventAt = nowFn();
-    if (event.type === "run.error") sawRunError = true;
-    if (event.type === "thinking.delta" && !thinkingOpen) {
-      thinkingOpen = true;
-      thinkingStarted = nowFn();
-    }
-    if (event.type === "thinking.done") thinkingOpen = false;
-    void emit(event, handle.agentId);
-  };
-
-  const closeThinkingIfOpen = async () => {
-    if (!thinkingOpen) return;
-    thinkingOpen = false;
-    await emit({ type: "thinking.done", durationMs: Math.max(0, nowFn() - thinkingStarted) }, handle.agentId);
-  };
-
-  const cfg = await loadConfig();
-  const runId = randomUUID();
-  runStartedAt = nowFn();
-  lastEventAt = nowFn();
-  resetPushRunFlags();
-  await emit({ type: "run.start", runId });
-  await broadcastSession();
-  const stallSeconds = cfg.session.stallSeconds;
-  if (stallSeconds > 0) {
-    stallTimer = setInterval(() => {
-      if (stalledEmitted) return;
-      const idleMs = nowFn() - lastEventAt;
-      if (idleMs >= stallSeconds * 1000) {
-        stalledEmitted = true;
-        void emit({ type: "run.stalled", idleMs });
-      }
-    }, stallPollMs);
-  }
-
-  if (cancelGeneration !== gen) {
-    await emit({ type: "run.cancelled" });
-    return;
-  }
-
-  let files: Awaited<ReturnType<typeof materializeAttachments>> = [];
   try {
-    files = await materializeAttachments(cfg.agent.cwd, job.attachments);
-  } catch (err) {
-    await emit({
-      type: "run.error",
-      message: err instanceof Error ? err.message : String(err),
-      phase: "startup",
-    });
-    return;
-  }
-  if (job.attachments?.length && files.length === 0) {
-    await emit({ type: "run.error", message: "Attachments could not be read", phase: "startup" });
-    return;
-  }
-  const sendOpts = {
-    model: cfg.agent.model,
-    modelParams: cfg.agent.modelParams,
-    attachments: files.length ? files : undefined,
-  };
-
-  try {
-    let run: AdapterRun;
+    let handle: AdapterSession;
     try {
-      run = await handle.send(job.text, onEvent, sendOpts);
+      handle = await ensureSession(job);
     } catch (err) {
-      if (isActiveRunError(err)) {
-        run = await handle.send(job.text, onEvent, { ...sendOpts, force: true });
-      } else {
-        throw err;
+      await emit({ type: "run.error", message: err instanceof Error ? err.message : String(err), phase: "startup" });
+      return;
+    }
+
+    if (cancelGeneration !== gen) {
+      await emit({ type: "run.cancelled" });
+      return;
+    }
+
+    let sawRunError = false;
+    let thinkingOpen = false;
+    let thinkingStarted = 0;
+    let lastEventAt = nowFn();
+    let stalledEmitted = false;
+    const onEvent = (event: ServerMessage) => {
+      lastEventAt = nowFn();
+      if (event.type === "run.error") sawRunError = true;
+      if (event.type === "thinking.delta" && !thinkingOpen) {
+        thinkingOpen = true;
+        thinkingStarted = nowFn();
       }
+      if (event.type === "thinking.done") thinkingOpen = false;
+      void emit(event, handle.agentId);
+    };
+
+    const closeThinkingIfOpen = async () => {
+      if (!thinkingOpen) return;
+      thinkingOpen = false;
+      await emit({ type: "thinking.done", durationMs: Math.max(0, nowFn() - thinkingStarted) }, handle.agentId);
+    };
+
+    const cfg = await loadConfig();
+    const runId = randomUUID();
+    runStartedAt = nowFn();
+    lastEventAt = nowFn();
+    resetPushRunFlags();
+    await emit({ type: "run.start", runId });
+    await broadcastSession();
+    const stallSeconds = cfg.session.stallSeconds;
+    if (stallSeconds > 0) {
+      stallTimer = setInterval(() => {
+        if (stalledEmitted) return;
+        const idleMs = nowFn() - lastEventAt;
+        if (idleMs >= stallSeconds * 1000) {
+          stalledEmitted = true;
+          void emit({ type: "run.stalled", idleMs });
+        }
+      }, stallPollMs);
     }
-    currentRun = run;
+
     if (cancelGeneration !== gen) {
-      await cancelAndWait(run);
-      await drainEmit();
-      await closeThinkingIfOpen();
       await emit({ type: "run.cancelled" });
       return;
     }
-    await persistAgentId(handle.agentId);
-    log("info", "run started", { agentId: handle.agentId, runId: run.id });
-    const status = await waitRunRespectingCancel(run, gen);
-    await persistAgentId(handle.agentId);
-    await drainEmit();
-    await closeThinkingIfOpen();
-    if (cancelGeneration !== gen || status === "cancelled") await emit({ type: "run.cancelled" });
-    else if (status === "error") {
-      if (!sawRunError) await emit({ type: "run.error", message: "Run failed", phase: "run" });
-    } else await emit({ type: "run.done" });
-  } catch (err) {
-    if (cancelGeneration !== gen) {
-      await closeThinkingIfOpen();
-      await emit({ type: "run.cancelled" });
-      return;
-    }
-    const phase = err instanceof AdapterError ? err.phase : "run";
-    await closeThinkingIfOpen();
-    if (!sawRunError) {
+
+    let files: Awaited<ReturnType<typeof materializeAttachments>> = [];
+    try {
+      files = await materializeAttachments(cfg.agent.cwd, job.attachments);
+    } catch (err) {
       await emit({
         type: "run.error",
         message: err instanceof Error ? err.message : String(err),
-        phase,
+        phase: "startup",
       });
+      return;
+    }
+    if (job.attachments?.length && files.length === 0) {
+      await emit({ type: "run.error", message: "Attachments could not be read", phase: "startup" });
+      return;
+    }
+    const sendOpts = {
+      model: cfg.agent.model,
+      modelParams: cfg.agent.modelParams,
+      attachments: files.length ? files : undefined,
+    };
+
+    try {
+      let run: AdapterRun;
+      try {
+        run = await handle.send(job.text, onEvent, sendOpts);
+      } catch (err) {
+        if (isActiveRunError(err)) {
+          run = await handle.send(job.text, onEvent, { ...sendOpts, force: true });
+        } else {
+          throw err;
+        }
+      }
+      currentRun = run;
+      if (cancelGeneration !== gen) {
+        await cancelAndWait(run);
+        await drainEmit();
+        await closeThinkingIfOpen();
+        await emit({ type: "run.cancelled" });
+        return;
+      }
+      await persistAgentId(handle.agentId);
+      log("info", "run started", { agentId: handle.agentId, runId: run.id });
+      const status = await waitRunRespectingCancel(run, gen);
+      await persistAgentId(handle.agentId);
+      await drainEmit();
+      await closeThinkingIfOpen();
+      if (cancelGeneration !== gen || status === "cancelled") await emit({ type: "run.cancelled" });
+      else if (status === "error") {
+        if (!sawRunError) await emit({ type: "run.error", message: "Run failed", phase: "run" });
+      } else await emit({ type: "run.done" });
+    } catch (err) {
+      if (cancelGeneration !== gen) {
+        await closeThinkingIfOpen();
+        await emit({ type: "run.cancelled" });
+        return;
+      }
+      const phase = err instanceof AdapterError ? err.phase : "run";
+      await closeThinkingIfOpen();
+      if (!sawRunError) {
+        await emit({
+          type: "run.error",
+          message: err instanceof Error ? err.message : String(err),
+          phase,
+        });
+      }
     }
   } finally {
     if (stallTimer) clearInterval(stallTimer);
@@ -650,20 +682,20 @@ export async function enqueueMessage(
   attachments?: MessageAttachment[],
   clientId?: string,
   source: "user" | "schedule" = "user",
-): Promise<void> {
+): Promise<boolean> {
   const trimmed = text.trim();
-  if (!trimmed && !attachments?.length) return;
+  if (!trimmed && !attachments?.length) return false;
   if (attachments && attachments.length > MAX_ATTACHMENTS) {
     await emit({ type: "run.error", message: "Too many attachments", phase: "startup" });
-    return;
+    return false;
   }
   const cfg = await loadConfig();
   if (!cfg.onboarding.completed) {
     await emit({ type: "run.error", message: "Onboarding is not complete", phase: "startup" });
-    return;
+    return false;
   }
 
-  for (let attempt = 0; attempt < 200; attempt++) {
+  for (let attempt = 0; attempt < enqueueRotatingRetries; attempt++) {
     const prepared = await withQueueLock(async () => {
       if (rotating) return { kind: "retry" as const };
       const id = isMessageId(clientId) ? clientId : randomUUID();
@@ -672,10 +704,10 @@ export async function enqueueMessage(
       if (live >= MAX_QUEUE) return { kind: "full" as const };
       return { kind: "ok" as const, id, generation: identityGeneration };
     });
-    if (prepared.kind === "skip") return;
+    if (prepared.kind === "skip") return false;
     if (prepared.kind === "full") {
       await emit({ type: "run.error", message: "Queue is full", phase: "startup" });
-      return;
+      return false;
     }
     if (prepared.kind === "retry") {
       await new Promise((r) => setTimeout(r, 25));
@@ -700,7 +732,7 @@ export async function enqueueMessage(
       } catch {
         /* already logged */
       }
-      return;
+      return false;
     }
 
     const queued = await withQueueLock(async () => {
@@ -709,12 +741,14 @@ export async function enqueueMessage(
       queue.push({ id: prepared.id, text: trimmed, attachments, generation: prepared.generation, source });
       return { ok: true as const, busy };
     });
-    if (!queued.ok) return;
+    if (!queued.ok) return false;
     if (queued.busy) await emit({ type: "run.queued" });
     await broadcastQueue();
     void processQueue().catch((err) => log("error", "processQueue", { error: String(err) }));
-    return;
+    return true;
   }
+  await emit({ type: "run.error", message: "Gateway is busy, try again", phase: "startup" });
+  return false;
 }
 
 export async function cancelQueued(id: string): Promise<void> {
@@ -821,7 +855,7 @@ export async function startNewLiveThread(): Promise<void> {
     runtime.fingerprint = null;
     runtime.identityAgent = null;
     await saveState({ agentId: null });
-    hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+    await broadcastTranscriptSnapshot();
     await broadcastConfig();
     await broadcastSession();
     await broadcastQueue();
@@ -855,7 +889,7 @@ export async function switchLiveThread(id: string): Promise<void> {
     await applyConfigPatch({ agent: loaded.agent }, { identity: "preserve" });
     await activateThread(id, loaded.meta.agentId);
     runtime.agentId = loaded.meta.agentId;
-    hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+    await broadcastTranscriptSnapshot();
     await broadcastSession();
     await broadcastQueue();
     await broadcastThreads();
@@ -877,7 +911,7 @@ export async function deleteLiveThread(id: string): Promise<void> {
   }
   await gcUploads();
   if (wasLive) {
-    hub.broadcast({ type: "transcript.snapshot", events: await readTranscript() });
+    await broadcastTranscriptSnapshot();
     await broadcastSession();
   }
   await broadcastThreads();
@@ -1092,5 +1126,5 @@ export async function cursorAuthStatus(): Promise<{ loggedIn: boolean; email?: s
   return adapterAuthStatus("cursor");
 }
 
-export { readTranscript };
+export { readTranscript, readTranscriptSnapshot };
 export { isActiveRunError } from "./errors.js";

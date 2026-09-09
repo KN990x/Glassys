@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   AdapterError,
   errorMessage,
+  imagePartsFromAttachments,
   pendingRun,
   promptWithAttachments,
   type Adapter,
@@ -42,24 +43,29 @@ async function loadSdk(): Promise<{
 
 export const CLAUDE_CANCEL_TIMEOUT_MS = 20_000;
 
+export function claudeUserContent(
+  text: string,
+  attachments?: { path: string; mime: string; name: string; body?: Buffer }[],
+): string | Array<Record<string, unknown>> {
+  const note = promptWithAttachments(text, attachments);
+  const images = imagePartsFromAttachments(attachments);
+  if (images.length === 0) return note;
+  return [
+    { type: "text", text: note },
+    ...images.map((a) => ({
+      type: "image",
+      source: { type: "base64", media_type: a.mime, data: a.data },
+    })),
+  ];
+}
+
 class PromptQueue {
   private items: Array<Record<string, unknown>> = [];
   private waiters: Array<(v: IteratorResult<Record<string, unknown>>) => void> = [];
   private closed = false;
 
   push(text: string, attachments?: { path: string; mime: string; name: string; body?: Buffer }[]) {
-    const note = promptWithAttachments(text, attachments);
-    const images = (attachments ?? []).filter((a) => a.body && a.body.length);
-    const content =
-      images.length > 0
-        ? [
-            { type: "text", text: note },
-            ...images.map((a) => ({
-              type: "image",
-              source: { type: "base64", media_type: a.mime, data: a.body!.toString("base64") },
-            })),
-          ]
-        : note;
+    const content = claudeUserContent(text, attachments);
     const msg = {
       type: "user",
       message: { role: "user", content },

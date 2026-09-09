@@ -7,6 +7,7 @@ import {
   DEFAULT_KEEPALIVE_SECONDS,
   MAX_KEEPALIVE_SECONDS,
   MIN_KEEPALIVE_SECONDS,
+  MAX_ATTACHMENTS,
   clampKeepaliveSeconds,
   clampStallSeconds,
   DEFAULT_STALL_SECONDS,
@@ -22,6 +23,7 @@ import {
 describe("protocol v1", () => {
   it("freezes major version 1", () => {
     expect(PROTOCOL_VERSION).toBe(1);
+    expect(MAX_ATTACHMENTS).toBe(4);
   });
 
   it("defaults bind to localhost", () => {

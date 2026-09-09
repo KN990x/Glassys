@@ -1,10 +1,19 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
-import { asRecord } from "@glassys/adapter-contract";
+import { asRecord, toolKindFromName } from "@glassys/adapter-contract";
 import { optionBool } from "@glassys/protocol";
 
 export const MAX_ACP_READ_BYTES = 1_048_576;
+
+const READISH_KINDS = new Set(["read", "grep", "glob", "ls"]);
+
+export function acpPermissionAllow(toolCall: unknown): boolean {
+  const rec = asRecord(toolCall) ?? {};
+  const raw = String(rec.kind ?? rec.title ?? rec.name ?? "").trim();
+  if (!raw) return false;
+  return READISH_KINDS.has(toolKindFromName(raw));
+}
 
 export function resolveInsideCwd(cwd: string, path: string): string {
   const root = resolve(cwd);
@@ -49,9 +58,7 @@ export function registerHostHandlers(
   rpc.handle("session/request_permission", async (params) => {
     if (autoRun) return { outcome: { outcome: "selected", optionId: "allow-once" } };
     const rec = asRecord(params) ?? {};
-    const tool = String(asRecord(rec.toolCall)?.kind ?? asRecord(rec.toolCall)?.title ?? "");
-    const readish = /read|grep|glob|ls|search/i.test(tool);
-    if (readish) return { outcome: { outcome: "selected", optionId: "allow-once" } };
+    if (acpPermissionAllow(rec.toolCall)) return { outcome: { outcome: "selected", optionId: "allow-once" } };
     return { outcome: { outcome: "cancelled" } };
   });
 

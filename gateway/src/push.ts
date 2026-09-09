@@ -12,6 +12,25 @@ export interface PushSubscriptionRecord {
   keys: { p256dh: string; auth: string };
 }
 
+export const MAX_PUSH_SUBSCRIPTIONS = 20;
+
+const PUSH_COPY = {
+  en: {
+    done: "Run finished",
+    failed: "Run failed",
+    cancelled: "Run cancelled",
+    stalled: "Run looks stalled",
+    denied: "A tool was denied",
+  },
+  es: {
+    done: "Run terminado",
+    failed: "El run falló",
+    cancelled: "Run cancelado",
+    stalled: "El run parece colgado",
+    denied: "Se denegó una herramienta",
+  },
+} as const;
+
 const withPushLock = createMutex();
 
 let deniedThisRun = false;
@@ -54,6 +73,7 @@ export async function savePushSubscription(sub: PushSubscriptionRecord): Promise
   await withPushLock(async () => {
     const cur = await readSubs();
     const next = cur.filter((s) => s.endpoint !== sub.endpoint);
+    if (next.length >= MAX_PUSH_SUBSCRIPTIONS) throw new Error("Too many push subscriptions");
     next.push({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
     await writeSubs(next);
   });
@@ -66,6 +86,12 @@ export async function removePushSubscription(endpoint: string): Promise<void> {
   });
 }
 
+export function vapidSubject(publicUrl?: string): string {
+  const url = publicUrl?.trim() || "";
+  if (url.startsWith("https://")) return url;
+  return "mailto:operator@localhost";
+}
+
 export async function ensureVapidKeys(): Promise<{ publicKey: string; subject: string }> {
   const secrets = await loadSecrets();
   if (secrets.vapid?.publicKey && secrets.vapid.privateKey) {
@@ -73,24 +99,25 @@ export async function ensureVapidKeys(): Promise<{ publicKey: string; subject: s
   }
   const generated = webpush.generateVAPIDKeys();
   const cfg = await loadConfig();
-  const subject = cfg.network.publicUrl?.trim() || "mailto:operator@localhost";
+  const subject = vapidSubject(cfg.network.publicUrl);
   const vapid: VapidKeys = { publicKey: generated.publicKey, privateKey: generated.privateKey, subject };
   await patchSecrets({ vapid });
   return { publicKey: vapid.publicKey, subject: vapid.subject };
 }
 
-function payloadFor(event: ServerMessage): { title: string; body: string } | null {
+function payloadFor(event: ServerMessage, locale: string): { title: string; body: string } | null {
+  const copy = locale.startsWith("es") ? PUSH_COPY.es : PUSH_COPY.en;
   switch (event.type) {
     case "run.done":
-      return { title: "Glassys", body: "Run finished" };
+      return { title: "Glassys", body: copy.done };
     case "run.error":
-      return { title: "Glassys", body: event.message || "Run failed" };
+      return { title: "Glassys", body: event.message || copy.failed };
     case "run.cancelled":
-      return { title: "Glassys", body: "Run cancelled" };
+      return { title: "Glassys", body: copy.cancelled };
     case "run.stalled":
-      return { title: "Glassys", body: "Run looks stalled" };
+      return { title: "Glassys", body: copy.stalled };
     case "tool.end":
-      if (event.denied) return { title: "Glassys", body: "A tool was denied" };
+      if (event.denied) return { title: "Glassys", body: copy.denied };
       return null;
     default:
       return null;
@@ -117,13 +144,13 @@ export async function notifyFromEvent(event: ServerMessage): Promise<void> {
     deniedThisRun = false;
     return;
   }
-  const note = payloadFor(event);
+  const cfg = await loadConfig();
+  const note = payloadFor(event, cfg.space.locale || "en");
   if (!note) return;
   if (event.type === "tool.end" && event.denied) {
     if (deniedThisRun) return;
     deniedThisRun = true;
   }
-  const cfg = await loadConfig();
   if (!cfg.session.notifyOnComplete) return;
   const secrets = await loadSecrets();
   const vapid = secrets.vapid;

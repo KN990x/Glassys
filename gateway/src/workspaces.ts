@@ -1,4 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { HttpError } from "./errors.js";
 
@@ -49,8 +50,10 @@ async function walk(root: string, depth: number, hits: WorkspaceHit[]): Promise<
 export async function listWorkspaces(root: string): Promise<WorkspaceHit[]> {
   if (!root || !isAbsolute(root)) throw new HttpError(400, "Workspace root must be an absolute path");
   const abs = resolve(root);
-  if (abs === "/" || abs === "/Users" || abs === "/home") {
-    throw new HttpError(400, "Pick a working directory, not the filesystem root");
+  if (abs === "/") throw new HttpError(400, "Pick a working directory, not the filesystem root");
+  if (abs === "/Users" || abs === "/home") {
+    const home = homedir();
+    return [{ path: home, name: basename(home) }];
   }
   try {
     const s = await stat(abs);

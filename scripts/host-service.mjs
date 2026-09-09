@@ -58,6 +58,19 @@ export function listenEnvFrom(env = process.env) {
   return out;
 }
 
+/** Hosts to probe for GET /health after install (loopback first, then a LAN bind). */
+export function healthProbeHosts(bind = process.env.GLASSYS_BIND || "127.0.0.1") {
+  const hosts = ["127.0.0.1"];
+  const b = String(bind || "127.0.0.1").trim() || "127.0.0.1";
+  if (b === "127.0.0.1" || b === "0.0.0.0" || b === "::" || b === "[::]") return hosts;
+  if (b === "::1" || b === "[::1]") {
+    hosts.push("[::1]");
+    return [...new Set(hosts)];
+  }
+  hosts.push(b.includes(":") && !b.startsWith("[") ? `[${b}]` : b);
+  return [...new Set(hosts)];
+}
+
 export function nodeMeetsMin(version = process.versions.node) {
   const parts = String(version)
     .split(".")
@@ -239,26 +252,34 @@ function printNextSteps(opts) {
   console.log("Closing the terminal will not stop it.");
   console.log("");
   const port = opts.port || gatewayListenPort();
+  const bind = process.env.GLASSYS_BIND || "127.0.0.1";
   console.log(`Open  http://127.0.0.1:${port}`);
   console.log(`Data  ${opts.dataDir}`);
-  if (waitForHealth(port)) console.log("Health  ok");
-  else console.warn(`Health  gateway did not answer GET http://127.0.0.1:${port}/health yet. Check service:status.`);
+  if (waitForHealth(port, 8000, bind)) console.log("Health  ok");
+  else {
+    const urls = healthProbeHosts(bind).map((host) => `http://${host}:${port}/health`);
+    console.warn(`Health  gateway did not answer GET ${urls.join(" or ")} yet. Check service:status.`);
+  }
   console.log("");
   console.log("pnpm run service:status     # is it running?");
   console.log("pnpm run service:upgrade    # git pull, rebuild, restart");
   console.log("pnpm run service:uninstall  # stop and remove (keeps data/)");
 }
 
-function waitForHealth(port, timeoutMs = 8000) {
+function waitForHealth(port, timeoutMs = 8000, bind = process.env.GLASSYS_BIND || "127.0.0.1") {
+  const hosts = JSON.stringify(healthProbeHosts(bind));
   const script = `
     const port = ${Number(port)};
+    const hosts = ${hosts};
     const deadline = Date.now() + ${Number(timeoutMs)};
     (async () => {
       while (Date.now() < deadline) {
-        try {
-          const res = await fetch("http://127.0.0.1:" + port + "/health");
-          if (res.ok) process.exit(0);
-        } catch {}
+        for (const host of hosts) {
+          try {
+            const res = await fetch("http://" + host + ":" + port + "/health");
+            if (res.ok) process.exit(0);
+          } catch {}
+        }
         await new Promise((r) => setTimeout(r, 250));
       }
       process.exit(1);

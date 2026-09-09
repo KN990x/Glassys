@@ -394,6 +394,7 @@ button.host-copy {
 .banner { font-size: 0.85rem; color: var(--muted); }
 .banner.error { color: var(--danger); }
 .banner.info { color: var(--muted); }
+.banner.warn { color: var(--warn); }
 .pulse {
   width: 8px;
   height: 8px;
@@ -696,6 +697,44 @@ button.host-copy {
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
+}
+.settings-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
+.settings-toc a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.settings-toc a:hover,
+.settings-toc a:focus-visible {
+  color: var(--text);
+}
+.palette-group {
+  padding: 0.45rem 0.2rem 0.15rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  list-style: none;
+}
+.composer-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+}
+.ops-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.45rem;
+}
+.thread-filter {
+  display: grid;
+  margin: 0.35rem 0 0.15rem;
+}
+.thread-filter input {
+  width: 100%;
 }
 
 .locale-switch {
