@@ -1228,6 +1228,47 @@ button.host-copy:hover { color: var(--text); }
   list-style: none;
 }
 
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: max(var(--s-4), env(safe-area-inset-top)) max(var(--s-4), env(safe-area-inset-right))
+           max(var(--s-4), env(safe-area-inset-bottom)) max(var(--s-4), env(safe-area-inset-left));
+  background: var(--scrim);
+  animation: fade-in var(--dur) var(--ease);
+}
+.confirm-panel {
+  width: min(400px, 100%);
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  background: var(--bg-elev);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  box-shadow: var(--e-3);
+  animation: rise var(--dur) var(--ease);
+}
+.confirm-panel h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.confirm-panel p { margin: 0; font-size: var(--fs-base); }
+.confirm-panel .row { margin-top: var(--s-2); }
+.confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.confirm-icon.destructive { background: var(--danger-bg); color: var(--danger); }
+
+.palette-group + li .picker-item { margin-top: 0; }
+.palette-list .picker-item { min-height: var(--control-h); }
+.palette-list .picker-item strong { font-weight: 500; }
+.palette-panel > input { margin-bottom: var(--s-1); }
+
 /* ---------------------------------------------------------------------------
    Settings dialog
    --------------------------------------------------------------------------- */

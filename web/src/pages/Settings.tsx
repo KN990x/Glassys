@@ -19,6 +19,7 @@ import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { enableWebPush, disableWebPush } from "../push";
+import { useConfirm } from "../components/ConfirmDialog";
 
 export function Settings({
   config,
@@ -38,6 +39,7 @@ export function Settings({
   schedulePrefill?: string;
 }) {
   const t = useT();
+  const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState(config);
   const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -107,8 +109,9 @@ export function Settings({
         prompts: config.prompts,
       });
 
-  function requestClose() {
-    if (dirty && !window.confirm(t("settings.discard"))) return;
+  async function requestClose() {
+    if (dirty && !(await confirm({ message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
+      return;
     onCloseRef.current();
   }
   const requestCloseRef = useRef(requestClose);
@@ -138,7 +141,7 @@ export function Settings({
     const root = document.querySelector(".settings-dialog");
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        requestCloseRef.current();
+        void requestCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !root) return;
@@ -277,7 +280,10 @@ export function Settings({
       setError(t("wizard.acp.commandRequired"));
       return;
     }
-    if (archivesLiveThread(config.agent, draft.agent) && !window.confirm(t("settings.archiveConfirm"))) {
+    if (
+      archivesLiveThread(config.agent, draft.agent) &&
+      !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive") }))
+    ) {
       return;
     }
     if (password && password.length < 8) {
@@ -406,7 +412,7 @@ export function Settings({
     (draft.agent.adapter === "cursor" && draft.secrets.cursorApiKey.configured);
 
   return (
-    <div className="settings-overlay" onClick={requestClose}>
+    <div className="settings-overlay" onClick={() => void requestClose()}>
       <div
         className="settings-dialog"
         role="dialog"
@@ -416,7 +422,7 @@ export function Settings({
       >
         <header>
           <h2 id="settings-title">{t("settings.title")}</h2>
-          <button ref={closeRef} className="ghost" type="button" onClick={requestClose}>
+          <button ref={closeRef} className="ghost" type="button" onClick={() => void requestClose()}>
             {t("settings.close")}
           </button>
         </header>
@@ -1030,7 +1036,8 @@ export function Settings({
                       setError(t("settings.updateDirty"));
                       return;
                     }
-                    if (!window.confirm(t("settings.updateConfirm"))) return;
+                    if (!(await confirm({ message: t("settings.updateConfirm"), confirmLabel: t("confirm.update") })))
+                      return;
                     try {
                       await api.upgrade();
                       setUpdate(await api.adminUpdate());
@@ -1085,6 +1092,7 @@ export function Settings({
           </button>
         </footer>
       </div>
+      {confirmDialog}
     </div>
   );
 }

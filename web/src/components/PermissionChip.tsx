@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { optionBool, optionString, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
 import { operatorError } from "../operatorError";
+import { useConfirm } from "./ConfirmDialog";
 
 export function PermissionChip({
   config,
@@ -15,6 +16,7 @@ export function PermissionChip({
   onConfig: (c: RedactedConfig) => void;
 }) {
   const t = useT();
+  const { confirm, confirmDialog } = useConfirm();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
@@ -54,7 +56,7 @@ export function PermissionChip({
   const chipLabel = sandboxPart ? `${label} · ${sandboxPart}` : label;
 
   async function patch(options: Record<string, unknown>) {
-    if (!window.confirm(t("chip.archiveConfirm"))) return;
+    if (!(await confirm({ message: t("chip.archiveConfirm"), confirmLabel: t("confirm.archive") }))) return;
     try {
       setError("");
       onConfig(await api.saveConfig({ agent: { options } }));
@@ -111,6 +113,7 @@ export function PermissionChip({
           {error && <p className="error-text">{error}</p>}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

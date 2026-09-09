@@ -329,5 +329,13 @@
   "host.branch": "Branch",
   "host.agent": "Agent",
   "alert.dismiss": "Dismiss",
-  "chat.emptyTitle": "Ready on this host"
+  "chat.emptyTitle": "Ready on this host",
+  "confirm.title": "Are you sure?",
+  "confirm.cancel": "Cancel",
+  "confirm.ok": "Continue",
+  "confirm.delete": "Delete",
+  "confirm.archive": "Archive and continue",
+  "confirm.restart": "Restart",
+  "confirm.discard": "Discard changes",
+  "confirm.update": "Update now"
 }

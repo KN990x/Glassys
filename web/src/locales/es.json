@@ -329,5 +329,13 @@
   "host.branch": "Rama",
   "host.agent": "Agente",
   "alert.dismiss": "Descartar",
-  "chat.emptyTitle": "Listo en este host"
+  "chat.emptyTitle": "Listo en este host",
+  "confirm.title": "¿Seguro?",
+  "confirm.cancel": "Cancelar",
+  "confirm.ok": "Continuar",
+  "confirm.delete": "Eliminar",
+  "confirm.archive": "Archivar y continuar",
+  "confirm.restart": "Reiniciar",
+  "confirm.discard": "Descartar cambios",
+  "confirm.update": "Actualizar ahora"
 }
