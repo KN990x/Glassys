@@ -11,8 +11,12 @@ export function LocaleSwitch({
   const t = useT();
   return (
     <label className="locale-switch">
-      {t("settings.locale")}
-      <select value={locale} onChange={(e) => onChange(e.target.value === "es" ? "es" : "en")}>
+      <span className="visually-hidden">{t("settings.locale")}</span>
+      <select
+        value={locale}
+        aria-label={t("settings.locale")}
+        onChange={(e) => onChange(e.target.value === "es" ? "es" : "en")}
+      >
         <option value="en">English</option>
         <option value="es">Español</option>
       </select>

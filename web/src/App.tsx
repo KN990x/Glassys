@@ -7,6 +7,7 @@ import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
 import { Wizard } from "./pages/Wizard";
 import { Chat } from "./pages/Chat";
+import { GlassysMark } from "./components/Icon";
 
 type Gate = "boot" | "unreachable" | "setup" | "login" | "wizard" | "chat";
 type ResolvedTheme = "dark" | "light";
@@ -179,7 +180,14 @@ function Unreachable({ onRetry }: { onRetry: () => void }) {
   return (
     <main className="gate">
       <div className="panel">
-        <h1>{t("app.name")}</h1>
+        <div className="brand">
+          <GlassysMark size={36} />
+          <div>
+            <h1>{t("app.name")}</h1>
+            <p className="muted">{t("app.tagline")}</p>
+          </div>
+        </div>
+        <h2>{t("boot.unreachableTitle")}</h2>
         <p className="muted" role="alert">
           {t("boot.unreachable")}
         </p>
