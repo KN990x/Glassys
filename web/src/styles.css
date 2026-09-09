@@ -1284,7 +1284,7 @@ button.host-copy:hover { color: var(--text); }
   animation: fade-in var(--dur) var(--ease);
 }
 .settings-dialog {
-  width: min(560px, 100%);
+  width: min(920px, 100%);
   max-width: 100%;
   max-height: min(88dvh, 100%);
   min-width: 0;
@@ -1304,11 +1304,95 @@ button.host-copy:hover { color: var(--text); }
   justify-content: space-between;
   align-items: center;
   gap: var(--s-3);
+  flex: none;
 }
 .settings-dialog header { border-bottom: 1px solid var(--stroke); }
 .settings-dialog footer { border-top: 1px solid var(--stroke); }
 .settings-dialog h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.settings-layout { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
 .settings-body { overflow: auto; padding: var(--s-4); display: grid; gap: var(--s-4); min-width: 0; align-content: start; }
+.settings-tabs {
+  display: flex;
+  gap: var(--s-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--stroke);
+}
+.settings-tabs::-webkit-scrollbar { display: none; }
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: none;
+  min-height: var(--control-h);
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-base);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.settings-tab:hover { background: var(--ghost-hover); color: var(--text); }
+.settings-tab.current { background: var(--surface-2); color: var(--text); }
+.settings-tab.current svg { color: var(--accent); }
+.settings-dirty { font-size: var(--fs-xs); }
+
+@media (min-width: 860px) {
+  .settings-layout { grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .settings-tabs {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-right: 1px solid var(--stroke);
+    padding: var(--s-3);
+    align-content: start;
+  }
+  .settings-tab { justify-content: flex-start; width: 100%; }
+  .settings-section { border: 0; padding: 0; background: transparent; }
+  .settings-body { padding: var(--s-5); }
+}
+
+/* Label on the left, control on the right, instead of every select spanning
+   the dialog. Narrow screens keep the stacked form: two columns clipped the
+   label text. */
+@media (min-width: 860px) {
+  .settings-section > label:not(.choice) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+    align-items: center;
+    gap: var(--s-3);
+    min-height: var(--control-h);
+  }
+  .settings-section > label:not(.choice) > input,
+  .settings-section > label:not(.choice) > select,
+  .settings-section > label:not(.choice) > textarea { justify-self: stretch; }
+  .settings-section > label:not(.choice) > textarea { grid-column: 1 / -1; }
+}
+.settings-section > p { margin: 0; font-size: var(--fs-sm); }
+.settings-section > button,
+.settings-section .stack > button,
+.settings-section > .row { justify-self: start; }
+.settings-section > .row { flex-wrap: wrap; }
+
+.usage-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.usage-table th, .usage-table td { padding: var(--s-2); border-bottom: 1px solid var(--stroke); text-align: left; }
+.usage-table thead th { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.usage-table td { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-table tbody th { font-weight: 400; color: var(--text); }
+
+.prompt-row {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+}
+.prompt-row > .ghost { justify-self: start; }
 .settings-section {
   border: 1px solid var(--stroke);
   border-radius: var(--r-lg);

@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  BarChart3,
   ArrowDown,
   Check,
   ChevronDown,
@@ -16,6 +17,7 @@ import {
   Info,
   MessageSquare,
   MoreHorizontal,
+  Palette,
   Paperclip,
   Pencil,
   Pin,
@@ -26,6 +28,7 @@ import {
   Send,
   Server,
   Settings as SettingsGlyph,
+  Smartphone,
   Square,
   Terminal,
   Trash2,
@@ -42,6 +45,9 @@ function icon(Base: LucideIcon) {
 }
 
 export const IconAlert = icon(AlertTriangle);
+export const IconChart = icon(BarChart3);
+export const IconPalette = icon(Palette);
+export const IconPhone = icon(Smartphone);
 export const IconArrowDown = icon(ArrowDown);
 export const IconCheck = icon(Check);
 export const IconChevronDown = icon(ChevronDown);
