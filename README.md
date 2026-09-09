@@ -27,12 +27,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/KN990x/Glassys/actions/workflows/ci.yml">
-    <img src="https://github.com/KN990x/Glassys/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"/>
-  </a>
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?logo=react&logoColor=white" alt="React + Vite"/>
   &nbsp;
   <img src="https://img.shields.io/badge/backend-Node.js-339933?logo=nodedotjs&logoColor=white" alt="Node.js"/>
