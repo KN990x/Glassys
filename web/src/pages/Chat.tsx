@@ -27,6 +27,7 @@ import { operatorError, shouldSubmitOnEnter } from "../operatorError";
 import { blockMatchesQuery, cwdBasename, isImageMime, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
+import { GlassysMark, IconAttach, IconSend, IconStop } from "../components/Icon";
 
 const COMPOSER_MAX_PX = 160;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
@@ -724,7 +725,7 @@ export function Chat({
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand tight">
-            <img src="/icon.svg" alt="" width={28} height={28} />
+            <GlassysMark size={24} />
             <div>
               <strong>{config.space.name.trim() || t("app.name")}</strong>
               <span className="host-context muted">
@@ -1163,7 +1164,7 @@ export function Chat({
               aria-label={t("chat.attach")}
               onClick={() => fileRef.current?.click()}
             >
-              <AttachIcon />
+              <IconAttach />
             </button>
             <input
               ref={fileRef}
@@ -1220,11 +1221,11 @@ export function Chat({
                   if (!sendRef.current({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));
                 }}
               >
-                <StopIcon />
+                <IconStop fill="currentColor" />
               </button>
             )}
             <button className="primary composer-send" type="submit" disabled={!canSend} aria-label={t("chat.send")}>
-              <SendIcon />
+              <IconSend />
             </button>
           </div>
           <p className="muted composer-hint">{t("palette.hint")}</p>
@@ -1252,35 +1253,6 @@ export function Chat({
   );
 }
 
-function AttachIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M8 12.5V8.2A4.2 4.2 0 0 1 16.4 8v9.1a3.4 3.4 0 0 1-6.8 0V9.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 4 5.5 18h4.2L12 12.5 14.3 18h4.2L12 4z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />
-    </svg>
-  );
-}
 
 function attachableFile(file: File): boolean {
   if (isImageMime(file.type)) return true;
