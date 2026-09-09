@@ -229,7 +229,6 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .row { display: flex; gap: var(--s-2); justify-content: flex-end; align-items: center; }
 .row.wrap { flex-wrap: wrap; justify-content: flex-start; }
 .muted { color: var(--muted); }
-.faint { color: var(--faint); }
 .error-text { color: var(--danger); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .ok { color: var(--ok); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .warn { color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-body); overflow-wrap: break-word; }
@@ -282,8 +281,6 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .ghost:hover:not(:disabled) { background: var(--ghost-hover); border-color: var(--stroke-strong); }
 .danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 .danger:hover:not(:disabled) { background: var(--danger-bg); }
-.accent { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.accent:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, #000); }
 
 .tiny {
   min-height: var(--control-h-sm);
@@ -814,7 +811,7 @@ button.host-copy:hover { color: var(--text); }
   box-shadow: var(--e-1);
   z-index: 2;
 }
-.usage, .live-line { font-size: var(--fs-xs); margin: 0; font-variant-numeric: tabular-nums; }
+.usage { font-size: var(--fs-xs); margin: 0; font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------------------
    Tool cards
@@ -1386,9 +1383,11 @@ button.host-copy:hover { color: var(--text); }
     overflow-y: auto;
     border-bottom: 0;
     border-right: 1px solid var(--stroke);
+    background: var(--bg);
     padding: var(--s-3);
     align-content: start;
   }
+  .settings-tab.current { background: var(--surface-3); }
   .settings-tab { justify-content: flex-start; width: 100%; }
   .settings-section { border: 0; padding: 0; background: transparent; }
   .settings-body { padding: var(--s-5); }
@@ -1447,9 +1446,6 @@ button.host-copy:hover { color: var(--text); }
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.settings-toc { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); font-size: var(--fs-sm); }
-.settings-toc a { color: var(--muted); text-decoration: none; transition: color var(--dur) var(--ease); }
-.settings-toc a:hover, .settings-toc a:focus-visible { color: var(--text); }
 .prompt-row { display: grid; gap: var(--s-2); }
 .schedule-list { display: grid; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }
 .schedule-list li {
