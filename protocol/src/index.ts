@@ -8,6 +8,7 @@ export const PROFILE_ID = "default";
 export const DEFAULT_STALL_SECONDS = 180;
 export const MAX_STALL_SECONDS = 3600;
 export const MAX_PINNED_CWDS = 12;
+export const MAX_ATTACHMENTS = 4;
 
 export function clampKeepaliveSeconds(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_KEEPALIVE_SECONDS;
@@ -338,7 +339,7 @@ export type ServerMessage =
   | { type: "threads.snapshot"; threads: ThreadSummary[]; currentId: string | null }
   | { type: "config"; config: RedactedConfig }
   | { type: "config.error"; message: string }
-  | { type: "transcript.snapshot"; events: TranscriptEvent[] }
+  | { type: "transcript.snapshot"; events: TranscriptEvent[]; truncated?: boolean }
   | TranscriptEvent;
 
 export function isClientMessage(value: unknown): value is ClientMessage {

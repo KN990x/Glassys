@@ -20,9 +20,11 @@ export async function enableWebPush(publicKey: string): Promise<{ endpoint: stri
   return { endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } };
 }
 
-export async function currentPushEndpoint(): Promise<string | null> {
+export async function disableWebPush(): Promise<string | null> {
   const reg = await navigator.serviceWorker.ready.catch(() => null);
   if (!reg) return null;
   const sub = await reg.pushManager.getSubscription();
-  return sub?.endpoint ?? null;
+  const endpoint = sub?.endpoint ?? null;
+  if (sub) await sub.unsubscribe();
+  return endpoint;
 }

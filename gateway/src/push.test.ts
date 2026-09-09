@@ -55,4 +55,19 @@ describe("web push", () => {
     await notifyFromEvent({ type: "run.error", message: "boom" });
     expect(sent.every((s) => s.endpoint !== "https://push.example/gone")).toBe(true);
   });
+
+  it("uses Spanish copy when locale is es", async () => {
+    const cfg = defaultConfig();
+    cfg.session.notifyOnComplete = true;
+    cfg.space.locale = "es";
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    await savePushSubscription({ endpoint: "https://push.example/es", keys: { p256dh: "p", auth: "a" } });
+    const sent: string[] = [];
+    setPushSenderForTests(async (_sub, payload) => {
+      sent.push(payload);
+      return { statusCode: 201 };
+    });
+    await notifyFromEvent({ type: "run.done" });
+    expect(sent.some((body) => body.includes("terminado"))).toBe(true);
+  });
 });

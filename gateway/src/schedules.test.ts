@@ -7,6 +7,7 @@ import {
   createSchedule,
   listSchedules,
   setScheduleIdlePollMsForTests,
+  setScheduleIdleWaitMsForTests,
   stopSchedules,
   tickSchedulesForTests,
 } from "./schedules.js";
@@ -24,6 +25,7 @@ describe("schedules", () => {
     stopSchedules();
     bindScheduleRuntime(null);
     setScheduleIdlePollMsForTests(500);
+    setScheduleIdleWaitMsForTests();
   });
 
   it("persists cron and at jobs", async () => {
@@ -47,6 +49,7 @@ describe("schedules", () => {
     bindScheduleRuntime({
       enqueue: async (text) => {
         enqueued.push(text);
+        return true;
       },
       isIdle: () => idle,
       liveThreadId: () => liveThread,
@@ -81,7 +84,7 @@ describe("schedules", () => {
     bindScheduleRuntime(null);
     stopSchedules();
     bindScheduleRuntime({
-      enqueue: async () => undefined,
+      enqueue: async () => true,
       isIdle: () => true,
       liveThreadId: () => null,
       liveCwd: async () => dir,
@@ -89,5 +92,25 @@ describe("schedules", () => {
       applyCwd: async () => undefined,
     });
     expect((await listSchedules())[0]?.text).toBe("keep");
+  });
+
+  it("keeps a one-shot enabled when enqueue does not queue", async () => {
+    bindScheduleRuntime({
+      enqueue: async () => false,
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+    });
+    const job = await createSchedule({
+      text: "missed",
+      cwd: dir,
+      at: new Date(Date.now() - 1000).toISOString(),
+    });
+    await tickSchedulesForTests();
+    const listed = (await listSchedules()).find((j) => j.id === job.id);
+    expect(listed?.enabled).toBe(true);
+    expect(listed?.lastError).toMatch(/not queued/i);
   });
 });

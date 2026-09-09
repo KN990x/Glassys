@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useT } from "../i18n";
@@ -11,7 +11,7 @@ export function safeHref(href: string | undefined): string | undefined {
   return SAFE_HREF.test(trimmed) ? trimmed : undefined;
 }
 
-export function MarkdownBody({ text }: { text: string }) {
+function MarkdownBodyInner({ text }: { text: string }) {
   return (
     <div className="md">
       <Markdown
@@ -39,6 +39,8 @@ export function MarkdownBody({ text }: { text: string }) {
     </div>
   );
 }
+
+export const MarkdownBody = memo(MarkdownBodyInner);
 
 function CodeBlock({ children }: { children?: ReactNode }) {
   const t = useT();

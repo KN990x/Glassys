@@ -17,11 +17,25 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Queue is full": "error.queueFull",
   "invalid thread id": "error.invalidThreadId",
   "Too many attachments": "error.tooManyAttachments",
+  "Gateway is busy, try again": "error.gatewayBusy",
+  "Schedule needs either cron or at": "error.scheduleXor",
+  "Too many schedules": "error.tooManySchedules",
+  "Schedule not found": "error.scheduleNotFound",
+  "Schedule text required": "error.scheduleText",
+  "Invalid cron expression": "error.invalidCron",
+  "This install is not a git clone": "error.notGitClone",
+  "An upgrade is already running": "error.upgradeRunning",
+  "Working tree is dirty": "error.upgradeDirty",
+  "invalid subscription": "error.invalidSubscription",
+  "Too many push subscriptions": "error.tooManyPush",
+  "Too many pinned workspaces": "error.tooManyPins",
+  "Notification permission denied": "settings.notifyDenied",
 };
 
 export function operatorError(message: string, t: (key: string) => string): string {
   const key = MESSAGE_KEYS[message];
   if (key) return t(key);
+  if (/git fetch failed/i.test(message)) return t("error.gitFetch");
   return message;
 }
 

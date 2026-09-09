@@ -24,6 +24,7 @@ import {
   enqueueMessage,
   listLiveThreads,
   readTranscript,
+  readTranscriptSnapshot,
   snapshotQueue,
   snapshotRuntime,
   startNewLiveThread,
@@ -211,13 +212,16 @@ async function handleClient(
     const config = await redacted();
     hub.add(ws, { buffer: true });
     await drainEmit();
-    const events = await readTranscript();
+    const snap = await readTranscriptSnapshot();
     hub.send(ws, { type: "auth.ok" });
     hub.send(ws, { type: "config", config });
-    hub.send(ws, { type: "transcript.snapshot", events });
+    hub.send(ws, {
+      type: "transcript.snapshot",
+      events: snap.events,
+      ...(snap.truncated ? { truncated: true } : {}),
+    });
     await drainEmit();
-    const later = await readTranscript();
-    const extra = later.slice(events.length);
+    const extra = snap.truncated ? [] : (await readTranscript()).slice(snap.events.length);
     for (const ev of extra) {
       hub.send(ws, ev);
     }

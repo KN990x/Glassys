@@ -18,18 +18,24 @@ import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
-import { enableWebPush } from "../push";
+import { enableWebPush, disableWebPush } from "../push";
 
 export function Settings({
   config,
   onClose,
   onConfig,
   onLogout,
+  currentThreadId,
+  focusSection,
+  schedulePrefill,
 }: {
   config: RedactedConfig;
   onClose: () => void;
   onConfig: (c: RedactedConfig) => void;
   onLogout: () => void;
+  currentThreadId?: string | null;
+  focusSection?: "schedules" | "updates";
+  schedulePrefill?: string;
 }) {
   const t = useT();
   const [draft, setDraft] = useState(config);
@@ -58,12 +64,16 @@ export function Settings({
       id: string;
       text: string;
       cwd: string;
+      threadId?: string;
       cron?: string;
       at?: string;
       enabled: boolean;
       nextRun: string | null;
+      lastRun?: string;
+      lastError?: string;
     }>
   >([]);
+  const [scheduleTz, setScheduleTz] = useState("");
   const [scheduleText, setScheduleText] = useState("");
   const [scheduleCron, setScheduleCron] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
@@ -110,6 +120,16 @@ export function Settings({
   useEffect(() => {
     setDraft(config);
   }, [config]);
+
+  useEffect(() => {
+    if (schedulePrefill) setScheduleText(schedulePrefill);
+  }, [schedulePrefill]);
+
+  useEffect(() => {
+    if (!focusSection) return;
+    const id = focusSection === "schedules" ? "settings-schedules" : "settings-updates";
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, [focusSection]);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -185,7 +205,10 @@ export function Settings({
       .catch(() => setThreadUsage(null));
     api
       .schedules()
-      .then((r) => setSchedules(r.schedules))
+      .then((r) => {
+        setSchedules(r.schedules);
+        setScheduleTz(r.timezone || "");
+      })
       .catch(() => setSchedules([]));
     api
       .adminUpdate()
@@ -341,28 +364,36 @@ export function Settings({
 
   async function refreshSchedules() {
     try {
-      setSchedules((await api.schedules()).schedules);
+      const r = await api.schedules();
+      setSchedules(r.schedules);
+      setScheduleTz(r.timezone || "");
     } catch {
       /* ignore */
     }
   }
 
   async function enableNotify(on: boolean) {
-    setDraft({ ...draft, session: { ...draft.session, notifyOnComplete: on } });
     setNotifyNote("");
-    if (!on) return;
-    if (!window.isSecureContext) {
-      setNotifyNote(t("settings.notifyHint"));
-      return;
-    }
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setNotifyNote(t("settings.notifyNeedSw"));
-      return;
-    }
     try {
-      const { publicKey } = await api.vapid();
-      const sub = await enableWebPush(publicKey);
-      await api.pushSubscribe(sub);
+      if (on) {
+        if (!window.isSecureContext) {
+          setNotifyNote(t("settings.notifyHint"));
+          return;
+        }
+        if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+          setNotifyNote(t("settings.notifyNeedSw"));
+          return;
+        }
+        const { publicKey } = await api.vapid();
+        const sub = await enableWebPush(publicKey);
+        await api.pushSubscribe(sub);
+      } else {
+        const endpoint = await disableWebPush();
+        if (endpoint) await api.pushUnsubscribe(endpoint);
+      }
+      const next = await api.saveConfig({ session: { notifyOnComplete: on } });
+      setDraft(next);
+      onConfig(next);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       setNotifyNote(msg.includes("denied") || msg.includes("permission") ? t("settings.notifyDenied") : operatorError(msg, t));
@@ -390,6 +421,15 @@ export function Settings({
           </button>
         </header>
         <div className="settings-body">
+          <nav className="settings-toc" aria-label={t("settings.title")}>
+            <a href="#settings-appearance">{t("settings.appearance")}</a>
+            <a href="#settings-agent">{t("settings.agent")}</a>
+            <a href="#settings-session">{t("settings.session")}</a>
+            <a href="#settings-prompts">{t("settings.prompts")}</a>
+            <a href="#settings-schedules">{t("settings.schedules")}</a>
+            <a href="#settings-updates">{t("settings.update")}</a>
+            <a href="#settings-phone">{t("settings.phone")}</a>
+          </nav>
           {config.restartRequired && (
             <p className="warn">
               {t("settings.restartRequired")}{" "}
@@ -408,7 +448,7 @@ export function Settings({
               {restartNote ? ` ${restartNote}` : ""}
             </p>
           )}
-          <section className="settings-section">
+          <section className="settings-section" id="settings-appearance">
             <h3>{t("settings.appearance")}</h3>
             <label>
               {t("settings.locale")}
@@ -488,7 +528,7 @@ export function Settings({
             </label>
           </section>
 
-          <section className="settings-section">
+          <section className="settings-section" id="settings-agent">
             <h3>{t("settings.agent")}</h3>
             <p className="warn">{t("settings.newThread")}</p>
             <label>
@@ -708,7 +748,7 @@ export function Settings({
             </details>
           </section>
 
-          <section className="settings-section">
+          <section className="settings-section" id="settings-session">
             <h3>{t("settings.session")}</h3>
             {caps?.resume && (
             <label className="choice">
@@ -775,7 +815,7 @@ export function Settings({
             )}
           </section>
 
-          <section className="settings-section">
+          <section className="settings-section" id="settings-prompts">
             <h3>{t("settings.prompts")}</h3>
             <p className="muted">{t("settings.promptsHint")}</p>
             {templates.map((tpl, i) => (
@@ -837,9 +877,15 @@ export function Settings({
             </button>
           </section>
 
-          <section className="settings-section">
+          <section className="settings-section" id="settings-schedules">
             <h3>{t("settings.schedules")}</h3>
             <p className="muted">{t("settings.schedulesHint")}</p>
+            {scheduleTz && (
+              <p className="muted">
+                {t("settings.scheduleTz")}: {scheduleTz}
+              </p>
+            )}
+            <p className="muted">{t("settings.scheduleCatchUp")}</p>
             <label>
               {t("settings.scheduleText")}
               <textarea rows={3} value={scheduleText} onChange={(e) => setScheduleText(e.target.value)} />
@@ -875,6 +921,7 @@ export function Settings({
                     await api.createSchedule({
                       text: scheduleText,
                       cwd: draft.agent.cwd,
+                      threadId: currentThreadId || undefined,
                       cron: scheduleCron.trim() || undefined,
                       at: scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
                     });
@@ -898,6 +945,16 @@ export function Settings({
                   <p className="muted">
                     {job.cron || job.at} · {t("settings.scheduleNext")} {job.nextRun || "—"} · {job.cwd}
                   </p>
+                  {job.lastRun && (
+                    <p className="muted">
+                      {t("settings.scheduleLast")}: {job.lastRun}
+                    </p>
+                  )}
+                  {job.lastError && (
+                    <p className="warn">
+                      {t("settings.scheduleLastError")}: {job.lastError}
+                    </p>
+                  )}
                   <label className="choice">
                     <input
                       type="checkbox"
@@ -928,7 +985,7 @@ export function Settings({
             </ul>
           </section>
 
-          <section className="settings-section">
+          <section className="settings-section" id="settings-updates">
             <h3>{t("settings.update")}</h3>
             {update && (
               <>
@@ -969,6 +1026,11 @@ export function Settings({
                 className="ghost"
                 onClick={() => {
                   void (async () => {
+                    if (update?.git?.dirty) {
+                      setError(t("settings.updateDirty"));
+                      return;
+                    }
+                    if (!window.confirm(t("settings.updateConfirm"))) return;
                     try {
                       await api.upgrade();
                       setUpdate(await api.adminUpdate());
@@ -998,7 +1060,7 @@ export function Settings({
             {update?.service === "none" && <p className="muted">{t("settings.updateNeedService")}</p>}
           </section>
 
-          <section className="settings-section">
+          <section className="settings-section" id="settings-phone">
             <h3>{t("settings.phone")}</h3>
             <ReachabilityCard />
           </section>

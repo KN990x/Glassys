@@ -21,6 +21,7 @@ export function ThreadDrawer({
   onOpenCwd,
   onPin,
   onUnpin,
+  onExport,
 }: {
   threads: ThreadSummary[];
   currentId: string | null;
@@ -39,12 +40,16 @@ export function ThreadDrawer({
   onOpenCwd?: (cwd: string) => void;
   onPin?: (cwd: string) => void;
   onUnpin?: (cwd: string) => void;
+  onExport?: () => void;
 }) {
   const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
-  const groups = groupThreadsByCwd(threads);
+  const [filter, setFilter] = useState("");
+  const q = filter.trim().toLowerCase();
+  const visible = q ? threads.filter((th) => th.title.toLowerCase().includes(q) || th.cwd.toLowerCase().includes(q)) : threads;
+  const groups = groupThreadsByCwd(visible);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -92,11 +97,26 @@ export function ThreadDrawer({
             <button type="button" className="primary" onClick={onNew} disabled={busy || waiting}>
               {t("threads.new")}
             </button>
+            {onExport && currentId && (
+              <button type="button" className="ghost" onClick={onExport}>
+                {t("chat.export")}
+              </button>
+            )}
             <button ref={closeRef} type="button" className="ghost" onClick={onClose}>
               {t("threads.close")}
             </button>
           </div>
         </header>
+        <label className="thread-filter">
+          <span className="visually-hidden">{t("threads.filter")}</span>
+          <input
+            type="search"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t("threads.filter")}
+            aria-label={t("threads.filter")}
+          />
+        </label>
         <p className="muted">{t("threads.switchResume")}</p>
         {pins && pins.length > 0 && (
           <section className="thread-group">

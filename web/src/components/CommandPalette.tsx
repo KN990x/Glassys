@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../i18n";
 import type { PromptTemplate } from "@glassys/protocol";
 
+export type PaletteGroup = "product" | "workspace" | "template";
+
 export type PaletteItem = {
   id: string;
-  group: "product" | "template";
+  group: PaletteGroup;
   label: string;
   hint?: string;
   run: () => void;
@@ -14,6 +16,10 @@ export function filterPaletteItems(items: PaletteItem[], query: string): Palette
   const q = query.trim().toLowerCase();
   if (!q) return items;
   return items.filter((item) => `${item.label} ${item.hint || ""} ${item.id}`.toLowerCase().includes(q));
+}
+
+export function paletteItemIds(items: PaletteItem[]): string {
+  return items.map((item) => item.id).join("\n");
 }
 
 export function CommandPalette({
@@ -37,10 +43,11 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => filterPaletteItems(items, query), [items, query]);
+  const ids = paletteItemIds(filtered);
 
   useEffect(() => {
     setActive(0);
-  }, [query, open, items]);
+  }, [query, open, ids]);
 
   useEffect(() => {
     if (open && !hideSearch) inputRef.current?.focus();
@@ -97,19 +104,29 @@ export function CommandPalette({
         />
       )}
       <ul className="palette-list">
-        {filtered.map((item, i) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              className={`ghost picker-item${i === active ? " current" : ""}`}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => choose(i)}
-            >
-              <strong>{item.label}</strong>
-              {item.hint ? <span className="muted">{item.hint}</span> : null}
-            </button>
-          </li>
-        ))}
+        {filtered.map((item, i) => {
+          const header = i === 0 || item.group !== filtered[i - 1]?.group;
+          return (
+            <Fragment key={item.id}>
+              {header && (
+                <li className="muted palette-group" aria-hidden="true">
+                  {t(`palette.group.${item.group}`)}
+                </li>
+              )}
+              <li>
+                <button
+                  type="button"
+                  className={`ghost picker-item${i === active ? " current" : ""}`}
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(i)}
+                >
+                  <strong>{item.label}</strong>
+                  {item.hint ? <span className="muted">{item.hint}</span> : null}
+                </button>
+              </li>
+            </Fragment>
+          );
+        })}
         {filtered.length === 0 && <li className="muted">{t("palette.empty")}</li>}
       </ul>
     </div>

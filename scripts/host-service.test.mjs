@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   gatewayListenPort,
   graphicalEnvFrom,
+  healthProbeHosts,
   nodeMeetsMin,
   renderLaunchdPlist,
   renderSystemdUserUnit,
@@ -75,6 +76,13 @@ test("systemd user unit inherits graphical session env when present", () => {
   assert.match(unit, /Environment=WAYLAND_DISPLAY=wayland-0/);
   assert.match(unit, /Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=\/run\/user\/1000\/bus/);
   assert.doesNotMatch(unit, /CURSOR_API_KEY/);
+});
+
+test("healthProbeHosts tries loopback then a LAN bind", () => {
+  assert.deepEqual(healthProbeHosts("127.0.0.1"), ["127.0.0.1"]);
+  assert.deepEqual(healthProbeHosts("0.0.0.0"), ["127.0.0.1"]);
+  assert.deepEqual(healthProbeHosts("192.168.1.10"), ["127.0.0.1", "192.168.1.10"]);
+  assert.deepEqual(healthProbeHosts("::1"), ["127.0.0.1", "[::1]"]);
 });
 
 test("gatewayListenPort reads GLASSYS_PORT", () => {

@@ -43,14 +43,17 @@ describe("registerHostHandlers autoRun", () => {
     }
   });
 
-  it("allows permission for read-ish tools when auto-run is off", async () => {
+  it("does not auto-allow write-ish names that substring-match read tools", async () => {
     const { map, cleanup } = handlers(false);
     try {
-      await expect(map.get("session/request_permission")?.({ toolCall: { kind: "read" } })).resolves.toMatchObject({
-        outcome: { outcome: "selected" },
-      });
-      await expect(map.get("session/request_permission")?.({ toolCall: { kind: "edit" } })).resolves.toMatchObject({
+      await expect(map.get("session/request_permission")?.({ toolCall: { kind: "research" } })).resolves.toMatchObject({
         outcome: { outcome: "cancelled" },
+      });
+      await expect(map.get("session/request_permission")?.({ toolCall: { title: "already" } })).resolves.toMatchObject({
+        outcome: { outcome: "cancelled" },
+      });
+      await expect(map.get("session/request_permission")?.({ toolCall: { kind: "search" } })).resolves.toMatchObject({
+        outcome: { outcome: "selected" },
       });
     } finally {
       cleanup();
