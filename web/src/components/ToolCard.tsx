@@ -98,21 +98,26 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
           )}
           <StatusPill status={block.status} label={statusLabel} />
         </button>
-        {block.command && (
-          <button
-            type="button"
-            className={`icon-btn sm tool-copy${copyFailed ? " failed" : ""}`}
-            aria-label={t("tool.copyCommand")}
-            title={t("tool.copyCommand")}
-            onClick={(e) => void copyCommand(e)}
-          >
-            {copied ? <IconCheck /> : copyFailed ? <IconAlert /> : <IconCopy />}
-            {/* The label left the button face, so the outcome is announced instead. */}
-            <span className="visually-hidden" aria-live="polite">
-              {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
-            </span>
-          </button>
-        )}
+        {/* The slot is always here, even with nothing in it: when the copy button
+            only rendered for shell calls, the status pill landed 38px further
+            left on those cards than on file reads. */}
+        <span className="tool-action">
+          {block.command && (
+            <button
+              type="button"
+              className={`icon-btn sm tool-copy${copyFailed ? " failed" : ""}`}
+              aria-label={t("tool.copyCommand")}
+              title={t("tool.copyCommand")}
+              onClick={(e) => void copyCommand(e)}
+            >
+              {copied ? <IconCheck /> : copyFailed ? <IconAlert /> : <IconCopy />}
+              {/* The label left the button face, so the outcome is announced instead. */}
+              <span className="visually-hidden" aria-live="polite">
+                {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
+              </span>
+            </button>
+          )}
+        </span>
       </div>
       {open && (
         <div className="tool-body">
