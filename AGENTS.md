@@ -82,7 +82,9 @@ Package manager: **pnpm** (same as the rest of the GitHub workspace). `packageMa
 - Do not single-file-bundle `@cursor/sdk` on Node. Keep `node_modules`. Node `>=22.13`.
 - Store: `JsonlLocalAgentStore` under `$GLASSYS_DATA_DIR/cursor-store`. Other adapters use `$GLASSYS_DATA_DIR/<id>-store`. The live Glassys transcript is `$GLASSYS_DATA_DIR/threads/<threadId>/transcript.jsonl` (legacy `transcript.jsonl` is migrated on first run). The PWA replays that file; the SDK store is for model resume.
 
-## GitHub CI after push
+## Git and CI
+
+Single maintainer: a pull request is **not** required. Commit and push straight to `main` for ordinary work. Note that `ci` only runs on pushes to `main` and on pull requests, so a feature branch pushed on its own runs nothing — open a PR when a change genuinely needs validating before it lands.
 
 After any `git push` to GitHub (`main` or a PR branch), **do not end the session until workflow `ci` is green**. Watch it (`gh run watch --exit-status`, or `gh pr checks --watch` on a PR). If it fails, read the failing job log, fix, commit, push, and wait again. Do this without being asked. Never skip hooks, never force-push to `main`, and never change the workflow just to make a failure pass.
 
