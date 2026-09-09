@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
 import YAML from "yaml";
 import {
   type ConfigPatch,
@@ -56,8 +55,14 @@ export function restartRequired(before: GlassysConfig, after: GlassysConfig): bo
 
 async function ensureConfigFile(): Promise<void> {
   await mkdir(paths.data(), { recursive: true });
-  if (existsSync(paths.config())) return;
-  await writeFile(paths.config(), YAML.stringify(defaultConfig()), "utf8");
+  try {
+    // Exclusive create. This used to be existsSync() followed by writeFile(),
+    // and a config written between the two calls was overwritten with defaults
+    // by what is only meant to be a first-run bootstrap.
+    await writeFile(paths.config(), YAML.stringify(defaultConfig()), { encoding: "utf8", flag: "wx" });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+  }
 }
 
 function migrateLegacyAgent(parsed: unknown, agent: AgentConfig): { agent: AgentConfig; changed: boolean } {

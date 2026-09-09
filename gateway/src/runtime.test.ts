@@ -123,6 +123,11 @@ describe("runtime queue", () => {
     const { setNowForTests, setStallPollMsForTests } = await import("./runtime.js");
     setNowForTests();
     setStallPollMsForTests(1000);
+    // Every test shares one module instance, so work the previous test left in
+    // flight kept running against the next test's data directory. Dropping the
+    // module registry ends each test's world; the suite already imports through
+    // dynamic import(), so the next test simply gets a fresh one.
+    vi.resetModules();
   });
 
   it("rejects messages before onboarding is complete", async () => {
