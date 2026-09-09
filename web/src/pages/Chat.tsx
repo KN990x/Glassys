@@ -846,7 +846,7 @@ export function Chat({
                 aria-label={t("nav.threads")}
                 onClick={() => (threadOpen ? closeThreads() : openThreads())}
               >
-                <IconThreads size={18} />
+                <IconThreads />
               </button>
             )}
             <div className="topbar-title">
@@ -881,7 +881,7 @@ export function Chat({
               and, being a direct child, rendered wider than the messages. */}
           <div className="transcript-toolbar">
             <span className="search-field">
-              <IconSearch size={15} />
+              <IconSearch />
               <input
                 type="search"
                 value={search}
@@ -899,7 +899,7 @@ export function Chat({
               aria-label={t("chat.export")}
               title={t("chat.export")}
             >
-              <IconExport size={16} />
+              <IconExport />
             </button>
           </div>
           {transcriptTruncated && (
@@ -1069,7 +1069,7 @@ export function Chat({
               scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
             }}
           >
-            <IconArrowDown size={18} />
+            <IconArrowDown />
           </button>
         )}
         </div>
@@ -1125,7 +1125,7 @@ export function Chat({
                         if (!sendRef.current({ type: "queue.cancel", id: item.id })) setSendError(t("chat.sendFailed"));
                       }}
                     >
-                      <IconClose size={14} />
+                      <IconClose />
                     </button>
                   </li>
                 ))}
@@ -1176,7 +1176,7 @@ export function Chat({
                   )}
                   {/* Without this badge nothing said the thumbnail was removable. */}
                   <span className="thumb-badge" aria-hidden="true">
-                    <IconClose size={11} />
+                    <IconClose />
                   </span>
                 </button>
               ))}

@@ -16,19 +16,19 @@ import {
 } from "./Icon";
 
 const KIND_GLYPH: Record<string, ReactNode> = {
-  shell: <IconTerminal size={16} />,
-  read: <IconFile size={16} />,
-  write: <IconFileEdit size={16} />,
-  edit: <IconFileEdit size={16} />,
-  grep: <IconSearch size={16} />,
-  glob: <IconSearch size={16} />,
-  semsearch: <IconSearch size={16} />,
-  ls: <IconFolder size={16} />,
+  shell: <IconTerminal />,
+  read: <IconFile />,
+  write: <IconFileEdit />,
+  edit: <IconFileEdit />,
+  grep: <IconSearch />,
+  glob: <IconSearch />,
+  semsearch: <IconSearch />,
+  ls: <IconFolder />,
 };
 
 function StatusPill({ status, label }: { status: string; label: string }) {
   const glyph =
-    status === "running" ? null : status === "done" ? <IconCheck size={12} /> : status === "denied" ? <IconAlert size={12} /> : <IconError size={12} />;
+    status === "running" ? null : status === "done" ? <IconCheck /> : status === "denied" ? <IconAlert /> : <IconError />;
   return (
     <span className={`pill ${status}`}>
       {glyph}
@@ -80,11 +80,11 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
     <article className={`tool ${block.status}`}>
       <div className="tool-head-row">
         <button className="tool-head" type="button" aria-expanded={open} onClick={() => setUserOpen((v) => !(v ?? open))}>
-          <span className="tool-glyph" aria-hidden="true">
-            {open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+          <span className="tool-glyph tool-disclosure" aria-hidden="true">
+            {open ? <IconChevronDown /> : <IconChevronRight />}
           </span>
           <span className="tool-glyph tool-kind-glyph" title={label(block.toolKind, t)}>
-            {KIND_GLYPH[block.toolKind] ?? <IconTerminal size={16} />}
+            {KIND_GLYPH[block.toolKind] ?? <IconTerminal />}
             <span className="visually-hidden kind">{label(block.toolKind, t)}</span>
           </span>
           <span className="title">
@@ -106,7 +106,7 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
             title={t("tool.copyCommand")}
             onClick={(e) => void copyCommand(e)}
           >
-            {copied ? <IconCheck size={15} /> : copyFailed ? <IconAlert size={15} /> : <IconCopy size={15} />}
+            {copied ? <IconCheck /> : copyFailed ? <IconAlert /> : <IconCopy />}
             {/* The label left the button face, so the outcome is announced instead. */}
             <span className="visually-hidden" aria-live="polite">
               {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
@@ -163,7 +163,7 @@ function Hunk({ hunk, emptyLabel }: { hunk: string; emptyLabel: string }) {
   return (
     <div className="hunk">
       <button type="button" className="hunk-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        {open ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+        {open ? <IconChevronDown /> : <IconChevronRight />}
         {hasHeader ? header : emptyLabel}
       </button>
       {open && (

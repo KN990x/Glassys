@@ -419,14 +419,14 @@ export function Settings({
   /* The strip needs one word per tab; the panel heading keeps the longer,
      descriptive string. */
   const tabs: Array<{ id: SettingsTab; label: string; heading: string; glyph: ReactNode }> = [
-    { id: "appearance", label: t("settings.tab.appearance"), heading: t("settings.appearance"), glyph: <IconPalette size={16} /> },
-    { id: "agent", label: t("settings.tab.agent"), heading: t("settings.agent"), glyph: <IconTerminal size={16} /> },
-    { id: "session", label: t("settings.tab.session"), heading: t("settings.session"), glyph: <IconServer size={16} /> },
-    { id: "prompts", label: t("settings.tab.prompts"), heading: t("settings.prompts"), glyph: <IconCommand size={16} /> },
-    { id: "schedules", label: t("settings.tab.schedules"), heading: t("settings.schedules"), glyph: <IconClock size={16} /> },
-    { id: "updates", label: t("settings.tab.updates"), heading: t("settings.update"), glyph: <IconRefresh size={16} /> },
-    { id: "phone", label: t("settings.tab.phone"), heading: t("settings.phone"), glyph: <IconPhone size={16} /> },
-    { id: "usage", label: t("settings.tab.usage"), heading: t("settings.usage"), glyph: <IconChart size={16} /> },
+    { id: "appearance", label: t("settings.tab.appearance"), heading: t("settings.appearance"), glyph: <IconPalette /> },
+    { id: "agent", label: t("settings.tab.agent"), heading: t("settings.agent"), glyph: <IconTerminal /> },
+    { id: "session", label: t("settings.tab.session"), heading: t("settings.session"), glyph: <IconServer /> },
+    { id: "prompts", label: t("settings.tab.prompts"), heading: t("settings.prompts"), glyph: <IconCommand /> },
+    { id: "schedules", label: t("settings.tab.schedules"), heading: t("settings.schedules"), glyph: <IconClock /> },
+    { id: "updates", label: t("settings.tab.updates"), heading: t("settings.update"), glyph: <IconRefresh /> },
+    { id: "phone", label: t("settings.tab.phone"), heading: t("settings.phone"), glyph: <IconPhone /> },
+    { id: "usage", label: t("settings.tab.usage"), heading: t("settings.usage"), glyph: <IconChart /> },
   ];
 
   return (
@@ -448,7 +448,7 @@ export function Settings({
             title={t("settings.close")}
             onClick={() => void requestClose()}
           >
-            <IconClose size={16} />
+            <IconClose />
           </button>
         </header>
         <div className="settings-layout">

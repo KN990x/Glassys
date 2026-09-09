@@ -16,9 +16,9 @@ export function BottomNav({
   const t = useT();
   const items: Array<{ id: NavTarget; label: string; glyph: ReactNode }> = [
     { id: "chat", label: t("nav.chat"), glyph: <GlassysMark size={20} /> },
-    { id: "threads", label: t("nav.threads"), glyph: <IconThreads size={20} /> },
-    { id: "ops", label: t("nav.ops"), glyph: <IconCommand size={20} /> },
-    { id: "settings", label: t("nav.settings"), glyph: <IconSettings size={20} /> },
+    { id: "threads", label: t("nav.threads"), glyph: <IconThreads /> },
+    { id: "ops", label: t("nav.ops"), glyph: <IconCommand /> },
+    { id: "settings", label: t("nav.settings"), glyph: <IconSettings /> },
   ];
   return (
     <nav className="tabbar" aria-label={t("nav.primary")}>

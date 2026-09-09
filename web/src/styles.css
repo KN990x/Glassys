@@ -20,7 +20,6 @@
 
   /* Accent and state */
   --accent: #3d7dfa;
-  --accent-ink: #ffffff;
   --accent-bg: color-mix(in srgb, var(--accent) 16%, transparent);
   --danger: #e5484d;
   --danger-bg: color-mix(in srgb, var(--danger) 14%, transparent);
@@ -35,7 +34,6 @@
   --btn-fg: #0a0a0a;
   --btn-hover: #e5e5e5;
   --ghost-hover: var(--surface-2);
-  --ghost-active: var(--surface-3);
 
   /* Content surfaces */
   --user: var(--surface-2);
@@ -71,8 +69,6 @@
   --r-lg: 14px;
   --r-xl: 20px;
   --r-full: 999px;
-  --radius: var(--r-md);
-  --radius-lg: var(--r-lg);
 
   /* Elevation */
   --e-1: 0 1px 2px color-mix(in srgb, #000 40%, transparent),
@@ -97,11 +93,18 @@
   /* Layout */
   --content-max: 760px;
   --page-gutter: var(--s-4);
-  --topbar-h: 52px;
   --rail-w: 268px;
   --tabbar-h: 56px;
   --control-h: 36px;
   --control-h-sm: 30px;
+
+  /* Icon scale. Glyphs pair with a control box or a line of text, never a
+     one-off number. */
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 18px;
+  --icon-xl: 20px;
   --composer-btn: 40px;
   --composer-pad: var(--s-1);
   --tap: 40px;
@@ -124,7 +127,6 @@ html[data-theme="light"] {
   --faint: #a1a1aa;
 
   --accent: #2563eb;
-  --accent-ink: #ffffff;
   --danger: #c62828;
   --ok: #2f7d32;
   --warn: #b26b00;
@@ -133,7 +135,6 @@ html[data-theme="light"] {
   --btn-fg: #fafafa;
   --btn-hover: #3f3f46;
   --ghost-hover: var(--surface-2);
-  --ghost-active: var(--surface-3);
 
   --user: var(--surface-2);
   --code-bg: var(--surface-2);
@@ -183,24 +184,34 @@ h1, h2, h3, h4 { text-wrap: pretty; line-height: var(--lh-tight); }
    --------------------------------------------------------------------------- */
 input, textarea, select {
   width: 100%;
-  min-height: var(--control-h);
   background: var(--input-bg);
   border: 1px solid var(--stroke);
   border-radius: var(--r-md);
   padding: var(--s-2) var(--s-3);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
+/* Single-line controls are exactly one control height, so an input never sits
+   4px taller than the button beside it. */
+input:not([type="checkbox"]):not([type="radio"]), select {
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--s-3);
+}
+textarea { min-height: var(--control-h); }
 input:hover:not(:disabled), textarea:hover:not(:disabled), select:hover:not(:disabled) {
   border-color: var(--stroke-strong);
 }
+/* A bordered control already reads as focused once the border turns accent;
+   the full two-step ring on top of it was three visible edges. */
 input:focus-visible, textarea:focus-visible, select:focus-visible {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 textarea { resize: vertical; line-height: var(--lh-body); }
 input[type="checkbox"], input[type="radio"] {
-  width: 16px;
+  width: var(--icon-md);
   min-height: 0;
-  height: 16px;
+  height: var(--icon-md);
   accent-color: var(--accent);
   flex: none;
 }
@@ -210,7 +221,7 @@ select {
   background-image: var(--chevron);
   background-repeat: no-repeat;
   background-position: right var(--s-2) center;
-  background-size: 16px 16px;
+  background-size: var(--icon-md) var(--icon-md);
   padding-right: var(--s-6);
   cursor: pointer;
 }
@@ -308,7 +319,32 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 @media (pointer: coarse) {
   .tiny { min-height: var(--tap); padding: 0 var(--s-3); }
   .icon-btn.sm { width: var(--tap); height: var(--tap); min-height: var(--tap); }
+  /* iOS zooms the page when a text field under 16px takes focus, because the
+     keyboard needs a legible caret. A <select> opens a picker wheel instead, so
+     it keeps its design size and stays the same height as the chip beside it. */
+  input:not([type="checkbox"]):not([type="radio"]), textarea { font-size: 16px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Icon sizing lives here, per context, so no component picks a loose number.
+   --------------------------------------------------------------------------- */
+.icon-btn svg { width: var(--icon-md); height: var(--icon-md); }
+.icon-btn.sm svg { width: var(--icon-sm); height: var(--icon-sm); }
+.primary svg, .ghost svg, .danger svg { width: var(--icon-md); height: var(--icon-md); }
+.tiny svg { width: var(--icon-sm); height: var(--icon-sm); }
+.tabbar-item svg { width: var(--icon-xl); height: var(--icon-xl); }
+.settings-tab svg { width: var(--icon-md); height: var(--icon-md); }
+.tool-kind-glyph svg { width: var(--icon-md); height: var(--icon-md); }
+.tool-disclosure svg { width: var(--icon-sm); height: var(--icon-sm); }
+.pill svg { width: var(--icon-xs); height: var(--icon-xs); }
+.hunk-head svg { width: var(--icon-xs); height: var(--icon-xs); }
+.search-field svg { width: var(--icon-sm); height: var(--icon-sm); }
+.alert-icon svg { width: var(--icon-md); height: var(--icon-md); }
+.host-row dt svg { width: var(--icon-sm); height: var(--icon-sm); }
+.thumb-badge svg { width: var(--icon-xs); height: var(--icon-xs); }
+.confirm-icon svg { width: var(--icon-lg); height: var(--icon-lg); }
+.jump-bottom svg { width: var(--icon-lg); height: var(--icon-lg); }
+.queue-list svg { width: var(--icon-sm); height: var(--icon-sm); }
 
 /* ---------------------------------------------------------------------------
    Gates: boot, setup, login, wizard
@@ -384,10 +420,10 @@ details summary {
 details summary::-webkit-details-marker { display: none; }
 details summary::before {
   content: "";
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: none;
-  background: var(--chevron) center / 14px 14px no-repeat;
+  background: var(--chevron) center / var(--icon-sm) var(--icon-sm) no-repeat;
   transform: rotate(-90deg);
   transition: transform var(--dur) var(--ease);
 }
@@ -416,10 +452,13 @@ details label { margin-top: var(--s-2); }
 .panel-tools { display: flex; gap: var(--s-2); align-items: center; flex: none; }
 .panel-tools select {
   width: auto;
+  height: var(--control-h-sm);
   min-height: var(--control-h-sm);
   padding: 0 var(--s-5) 0 var(--s-2);
-  font-size: 16px;
+  font-size: var(--fs-sm);
   background-color: transparent;
+  background-position: right var(--s-1) center;
+  background-size: 14px 14px;
 }
 .panel-tools-corner { justify-content: flex-end; }
 
@@ -503,7 +542,7 @@ details label { margin-top: var(--s-2); }
 .thread-hint { margin: 0; font-size: var(--fs-xs); }
 
 .host-rows { display: grid; gap: var(--s-1); margin: 0; padding: 0 var(--s-2); max-width: none; }
-.host-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s-2); align-items: center; }
+.host-row { display: grid; grid-template-columns: var(--icon-md) minmax(0, 1fr); gap: var(--s-2); align-items: center; }
 .host-row dt { display: grid; place-items: center; color: var(--faint); margin: 0; }
 .host-row dd { margin: 0; font-size: var(--fs-xs); color: var(--muted); min-width: 0; }
 .host-row dd .host-copy { font-size: var(--fs-xs); }
@@ -562,7 +601,7 @@ details label { margin-top: var(--s-2); }
 .banner.alert.error { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
 .banner.alert.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
 .banner.alert.info { background: var(--info-bg); border-color: var(--stroke); }
-.alert-icon { display: grid; place-items: center; height: 20px; flex: none; }
+.alert-icon { display: grid; place-items: center; height: var(--icon-xl); flex: none; }
 .alert-text { flex: 1; min-width: 0; overflow-wrap: anywhere; align-self: center; }
 .banner.alert .ghost.tiny, .banner.alert .icon-btn { flex: none; align-self: center; }
 
@@ -713,7 +752,6 @@ button.host-copy:hover { color: var(--text); }
   justify-items: start;
   gap: 2px;
   text-align: left;
-  min-height: 58px;
   padding: var(--s-3);
   border-radius: var(--r-lg);
   justify-content: stretch;
@@ -755,7 +793,7 @@ button.host-copy:hover { color: var(--text); }
   background: var(--bg-muted);
   overflow: hidden;
 }
-.thinking summary { font-size: var(--fs-sm); }
+.thinking summary { font-size: var(--fs-base); color: var(--text); }
 .thinking-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -811,7 +849,7 @@ button.host-copy:hover { color: var(--text); }
   box-shadow: var(--e-1);
   z-index: 2;
 }
-.usage { font-size: var(--fs-xs); margin: 0; font-variant-numeric: tabular-nums; }
+.usage { font-size: var(--fs-sm); margin: 0; font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------------------
    Tool cards
@@ -829,11 +867,12 @@ button.host-copy:hover { color: var(--text); }
 .tool-copy { align-self: center; flex: none; margin-right: var(--s-2); }
 .tool-copy.failed { color: var(--warn); }
 .tool-glyph { display: grid; place-items: center; color: var(--muted); }
+.tool-disclosure { color: var(--faint); }
 .tool-kind-glyph { color: var(--faint); }
 .tool-head {
   width: 100%;
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) auto auto;
+  grid-template-columns: var(--icon-sm) var(--icon-md) minmax(0, 1fr) auto auto;
   gap: var(--s-2);
   align-items: center;
   background: transparent;
@@ -856,8 +895,9 @@ button.host-copy:hover { color: var(--text); }
   font-size: var(--fs-base);
 }
 .title, .title > span:first-child { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.title > span:first-child { font-weight: 500; }
 .tool-path { font-size: var(--fs-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stats { font-family: var(--mono); font-size: var(--fs-sm); color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.stats { font-family: var(--mono); font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .stats .add { color: var(--diff-add); }
 .stats .del { color: var(--diff-del); }
 .pill {
@@ -1017,7 +1057,7 @@ button.host-copy:hover { color: var(--text); }
   appearance: none;
 }
 .composer-box .composer-send svg,
-.composer-box .composer-attach svg { width: 18px; height: 18px; }
+.composer-box .composer-attach svg { width: var(--icon-lg); height: var(--icon-lg); }
 .composer-box .composer-send:focus-visible,
 .composer-box .composer-attach:focus-visible { box-shadow: 0 0 0 2px var(--input-bg), 0 0 0 4px var(--accent); z-index: 1; }
 
@@ -1092,15 +1132,23 @@ button.host-copy:hover { color: var(--text); }
   color: var(--muted);
   min-width: 0;
 }
+/* Sized as a chip so it matches the permission chip next to it. It used to
+   carry a hardcoded 16px, which made the model name the largest text in the
+   composer. */
 .model-picker.compact select {
   width: auto;
+  height: var(--control-h-sm);
   min-height: var(--control-h-sm);
   padding: 0 var(--s-5) 0 var(--s-2);
-  font-size: 16px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
   background-color: transparent;
-  border-color: transparent;
+  border-color: var(--stroke);
+  background-position: right var(--s-1) center;
+  background-size: 14px 14px;
 }
-.model-picker.compact select:hover { background-color: var(--ghost-hover); border-color: var(--stroke); }
+.model-picker.compact select:hover { background-color: var(--ghost-hover); border-color: var(--stroke-strong); }
 
 .picker-list { display: grid; gap: var(--s-1); }
 .picker-item {
@@ -1120,7 +1168,7 @@ button.host-copy:hover { color: var(--text); }
   font-size: var(--fs-base);
 }
 .picker-item > * { max-width: 100%; }
-.picker-item span { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-item span { font-size: var(--fs-xs); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-item strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The current row used --stroke, which is the same colour as an ordinary border. */
 .picker-item.current {
@@ -1290,8 +1338,8 @@ button.host-copy:hover { color: var(--text); }
 .confirm-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: var(--control-h);
+  height: var(--control-h);
   border-radius: var(--r-md);
   background: var(--warn-bg);
   color: var(--warn);
@@ -1375,39 +1423,7 @@ button.host-copy:hover { color: var(--text); }
 .settings-tab.current svg { color: var(--accent); }
 .settings-dirty { font-size: var(--fs-xs); }
 
-@media (min-width: 860px) {
-  .settings-layout { grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .settings-tabs {
-    flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto;
-    border-bottom: 0;
-    border-right: 1px solid var(--stroke);
-    background: var(--bg);
-    padding: var(--s-3);
-    align-content: start;
-  }
-  .settings-tab.current { background: var(--surface-3); }
-  .settings-tab { justify-content: flex-start; width: 100%; }
-  .settings-section { border: 0; padding: 0; background: transparent; }
-  .settings-body { padding: var(--s-5); }
-}
 
-/* Label on the left, control on the right, instead of every select spanning
-   the dialog. Narrow screens keep the stacked form: two columns clipped the
-   label text. */
-@media (min-width: 860px) {
-  .settings-section > label:not(.choice) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
-    align-items: center;
-    gap: var(--s-3);
-    min-height: var(--control-h);
-  }
-  .settings-section > label:not(.choice) > input,
-  .settings-section > label:not(.choice) > select,
-  .settings-section > label:not(.choice) > textarea { justify-self: stretch; }
-  .settings-section > label:not(.choice) > textarea { grid-column: 1 / -1; }
-}
 .settings-section > p { margin: 0; font-size: var(--fs-sm); }
 .settings-section > button,
 .settings-section .stack > button,
@@ -1446,7 +1462,6 @@ button.host-copy:hover { color: var(--text); }
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.prompt-row { display: grid; gap: var(--s-2); }
 .schedule-list { display: grid; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }
 .schedule-list li {
   display: grid;
@@ -1457,6 +1472,54 @@ button.host-copy:hover { color: var(--text); }
   background: var(--bg-elev);
 }
 .schedule-list li p { margin: 0; font-size: var(--fs-sm); }
+
+/* Number fields should not span the control column. */
+.settings-section input[type="number"] { max-width: 7rem; }
+
+@media (min-width: 860px) {
+  .settings-layout { grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .settings-tabs {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-right: 1px solid var(--stroke);
+    background: var(--bg);
+    padding: var(--s-3);
+    align-content: start;
+  }
+  .settings-tab.current { background: var(--surface-3); }
+  .settings-tab { justify-content: flex-start; width: 100%; }
+  .settings-section { border: 0; padding: 0; background: transparent; }
+  .settings-body { padding: var(--s-5); }
+}
+
+/* Label on the left, control on the right, instead of every select spanning
+   the dialog. Narrow screens keep the stacked form: two columns clipped the
+   label text. */
+@media (min-width: 860px) {
+  .settings-section { max-width: 34rem; }
+  .settings-section > label:not(.choice) {
+    grid-template-columns: minmax(0, 1fr) 15rem;
+    align-items: center;
+    gap: var(--s-3);
+    min-height: var(--control-h);
+  }
+  .settings-section > label:not(.choice) > input,
+  .settings-section > label:not(.choice) > select,
+  .settings-section > label:not(.choice) > textarea { justify-self: stretch; }
+  .settings-section > label:not(.choice) > textarea { grid-column: 1 / -1; }
+  /* Checkboxes share the control column instead of hanging off the left edge
+     while every other control is right-aligned. */
+  .settings-section > label.choice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 15rem;
+    align-items: center;
+    gap: var(--s-3);
+    min-height: var(--control-h);
+  }
+  .settings-section > label.choice > input { grid-column: 2; grid-row: 1; justify-self: start; margin-top: 0; }
+}
 
 .qr { width: 9rem; height: 9rem; background: #fff; border-radius: var(--r-md); padding: var(--s-2); }
 

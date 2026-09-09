@@ -61,7 +61,7 @@ export function HostContext({
       {info.hostLabel && (
         <div className="host-row">
           <dt>
-            <IconServer size={14} />
+            <IconServer />
             <span className="visually-hidden">{t("host.machine")}</span>
           </dt>
           <dd className="truncate" title={info.hostLabel}>
@@ -71,7 +71,7 @@ export function HostContext({
       )}
       <div className="host-row">
         <dt>
-          <IconFolder size={14} />
+          <IconFolder />
           <span className="visually-hidden">{t("host.folder")}</span>
         </dt>
         <dd>
@@ -83,7 +83,7 @@ export function HostContext({
       {branch && (
         <div className="host-row">
           <dt>
-            <IconGit size={14} />
+            <IconGit />
             <span className="visually-hidden">{t("host.branch")}</span>
           </dt>
           <dd className="truncate" title={branch}>
@@ -93,7 +93,7 @@ export function HostContext({
       )}
       <div className="host-row">
         <dt>
-          <IconTerminal size={14} />
+          <IconTerminal />
           <span className="visually-hidden">{t("host.agent")}</span>
         </dt>
         <dd className="truncate">{info.adapter}</dd>

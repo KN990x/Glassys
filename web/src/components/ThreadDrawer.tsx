@@ -70,7 +70,7 @@ export function ThreadDrawer({
                 aria-label={t("chat.export")}
                 title={t("chat.export")}
               >
-                <IconExport size={16} />
+                <IconExport />
               </button>
             )}
             <button
@@ -81,7 +81,7 @@ export function ThreadDrawer({
               aria-label={t("threads.close")}
               title={t("threads.close")}
             >
-              <IconClose size={16} />
+              <IconClose />
             </button>
           </div>
         </header>
@@ -91,7 +91,7 @@ export function ThreadDrawer({
           onClick={onNew}
           disabled={list.busy || list.waiting}
         >
-          <IconPlus size={16} />
+          <IconPlus />
           {t("threads.new")}
         </button>
         <p className="muted thread-hint">{t("threads.switchResume")}</p>
