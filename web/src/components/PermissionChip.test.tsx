@@ -60,7 +60,6 @@ describe("PermissionChip", () => {
   });
 
   it("does not patch options when the operator cancels the archive confirm", async () => {
-    vi.stubGlobal("confirm", () => false);
     host = document.createElement("div");
     document.body.append(host);
     await act(async () => {
@@ -78,7 +77,36 @@ describe("PermissionChip", () => {
     await act(async () => {
       checkbox.click();
     });
+    expect(host.querySelector(".confirm-panel")).toBeTruthy();
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "Cancel")?.click();
+    });
+    expect(host.querySelector(".confirm-panel")).toBeNull();
     expect(saveConfig).not.toHaveBeenCalled();
+  });
+
+  it("patches options once the operator confirms the archive", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <PermissionChip config={cfg()} caps={caps} onConfig={() => undefined} />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => {
+      host.querySelector("button")?.click();
+    });
+    await act(async () => {
+      (host.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "Archive and continue")?.click();
+      await Promise.resolve();
+    });
+    expect(saveConfig).toHaveBeenCalled();
   });
 
   it("closes the popover on Escape and click outside", async () => {

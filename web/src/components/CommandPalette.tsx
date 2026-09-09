@@ -136,7 +136,9 @@ export function CommandPalette({
 
   return (
     <div className="palette-overlay" role="dialog" aria-modal="true" aria-label={t("palette.title")}>
-      <button type="button" className="thread-scrim" aria-label={t("threads.close")} onClick={onClose} />
+      {/* A div, not a button: a full-viewport focusable scrim painted a
+          viewport-wide focus ring. Escape and the list already close it. */}
+      <div className="thread-scrim" onClick={onClose} aria-hidden="true" />
       {panel}
     </div>
   );

@@ -42,6 +42,7 @@ import { Sidebar } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
 import { HostContext, type HostInfo } from "../components/HostContext";
 import { AlertStack, type Alert } from "../components/AlertStack";
+import { useConfirm } from "../components/ConfirmDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 
 const COMPOSER_MAX_PX = 160;
@@ -103,6 +104,7 @@ export function Chat({
   onLogout: () => void;
 }) {
   const t = useT();
+  const { confirm, confirmDialog } = useConfirm();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [busy, setBusy] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -464,7 +466,8 @@ export function Chat({
       setSendError(t("threads.busy"));
       return;
     }
-    if (!window.confirm(t("threads.deleteConfirm"))) return;
+    if (!(await confirm({ message: t("threads.deleteConfirm"), confirmLabel: t("confirm.delete"), destructive: true })))
+      return;
     try {
       applyThreadList(await api.deleteThread(id));
       setSendError("");
@@ -533,7 +536,8 @@ export function Chat({
   }
 
   async function onRestart() {
-    if (!window.confirm(t("settings.restartConfirm"))) return;
+    if (!(await confirm({ message: t("settings.restartConfirm"), confirmLabel: t("confirm.restart"), destructive: true })))
+      return;
     try {
       setRestartNote(t("settings.restarting"));
       await api.restart();
@@ -569,7 +573,8 @@ export function Chat({
       return;
     }
     const hasThread = threads.some((th) => th.cwd === cwd);
-    if (!hasThread && !window.confirm(t("settings.archiveConfirm"))) return;
+    if (!hasThread && !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive") })))
+      return;
     const prevBlocks = blocks;
     try {
       beginThreadChange();
@@ -1304,6 +1309,7 @@ export function Chat({
         onClose={() => setPaletteOpen(false)}
         onQuery={setPaletteQuery}
       />
+      {confirmDialog}
     </div>
   );
 }
