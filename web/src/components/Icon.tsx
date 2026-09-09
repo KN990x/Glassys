@@ -80,9 +80,9 @@ export const IconTrash = icon(Trash2);
 export const IconClose = icon(X);
 
 /**
- * The product mark. Two offset panes: the agent underneath, the chat face on top.
- * Inherits currentColor, so it stays visible on either theme — unlike the flat
- * `/icon.svg` file, whose baked-in dark background disappeared on the dark topbar.
+ * The product mark: a viewfinder framing a single focus point. The brackets are
+ * the chat face onto the host; the point is the agent working inside it.
+ * Inherits currentColor, so it stays visible on either theme.
  */
 export function GlassysMark({ size = 24, title }: { size?: number; title?: string }) {
   return (
@@ -96,25 +96,21 @@ export function GlassysMark({ size = 24, title }: { size?: number; title?: strin
       aria-hidden={title ? undefined : "true"}
     >
       {title ? <title>{title}</title> : null}
-      <rect
-        x="6.5"
-        y="6.5"
-        width="27"
-        height="27"
-        rx="7"
+      <path
+        d="M26 8 H19 A11 11 0 0 0 8 19 V26"
+        fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
-        opacity="0.45"
+        strokeWidth="3.4"
+        strokeLinecap="round"
       />
-      <rect
-        x="14.5"
-        y="14.5"
-        width="27"
-        height="27"
-        rx="7"
+      <path
+        d="M22 40 H29 A11 11 0 0 0 40 29 V22"
+        fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth="3.4"
+        strokeLinecap="round"
       />
+      <circle cx="24" cy="24" r="4.2" fill="currentColor" />
     </svg>
   );
 }
