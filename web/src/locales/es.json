@@ -347,5 +347,6 @@
   "settings.tab.phone": "Teléfono",
   "settings.tab.usage": "Uso",
   "settings.unsaved": "Cambios sin guardar",
-  "settings.usageEmpty": "Todavía no hay uso registrado."
+  "settings.usageEmpty": "Todavía no hay uso registrado.",
+  "boot.unreachableTitle": "No se llega a la pasarela"
 }
