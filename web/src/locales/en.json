@@ -319,5 +319,14 @@
   "nav.settings": "Settings",
   "protocol.incompatible": "This PWA is not compatible with the gateway protocol.",
   "protocol.expected": "expected",
-  "protocol.got": "got"
+  "protocol.got": "got",
+  "nav.chat": "Chat",
+  "nav.ops": "Commands",
+  "nav.primary": "Main navigation",
+  "threads.untitled": "New thread",
+  "host.machine": "Machine",
+  "host.folder": "Working directory",
+  "host.branch": "Branch",
+  "host.agent": "Agent",
+  "alert.dismiss": "Dismiss"
 }

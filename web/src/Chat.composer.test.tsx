@@ -267,7 +267,7 @@ describe("Chat composer and layout", () => {
     expect(api.adapters).toHaveBeenCalledTimes(1);
   });
 
-  it("shows adapter and cwd in the thread drawer", async () => {
+  it("shows adapter and cwd in the desktop thread rail", async () => {
     const { api } = await import("./api");
     vi.mocked(api.threads).mockResolvedValueOnce({
       threads: [
@@ -282,12 +282,9 @@ describe("Chat composer and layout", () => {
       currentId: "t1",
     });
     await renderChat();
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click();
-    });
-    const drawer = host.querySelector(".thread-drawer")?.textContent ?? "";
-    expect(drawer).toContain("cursor");
-    expect(drawer).toContain("/tmp/ws");
+    const rail = host.querySelector(".sidebar")?.textContent ?? "";
+    expect(rail).toContain("cursor");
+    expect(rail).toContain("/tmp/ws");
   });
 
   it("shows the host user and hostname in the topbar", async () => {
@@ -315,12 +312,9 @@ describe("Chat composer and layout", () => {
         currentId: "t2",
       });
     });
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click();
-    });
-    const drawer = host.querySelector(".thread-drawer")?.textContent ?? "";
-    expect(drawer).toContain("/opt/stack");
-    expect(drawer).toContain("ops");
+    const rail = host.querySelector(".sidebar")?.textContent ?? "";
+    expect(rail).toContain("/opt/stack");
+    expect(rail).toContain("ops");
   });
 
   it("shows Working and queued together when a run and the FIFO both have work", async () => {
@@ -413,7 +407,7 @@ describe("Chat composer and layout", () => {
     });
     expect(host.textContent).toMatch(/loopback/i);
     await act(async () => {
-      [...host.querySelectorAll("button")].find((b) => b.textContent === "Dismiss")?.click();
+      host.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')?.click();
     });
     expect(host.textContent).not.toMatch(/loopback/i);
     expect(sessionStorage.getItem("glassys.hideLoopback")).toBe("1");

@@ -24,10 +24,15 @@ import { PermissionChip } from "../components/PermissionChip";
 import { Settings } from "./Settings";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
-import { blockMatchesQuery, cwdBasename, isImageMime, slashQuery } from "../format";
+import { blockMatchesQuery, cwdBasename, formatTokens, isImageMime, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
-import { GlassysMark, IconAttach, IconSend, IconStop } from "../components/Icon";
+import { IconAttach, IconSend, IconStop, IconThreads } from "../components/Icon";
+import { Sidebar } from "../components/Sidebar";
+import { BottomNav, type NavTarget } from "../components/BottomNav";
+import { HostContext, type HostInfo } from "../components/HostContext";
+import { AlertStack, type Alert } from "../components/AlertStack";
+import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 
 const COMPOSER_MAX_PX = 160;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
@@ -128,7 +133,6 @@ export function Chat({
     }
   });
   const [git, setGit] = useState<{ branch: string; dirty: boolean } | undefined>();
-  const [hostCopied, setHostCopied] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [transcriptTruncated, setTranscriptTruncated] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
@@ -720,180 +724,150 @@ export function Chat({
               ? "status.error"
               : "status.connecting";
 
+
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const spaceName = config.space.name.trim() || t("app.name");
+  const currentThread = threads.find((th) => th.id === currentThreadId);
+  const threadTitle = currentThread?.title || t("threads.untitled");
+  const hostInfo: HostInfo = {
+    hostLabel,
+    cwd: config.agent.cwd,
+    git,
+    adapter: currentAdapter?.displayName || config.agent.adapter,
+  };
+  const onCopyFailed = () => setSendError(t("chat.copyFailed"));
+
+  const threadListProps = {
+    threads,
+    currentId: currentThreadId,
+    locale: config.space.locale,
+    busy,
+    waiting,
+    onSwitch: (id: string) => void onSwitchThread(id),
+    onDelete: (id: string, e: { stopPropagation: () => void }) => void onDeleteThread(id, e),
+    onRename: onRenameThread,
+    git,
+    currentCwd: config.agent.cwd,
+    pins,
+    recents,
+    onOpenCwd: (cwd: string) => void onOpenCwd(cwd),
+    onPin: (cwd: string) => void onPin(cwd),
+    onUnpin: (cwd: string) => void onUnpin(cwd),
+  };
+
+  const navTarget: NavTarget = settings ? "settings" : threadOpen ? "threads" : paletteOpen ? "ops" : "chat";
+
+  function openThreads() {
+    pushOverlay("threads");
+    setThreadOpen(true);
+  }
+
+  const alerts: Alert[] = [];
+  if (protocolError !== null) {
+    alerts.push({
+      id: "protocol",
+      tone: "error",
+      text: `${t("protocol.incompatible")} (${t("protocol.expected")} ${PROTOCOL_VERSION}, ${t("protocol.got")} ${protocolError})`,
+    });
+  }
+  if (configError) alerts.push({ id: "config", tone: "error", text: configError });
+  if (loopback && !hideLoopback) {
+    alerts.push({
+      id: "loopback",
+      tone: "warn",
+      text: t("reach.loopback"),
+      onDismiss: () => {
+        try {
+          sessionStorage.setItem(LOOPBACK_DISMISS_KEY, "1");
+        } catch {
+          /* private mode */
+        }
+        setHideLoopback(true);
+      },
+    });
+  }
+  if (adaptersError) {
+    alerts.push({
+      id: "adapters",
+      tone: "error",
+      text: t("chat.adaptersFailed"),
+      action: { label: t("chat.adaptersRetry"), run: () => loadAdapters() },
+    });
+  }
+  if (config.restartRequired) {
+    alerts.push({
+      id: "restart",
+      tone: "warn",
+      text: restartNote ? `${t("settings.restartRequired")} ${restartNote}` : t("settings.restartRequired"),
+      action: { label: t("settings.restart"), run: () => void onRestart() },
+    });
+  } else if (restartNote) {
+    alerts.push({ id: "restart-note", tone: "info", text: restartNote });
+  }
+  if (sendError) alerts.push({ id: "send", tone: "error", text: sendError, onDismiss: () => setSendError("") });
+  if (attachError) alerts.push({ id: "attach", tone: "error", text: attachError, onDismiss: () => setAttachError("") });
+  if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
+
   return (
-    <div className="chat-shell">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="brand tight">
-            <GlassysMark size={24} />
-            <div>
-              <strong>{config.space.name.trim() || t("app.name")}</strong>
-              <span className="host-context muted">
-                <button
-                  type="button"
-                  className="host-copy"
-                  title={config.agent.cwd}
-                  aria-label={t("chat.copyCwd")}
-                  onClick={() => {
-                    const value = config.agent.cwd;
-                    if (!value) return;
-                    void navigator.clipboard.writeText(value).then(
-                      () => {
-                        setHostCopied(true);
-                        setTimeout(() => setHostCopied(false), 1500);
-                      },
-                      () => setSendError(t("chat.copyFailed")),
-                    );
-                  }}
-                >
-                  {[
-                    hostLabel,
-                    config.agent.cwd || cwdBasename(config.agent.cwd),
-                    git
-                      ? `${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}`
-                      : "",
-                    currentAdapter?.displayName || config.agent.adapter,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  {hostCopied ? ` · ${t("chat.copied")}` : ""}
-                </button>
-              </span>
-              {currentAdapter?.available && !currentAdapter.available.ok && (
-                <span className="warn">{t("wizard.adapter.unavailable")}</span>
-              )}
-              <span className={`status ${statusClass}`} aria-live="polite">
-                {t(statusKey)}
-              </span>
-              {liveUsage && (
-                  <span className="muted usage-chip">
-                    {t("chat.usageTotal")} ↓{liveUsage.inputTokens} ↑{liveUsage.outputTokens}
-                  </span>
-                )}
-            </div>
-          </div>
-          <div className="top-actions">
-            <button
-              ref={threadBtn}
-              type="button"
-              className="ghost"
-              aria-expanded={threadOpen}
-              onClick={() => {
-                if (threadOpen) closeThreads();
-                else {
-                  pushOverlay("threads");
-                  setThreadOpen(true);
-                }
-              }}
-            >
-              {t("nav.threads")}
-            </button>
-            <button
-              ref={settingsBtn}
-              type="button"
-              className="ghost"
-              aria-expanded={settings}
-              onClick={() => {
-                if (threadOpen) setThreadOpen(false);
-                pushOverlay("settings");
-                setSettings(true);
-              }}
-            >
-              {t("nav.settings")}
-            </button>
-          </div>
-        </div>
-      </header>
-      {threadOpen && (
-        <ThreadDrawer
-          threads={threads}
-          currentId={currentThreadId}
-          locale={config.space.locale}
-          busy={busy}
-          waiting={waiting}
+    <div className={`app-shell${isDesktop ? " has-rail" : ""}`}>
+      {isDesktop && (
+        <Sidebar
+          spaceName={spaceName}
+          statusClass={statusClass}
+          statusLabel={t(statusKey)}
+          host={hostInfo}
+          threads={threadListProps}
+          settingsRef={settingsBtn}
           onNew={() => void onNewThread()}
-          onSwitch={(id) => void onSwitchThread(id)}
-          onDelete={(id, e) => void onDeleteThread(id, e)}
-          onRename={onRenameThread}
-          onClose={closeThreads}
-          git={git}
-          currentCwd={config.agent.cwd}
-          pins={pins}
-          recents={recents}
-          onOpenCwd={(cwd) => void onOpenCwd(cwd)}
-          onPin={(cwd) => void onPin(cwd)}
-          onUnpin={(cwd) => void onUnpin(cwd)}
+          onSettings={() => openSettings()}
           onExport={() => void onExport()}
+          canExport={Boolean(currentThreadId)}
+          onCopyFailed={onCopyFailed}
         />
       )}
-      <main className="chat-main">
-        <h1 className="visually-hidden">{t("app.name")}</h1>
-      {protocolError !== null && (
-        <p className="banner error" role="alert">
-          {t("protocol.incompatible")} ({t("protocol.expected")} {PROTOCOL_VERSION}, {t("protocol.got")} {protocolError})
-        </p>
-      )}
-      {configError && (
-        <p className="banner error" role="alert">
-          {configError}
-        </p>
-      )}
-      {loopback && !hideLoopback && (
-        <p className="banner warn" role="status">
-          {t("reach.loopback")}{" "}
-          <button
-            type="button"
-            className="ghost tiny"
-            onClick={() => {
-              try {
-                sessionStorage.setItem(LOOPBACK_DISMISS_KEY, "1");
-              } catch {
-                /* ignore */
-              }
-              setHideLoopback(true);
-            }}
-          >
-            {t("reach.dismiss")}
-          </button>
-        </p>
-      )}
-      {adaptersError && (
-        <p className="banner error" role="alert">
-          {t("chat.adaptersFailed")}{" "}
-          <button type="button" className="ghost tiny" onClick={() => loadAdapters()}>
-            {t("chat.adaptersRetry")}
-          </button>
-        </p>
-      )}
-      {config.restartRequired && (
-        <p className="banner warn" role="status">
-          {t("settings.restartRequired")}{" "}
-          <button type="button" className="ghost tiny" onClick={() => void onRestart()}>
-            {t("settings.restart")}
-          </button>
-          {restartNote ? ` ${restartNote}` : ""}
-        </p>
-      )}
-      {restartNote && !config.restartRequired && (
-        <p className="banner info" role="status">
-          {restartNote}
-        </p>
-      )}
-      {sendError && (
-        <p className="banner error" role="alert">
-          {sendError}
-        </p>
-      )}
-      {attachError && (
-        <p className="banner error" role="alert">
-          {attachError}
-        </p>
-      )}
-      {modelError && (
-        <p className="banner error" role="alert">
-          {modelError}
-        </p>
-      )}
+      <div className="chat-shell">
+        <header className="topbar">
+          <div className="topbar-inner">
+            {!isDesktop && (
+              <button
+                ref={threadBtn}
+                type="button"
+                className="icon-btn"
+                aria-expanded={threadOpen}
+                aria-label={t("nav.threads")}
+                onClick={() => (threadOpen ? closeThreads() : openThreads())}
+              >
+                <IconThreads size={18} />
+              </button>
+            )}
+            <div className="topbar-title">
+              <strong className="truncate">{isDesktop ? threadTitle : spaceName}</strong>
+              {!isDesktop && <HostContext info={hostInfo} variant="inline" onCopyFailed={onCopyFailed} />}
+              {isDesktop && (
+                <span className="host-context muted truncate" title={config.agent.cwd}>
+                  {cwdBasename(config.agent.cwd)}
+                </span>
+              )}
+            </div>
+            <div className="top-actions">
+              {isDesktop && liveUsage && (
+                <span className="muted usage-chip" title={t("chat.usageTotal")}>
+                  ↓{formatTokens(liveUsage.inputTokens, config.space.locale)} ↑
+                  {formatTokens(liveUsage.outputTokens, config.space.locale)}
+                </span>
+              )}
+              {!isDesktop && (
+                /* The phone topbar has no room for a status word; the dot carries it. */
+                <span className={`status dot-only ${statusClass}`} aria-live="polite" title={t(statusKey)}>
+                  <span className="visually-hidden">{t(statusKey)}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </header>
+        <main className="chat-main">
+          <h1 className="visually-hidden">{t("app.name")}</h1>
+          <AlertStack alerts={alerts} />
       <div
         className="transcript"
         ref={scroller}
@@ -1231,6 +1205,41 @@ export function Chat({
           <p className="muted composer-hint">{t("palette.hint")}</p>
         </div>
       </form>
+      </div>
+      {!isDesktop && (
+        <BottomNav
+          active={navTarget}
+          onSelect={(target: NavTarget) => {
+            if (target === "threads") {
+              if (threadOpen) closeThreads();
+              else openThreads();
+              return;
+            }
+            if (target === "settings") {
+              if (threadOpen) setThreadOpen(false);
+              openSettings();
+              return;
+            }
+            if (target === "ops") {
+              setSlashOpen(false);
+              setPaletteQuery("");
+              setPaletteOpen(true);
+              return;
+            }
+            if (threadOpen) closeThreads();
+            if (settings) closeSettings();
+            composer.current?.focus();
+          }}
+        />
+      )}
+      {threadOpen && !isDesktop && (
+        <ThreadDrawer
+          {...threadListProps}
+          onNew={() => void onNewThread()}
+          onClose={closeThreads}
+          onExport={() => void onExport()}
+        />
+      )}
       {settings && (
         <Settings
           config={config}

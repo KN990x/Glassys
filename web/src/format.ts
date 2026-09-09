@@ -62,3 +62,23 @@ export function blockMatchesQuery(
     .toLowerCase();
   return hay.includes(q);
 }
+
+/** Token counts appear in four places; they all render through here. */
+export function formatTokens(n: number | undefined, locale = "en"): string {
+  if (!Number.isFinite(n) || n === undefined) return "0";
+  const lang = locale.startsWith("es") ? "es" : "en";
+  if (n >= 10_000) {
+    const scaled = n >= 1_000_000 ? n / 1_000_000 : n / 1_000;
+    const unit = n >= 1_000_000 ? "M" : "k";
+    return `${new Intl.NumberFormat(lang, { maximumFractionDigits: 1 }).format(scaled)}${unit}`;
+  }
+  return new Intl.NumberFormat(lang).format(n);
+}
+
+/** Long absolute paths read better clipped in the middle than wrapped to two lines. */
+export function truncateMiddle(value: string, max = 34): string {
+  if (value.length <= max) return value;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = Math.floor((max - 1) / 2);
+  return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
+}
