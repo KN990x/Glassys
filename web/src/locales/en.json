@@ -347,5 +347,6 @@
   "settings.tab.phone": "Phone",
   "settings.tab.usage": "Usage",
   "settings.unsaved": "Unsaved changes",
-  "settings.usageEmpty": "No usage recorded yet."
+  "settings.usageEmpty": "No usage recorded yet.",
+  "boot.unreachableTitle": "Cannot reach the gateway"
 }

@@ -49,6 +49,9 @@ export function Setup({
   return (
     <main className="gate">
       <div className="panel">
+        <div className="panel-tools panel-tools-corner">
+          <LocaleSwitch locale={locale} onChange={onLocale} />
+        </div>
         <div className="brand">
           <GlassysMark size={36} />
           <div>
@@ -56,7 +59,6 @@ export function Setup({
             <p className="muted">{t("app.tagline")}</p>
           </div>
         </div>
-        <LocaleSwitch locale={locale} onChange={onLocale} />
         <h2>{t("setup.title")}</h2>
         <p className="muted">{t("setup.body")}</p>
         <form onSubmit={submit} className="stack">

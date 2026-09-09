@@ -345,53 +345,66 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   return (
     <main className="gate wide">
       <div className="panel">
-        <p className="eyebrow">{t("wizard.title")}</p>
-        <h2>{t(`wizard.step.${id}`)}</h2>
-        <ol className="steps">
-          {steps.map((s, i) => (
-            <li
-              key={s}
-              className={i === step ? "active" : i < step ? "done" : ""}
-              aria-current={i === step ? "step" : undefined}
-              aria-label={t(`wizard.step.${s}`)}
-            />
-          ))}
-        </ol>
+        {/* Language and theme used to be asked inside the adapter step, which
+            made step one ask three unrelated questions. */}
+        <div className="panel-head">
+          <div className="panel-heading">
+            <p className="eyebrow">{t("wizard.title")}</p>
+            <h2>{t(`wizard.step.${id}`)}</h2>
+          </div>
+          <div className="panel-tools">
+            <label>
+              <span className="visually-hidden">{t("settings.locale")}</span>
+              <select
+                value={locale}
+                aria-label={t("settings.locale")}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setLocale(next);
+                  void api.saveConfig({ space: { locale: next, theme } }).then(onConfig).catch(() => undefined);
+                }}
+              >
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </label>
+            <label>
+              <span className="visually-hidden">{t("settings.theme")}</span>
+              <select
+                value={theme}
+                aria-label={t("settings.theme")}
+                onChange={(e) => {
+                  const next = e.target.value as Theme;
+                  setTheme(next);
+                  void api.saveConfig({ space: { locale, theme: next } }).then(onConfig).catch(() => undefined);
+                }}
+              >
+                <option value="dark">{t("settings.theme.dark")}</option>
+                <option value="light">{t("settings.theme.light")}</option>
+                <option value="system">{t("settings.theme.system")}</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div className="steps-row">
+          <ol className="steps">
+            {steps.map((s, i) => (
+              <li
+                key={s}
+                className={i === step ? "active" : i < step ? "done" : ""}
+                aria-current={i === step ? "step" : undefined}
+                aria-label={t(`wizard.step.${s}`)}
+              />
+            ))}
+          </ol>
+          <span className="muted nums steps-count" aria-label={t("wizard.title")}>
+            {step + 1}/{steps.length}
+          </span>
+        </div>
 
         {id === "adapter" && (
           <div className="stack">
             <p>{t("wizard.adapter.body")}</p>
-            <div className="row wrap">
-              <label>
-                {t("settings.locale")}
-                <select
-                  value={locale}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setLocale(next);
-                    void api.saveConfig({ space: { locale: next, theme } }).then(onConfig).catch(() => undefined);
-                  }}
-                >
-                  <option value="en">English</option>
-                  <option value="es">Español</option>
-                </select>
-              </label>
-              <label>
-                {t("settings.theme")}
-                <select
-                  value={theme}
-                  onChange={(e) => {
-                    const next = e.target.value as Theme;
-                    setTheme(next);
-                    void api.saveConfig({ space: { locale, theme: next } }).then(onConfig).catch(() => undefined);
-                  }}
-                >
-                  <option value="dark">{t("settings.theme.dark")}</option>
-                  <option value="light">{t("settings.theme.light")}</option>
-                  <option value="system">{t("settings.theme.system")}</option>
-                </select>
-              </label>
-            </div>
             {!adaptersReady && <p className="muted">{t("wizard.adapters.loading")}</p>}
             {adaptersError && (
               <div className="stack">
@@ -404,7 +417,10 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
             {adapters.map((a) => {
               const selectable = adapterSelectable(a);
               return (
-              <label key={a.id} className={selectable ? "choice" : "choice disabled"}>
+              <label
+                key={a.id}
+                className={`choice adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
+              >
                 <input
                   type="radio"
                   name="adapter"
@@ -412,17 +428,16 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                   disabled={!selectable}
                   onChange={() => setAdapterId(a.id)}
                 />
-                <span>
-                  {a.displayName}
-                  {a.description ? <span className="muted"> — {a.description}</span> : null}
+                <span className="adapter-card-body">
+                  <strong>{a.displayName}</strong>
+                  {a.description ? <span className="muted">{a.description}</span> : null}
                   {!selectable ? (
                     <span className="warn">
-                      {" "}
                       {t("wizard.adapter.unavailable")}
                       {a.available && !a.available.ok && a.available.error ? ` ${a.available.error}` : ""}
                     </span>
                   ) : a.id === "acp" ? (
-                    <span className="muted"> — {t("wizard.acp.needsCommand")}</span>
+                    <span className="muted">{t("wizard.acp.needsCommand")}</span>
                   ) : null}
                 </span>
               </label>
@@ -615,12 +630,17 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         )}
 
         {error && <p className="error-text">{error}</p>}
-        <div className="row">
-          {step > 0 && (
-            <button type="button" className="ghost" onClick={() => setStep((s) => s - 1)}>
-              {t("wizard.back")}
-            </button>
-          )}
+        <div className="row wizard-nav">
+          {/* Reserved: Back appearing and disappearing shifted Continue sideways. */}
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setStep((s) => s - 1)}
+            disabled={step === 0}
+            style={step === 0 ? { visibility: "hidden" } : undefined}
+          >
+            {t("wizard.back")}
+          </button>
           <button
             type="button"
             className="primary"

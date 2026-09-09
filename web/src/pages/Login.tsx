@@ -44,6 +44,9 @@ export function Login({
   return (
     <main className="gate">
       <div className="panel">
+        <div className="panel-tools panel-tools-corner">
+          <LocaleSwitch locale={locale} onChange={onLocale} />
+        </div>
         <div className="brand">
           <GlassysMark size={36} />
           <div>
@@ -51,7 +54,6 @@ export function Login({
             <p className="muted">{t("app.tagline")}</p>
           </div>
         </div>
-        <LocaleSwitch locale={locale} onChange={onLocale} />
         <h2>{t("login.title")}</h2>
         <form onSubmit={submit} className="stack">
           <label>

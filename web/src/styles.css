@@ -339,7 +339,8 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 /* .gate.wide must widen the panel: .panel sets `width`, so max-width alone did nothing. */
 .gate.wide .panel { width: min(680px, 100%); }
 .panel > * { min-width: 0; }
-.brand { display: flex; gap: var(--s-3); align-items: center; }
+.brand { display: flex; gap: var(--s-3); align-items: flex-start; }
+.brand > svg { margin-top: 2px; flex: none; }
 .brand h1 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
 .brand.tight { margin: 0; }
 .brand.tight strong { margin: 0; font-weight: 600; font-size: var(--fs-base); }
@@ -408,7 +409,43 @@ details label { margin-top: var(--s-2); }
 }
 .steps li.done { background: var(--stroke-strong); }
 .steps li.active { background: var(--accent); }
-.step-label { display: flex; align-items: baseline; gap: var(--s-2); }
+.steps-row { display: flex; align-items: center; gap: var(--s-3); }
+.steps-row .steps { flex: 1; }
+.steps-count { font-size: var(--fs-xs); flex: none; }
+
+.panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+.panel-heading { display: grid; gap: var(--s-1); min-width: 0; }
+.panel-heading .eyebrow { margin: 0; }
+.panel-tools { display: flex; gap: var(--s-2); align-items: center; flex: none; }
+.panel-tools select {
+  width: auto;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--s-5) 0 var(--s-2);
+  font-size: 16px;
+  background-color: transparent;
+}
+.panel-tools-corner { justify-content: flex-end; }
+
+/* Adapter choices were native radios followed by a run-on sentence. */
+.adapter-card {
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.adapter-card:hover:not(.disabled) { border-color: var(--stroke-strong); background: var(--surface-2); }
+.adapter-card.current { border-color: var(--accent); background: var(--accent-bg); }
+.adapter-card input { margin-top: 0; }
+.adapter-card-body { display: grid; gap: 2px; min-width: 0; }
+.adapter-card-body strong { font-weight: 600; }
+.adapter-card-body span { font-size: var(--fs-sm); }
+
+.wizard-nav { justify-content: space-between; }
+/* Secondary actions inside a gate panel should not span the card. */
+.gate .stack > button.ghost { justify-self: start; }
 
 .locale-switch { display: grid; gap: var(--s-1); font-size: var(--fs-sm); }
 
