@@ -71,7 +71,7 @@ export function ConfirmDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <span className={`confirm-icon${request.destructive ? " destructive" : ""}`}>
-          <IconAlert size={18} />
+          <IconAlert />
         </span>
         <h2 id="confirm-title">{request.title || t("confirm.title")}</h2>
         <p className="muted">{request.message}</p>

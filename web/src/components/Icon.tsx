@@ -39,7 +39,7 @@ import {
 
 /** Every icon in the product renders at one stroke weight and one default size. */
 function icon(Base: LucideIcon) {
-  return function Glyph({ size = 18, strokeWidth = 1.5, ...rest }: LucideProps) {
+  return function Glyph({ size = 16, strokeWidth = 1.5, ...rest }: LucideProps) {
     return <Base size={size} strokeWidth={strokeWidth} aria-hidden="true" {...rest} />;
   };
 }
