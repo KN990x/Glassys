@@ -32,6 +32,14 @@ function MarkdownBodyInner({ text }: { text: string }) {
           img() {
             return null;
           },
+          table({ children }) {
+            /* Wide tables scroll inside themselves; the page never does. */
+            return (
+              <div className="table-wrap">
+                <table>{children}</table>
+              </div>
+            );
+          },
         }}
       >
         {text}

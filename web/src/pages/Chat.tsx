@@ -27,7 +27,7 @@ import { operatorError, shouldSubmitOnEnter } from "../operatorError";
 import { blockMatchesQuery, cwdBasename, formatTokens, isImageMime, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
-import { IconAttach, IconSend, IconStop, IconThreads } from "../components/Icon";
+import { GlassysMark, IconArrowDown, IconAttach, IconExport, IconSearch, IconSend, IconStop, IconThreads } from "../components/Icon";
 import { Sidebar } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
 import { HostContext, type HostInfo } from "../components/HostContext";
@@ -62,19 +62,13 @@ export function formatElapsed(ms: number): string {
   return m > 0 ? `${m}:${String(rem).padStart(2, "0")}` : `${s}s`;
 }
 
-function RunElapsed({ startedAt, lastTool }: { startedAt: number; lastTool?: string }) {
-  const t = useT();
+function RunElapsedValue({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  return (
-    <p className="muted live-line">
-      {t("chat.elapsed")} {formatElapsed(now - startedAt)}
-      {lastTool ? ` · ${t("chat.lastTool")}: ${lastTool}` : ""}
-    </p>
-  );
+  return <span className="nums">{formatElapsed(now - startedAt)}</span>;
 }
 
 export function resizeComposer(el: HTMLTextAreaElement, maxPx = COMPOSER_MAX_PX): void {
@@ -868,6 +862,43 @@ export function Chat({
         <main className="chat-main">
           <h1 className="visually-hidden">{t("app.name")}</h1>
           <AlertStack alerts={alerts} />
+          {/* Pinned below the topbar: inside the scroller this bar scrolled away
+              and, being a direct child, rendered wider than the messages. */}
+          <div className="transcript-toolbar">
+            <span className="search-field">
+              <IconSearch size={15} />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("chat.search")}
+                aria-label={t("chat.search")}
+                ref={searchRef}
+              />
+            </span>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => void onExport()}
+              disabled={!currentThreadId}
+              aria-label={t("chat.export")}
+              title={t("chat.export")}
+            >
+              <IconExport size={16} />
+            </button>
+          </div>
+          {transcriptTruncated && (
+            <AlertStack
+              alerts={[
+                {
+                  id: "truncated",
+                  tone: "warn",
+                  text: t("chat.transcriptTruncated"),
+                  action: { label: t("chat.export"), run: () => void onExport() },
+                },
+              ]}
+            />
+          )}
       <div
         className="transcript"
         ref={scroller}
@@ -879,34 +910,34 @@ export function Chat({
           setAtBottom(bottom);
         }}
       >
-        <div className="transcript-toolbar">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("chat.search")}
-            aria-label={t("chat.search")}
-            ref={searchRef}
-          />
-          <button type="button" className="ghost tiny" onClick={() => void onExport()} disabled={!currentThreadId}>
-            {t("chat.export")}
-          </button>
-        </div>
-        {transcriptTruncated && (
-          <p className="banner warn" role="status">
-            {t("chat.transcriptTruncated")}{" "}
-            <button type="button" className="ghost tiny" onClick={() => void onExport()} disabled={!currentThreadId}>
-              {t("chat.export")}
-            </button>
-          </p>
-        )}
         <div className="transcript-inner">
         {!snapshotReady && (
           <p className="empty" aria-live="polite">
             {t(conn === "reconnecting" ? "status.reconnecting" : "status.connecting")}
           </p>
         )}
-        {blocks.length === 0 && snapshotReady && !search.trim() && <p className="empty">{t("chat.empty")}</p>}
+        {blocks.length === 0 && snapshotReady && !search.trim() && (
+          <div className="empty">
+            <GlassysMark size={30} />
+            <h2>{t("chat.emptyTitle")}</h2>
+            <p className="muted">{t("chat.empty")}</p>
+            <p className="muted empty-host">
+              {[hostLabel, config.agent.cwd, currentAdapter?.displayName || config.agent.adapter]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            {opsChips.length > 0 && (
+              <div className="empty-actions" role="group" aria-label={t("chat.opsChips")}>
+                {opsChips.map((tpl) => (
+                  <button key={tpl.id} type="button" className="ghost empty-action" onClick={() => insertTemplate(tpl.text)}>
+                    <strong>{t(`prompt.${tpl.id}`) === `prompt.${tpl.id}` ? tpl.title : t(`prompt.${tpl.id}`)}</strong>
+                    <span className="muted">{tpl.slash.startsWith("/") ? tpl.slash : `/${tpl.slash}`}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {search.trim() && visibleBlocks.length === 0 && blocks.length > 0 && (
           <p className="empty">{t("chat.searchEmpty")}</p>
         )}
@@ -966,8 +997,8 @@ export function Chat({
           }
           if (b.kind === "usage") {
             const parts = [
-              b.inputTokens != null ? `↓${b.inputTokens}` : "",
-              b.outputTokens != null ? `↑${b.outputTokens}` : "",
+              b.inputTokens != null ? `↓${formatTokens(b.inputTokens, config.space.locale)}` : "",
+              b.outputTokens != null ? `↑${formatTokens(b.outputTokens, config.space.locale)}` : "",
             ].filter(Boolean);
             if (!parts.length) return null;
             return (
@@ -999,24 +1030,31 @@ export function Chat({
           }
           return null;
         })}
-        {busy && <div className="pulse" aria-hidden />}
         {busy && (
-          <span className="visually-hidden" aria-live="polite">
-            {t("status.running")}
-          </span>
+          <div className="working" aria-live="polite">
+            <span className="pulse" aria-hidden />
+            <span className="working-text">
+              {t("status.running")}
+              {runStartedAt ? ` · ${t("chat.elapsed")} ` : ""}
+              {runStartedAt ? <RunElapsedValue startedAt={runStartedAt} /> : null}
+              {lastTool && lastTool.kind === "tool" ? ` · ${lastTool.title}` : ""}
+            </span>
+          </div>
         )}
         </div>
         {!atBottom && (
           <button
             type="button"
             className="ghost jump-bottom"
+            aria-label={t("chat.jumpBottom")}
+            title={t("chat.jumpBottom")}
             onClick={() => {
               pinToBottom.current = true;
               setAtBottom(true);
               scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
             }}
           >
-            {t("chat.jumpBottom")}
+            <IconArrowDown size={18} />
           </button>
         )}
         </div>
@@ -1088,9 +1126,6 @@ export function Chat({
                   </li>
                 ))}
               </ul>
-            )}
-            {busy && runStartedAt && (
-              <RunElapsed startedAt={runStartedAt} lastTool={lastTool && lastTool.kind === "tool" ? lastTool.title : undefined} />
             )}
           </div>
           {drafts.length > 0 && (
