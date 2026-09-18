@@ -9,6 +9,7 @@ import type {
   QueueItem,
   RedactedConfig,
   ServerMessage,
+  Theme,
   ThreadSummary,
 } from "@glassys/protocol";
 import { PROTOCOL_VERSION, MAX_ATTACHMENTS, isTranscriptEvent } from "@glassys/protocol";
@@ -33,11 +34,14 @@ import {
   IconAttach,
   IconClose,
   IconExport,
+  IconMore,
+  IconRename,
   IconSearch,
   IconSend,
   IconStop,
-  IconThreads,
+  IconTrash,
 } from "../components/Icon";
+import { PopAnchor, Popover } from "../components/Popover";
 import { Sidebar } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
 import { HostContext, type HostInfo } from "../components/HostContext";
@@ -47,6 +51,7 @@ import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 
 const COMPOSER_MAX_PX = 160;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
+const RAIL_KEY = "glassys.railCollapsed";
 const OPS_CHIP_IDS = ["status", "disk", "failed-units"] as const;
 
 export { shouldSubmitOnEnter };
@@ -143,6 +148,17 @@ export function Chat({
   const [transcriptTruncated, setTranscriptTruncated] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(RAIL_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [slashOpen, setSlashOpen] = useState(false);
@@ -364,8 +380,33 @@ export function Chat({
     };
   }, []);
 
+  const collapseRail = useCallback((next: boolean) => {
+    setRailCollapsed(next);
+    try {
+      localStorage.setItem(RAIL_KEY, next ? "1" : "0");
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        collapseRail(!railCollapsed);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+        queueMicrotask(() => searchRef.current?.focus());
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        void onNewThread();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setSlashOpen(false);
@@ -379,12 +420,17 @@ export function Chat({
         setSlashOpen(false);
         return;
       }
+      if (searchOpen) {
+        setSearchOpen(false);
+        setSearch("");
+        return;
+      }
       if (settings) return;
       if (threadOpen) closeThreads();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settings, threadOpen, closeThreads, paletteOpen, slashOpen]);
+  }, [settings, threadOpen, closeThreads, paletteOpen, slashOpen, searchOpen, railCollapsed, collapseRail]);
 
   useEffect(() => {
     function onPop() {
@@ -706,6 +752,14 @@ export function Chat({
     if (composer.current) resizeComposer(composer.current);
   }
 
+  async function changeTheme(next: Theme) {
+    try {
+      onConfig(await api.saveConfig({ space: { theme: next } }));
+    } catch (err) {
+      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+    }
+  }
+
   async function changeModel(id: string, params: ModelParam[]) {
     setDraftModel({ id, params });
     try {
@@ -757,6 +811,7 @@ export function Chat({
     onRename: onRenameThread,
     git,
     currentCwd: config.agent.cwd,
+    currentAdapter: config.agent.adapter,
     pins,
     recents,
     onOpenCwd: (cwd: string) => void onOpenCwd(cwd),
@@ -818,7 +873,7 @@ export function Chat({
   if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
 
   return (
-    <div className={`app-shell${isDesktop ? " has-rail" : ""}`}>
+    <div className={`app-shell${isDesktop ? (railCollapsed ? " has-mini-rail" : " has-rail") : ""}`}>
       {isDesktop && (
         <Sidebar
           spaceName={spaceName}
@@ -829,79 +884,184 @@ export function Chat({
           settingsRef={settingsBtn}
           onNew={() => void onNewThread()}
           onSettings={() => openSettings()}
-          onExport={() => void onExport()}
-          canExport={Boolean(currentThreadId)}
           onCopyFailed={onCopyFailed}
+          collapsed={railCollapsed}
+          onCollapse={collapseRail}
+          theme={config.space.theme}
+          onTheme={(next) => void changeTheme(next)}
         />
       )}
       <div className="chat-shell">
         <header className="topbar">
           <div className="topbar-inner">
-            {!isDesktop && (
-              <button
-                ref={threadBtn}
-                type="button"
-                className="icon-btn"
-                aria-expanded={threadOpen}
-                aria-label={t("nav.threads")}
-                onClick={() => (threadOpen ? closeThreads() : openThreads())}
-              >
-                <IconThreads />
-              </button>
+            {searchOpen ? (
+              <span className="search-field topbar-search">
+                <IconSearch />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("chat.search")}
+                  aria-label={t("chat.search")}
+                  ref={searchRef}
+                  autoFocus
+                />
+                {search.trim() ? (
+                  <span className="search-count nums muted">
+                    {visibleBlocks.length}/{blocks.length}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="icon-btn sm"
+                  aria-label={t("chat.searchClose")}
+                  title={t("chat.searchClose")}
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <IconClose />
+                </button>
+              </span>
+            ) : (
+              <>
+                <div className="topbar-title">
+                  {renaming ? (
+                    <form
+                      className="thread-rename"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (currentThreadId) void onRenameThread(currentThreadId, renameDraft);
+                        setRenaming(false);
+                      }}
+                    >
+                      <input
+                        value={renameDraft}
+                        aria-label={t("threads.rename")}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onBlur={() => setRenaming(false)}
+                        autoFocus
+                      />
+                      <button type="submit" className="ghost tiny">
+                        {t("threads.saveTitle")}
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="topbar-heading"
+                        disabled={!currentThreadId}
+                        title={currentThreadId ? t("threads.rename") : threadTitle}
+                        onClick={() => {
+                          setRenameDraft(currentThread?.title || "");
+                          setRenaming(true);
+                        }}
+                      >
+                        {!isDesktop && (
+                          <span className={`status dot-only ${statusClass}`} aria-live="polite" title={t(statusKey)}>
+                            <span className="visually-hidden">{t(statusKey)}</span>
+                          </span>
+                        )}
+                        <strong className="truncate">{threadTitle}</strong>
+                      </button>
+                      {isDesktop ? (
+                        <span className="host-context muted truncate" title={config.agent.cwd}>
+                          {[cwdBasename(config.agent.cwd), git ? `${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}` : ""]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      ) : (
+                        <HostContext info={hostInfo} variant="inline" onCopyFailed={onCopyFailed} />
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="top-actions">
+                  {isDesktop && liveUsage && (
+                    <span className="muted usage-chip" title={t("chat.usageTotal")}>
+                      ↓{formatTokens(liveUsage.inputTokens, config.space.locale)} ↑
+                      {formatTokens(liveUsage.outputTokens, config.space.locale)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => {
+                      setSearchOpen(true);
+                      queueMicrotask(() => searchRef.current?.focus());
+                    }}
+                    aria-label={t("chat.search")}
+                    title={t("chat.search")}
+                  >
+                    <IconSearch />
+                  </button>
+                  <PopAnchor>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-expanded={menuOpen}
+                      aria-label={t("chat.more")}
+                      title={t("chat.more")}
+                      onClick={() => setMenuOpen((v) => !v)}
+                    >
+                      <IconMore />
+                    </button>
+                    <Popover
+                      open={menuOpen}
+                      onClose={() => setMenuOpen(false)}
+                      label={t("chat.more")}
+                      side="bottom"
+                      align="end"
+                    >
+                      <button
+                        type="button"
+                        className="ghost picker-item"
+                        disabled={!currentThreadId}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setRenameDraft(currentThread?.title || "");
+                          setRenaming(true);
+                        }}
+                      >
+                        <IconRename />
+                        <strong>{t("threads.rename")}</strong>
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost picker-item"
+                        disabled={!currentThreadId}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          void onExport();
+                        }}
+                      >
+                        <IconExport />
+                        <strong>{t("chat.export")}</strong>
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost picker-item danger-hover"
+                        disabled={!currentThreadId}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          if (currentThreadId) void onDeleteThread(currentThreadId, { stopPropagation: () => undefined });
+                        }}
+                      >
+                        <IconTrash />
+                        <strong>{t("threads.delete")}</strong>
+                      </button>
+                    </Popover>
+                  </PopAnchor>
+                </div>
+              </>
             )}
-            <div className="topbar-title">
-              <strong className="truncate">{isDesktop ? threadTitle : spaceName}</strong>
-              {!isDesktop && <HostContext info={hostInfo} variant="inline" onCopyFailed={onCopyFailed} />}
-              {isDesktop && (
-                <span className="host-context muted truncate" title={config.agent.cwd}>
-                  {cwdBasename(config.agent.cwd)}
-                </span>
-              )}
-            </div>
-            <div className="top-actions">
-              {isDesktop && liveUsage && (
-                <span className="muted usage-chip" title={t("chat.usageTotal")}>
-                  ↓{formatTokens(liveUsage.inputTokens, config.space.locale)} ↑
-                  {formatTokens(liveUsage.outputTokens, config.space.locale)}
-                </span>
-              )}
-              {!isDesktop && (
-                /* The phone topbar has no room for a status word; the dot carries it. */
-                <span className={`status dot-only ${statusClass}`} aria-live="polite" title={t(statusKey)}>
-                  <span className="visually-hidden">{t(statusKey)}</span>
-                </span>
-              )}
-            </div>
           </div>
         </header>
         <main className="chat-main">
           <h1 className="visually-hidden">{t("app.name")}</h1>
           <AlertStack alerts={alerts} />
-          {/* Pinned below the topbar: inside the scroller this bar scrolled away
-              and, being a direct child, rendered wider than the messages. */}
-          <div className="transcript-toolbar">
-            <span className="search-field">
-              <IconSearch />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("chat.search")}
-                aria-label={t("chat.search")}
-                ref={searchRef}
-              />
-            </span>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => void onExport()}
-              disabled={!currentThreadId}
-              aria-label={t("chat.export")}
-              title={t("chat.export")}
-            >
-              <IconExport />
-            </button>
-          </div>
           {transcriptTruncated && (
             <AlertStack
               alerts={[
@@ -1284,12 +1444,7 @@ export function Chat({
         />
       )}
       {threadOpen && !isDesktop && (
-        <ThreadDrawer
-          {...threadListProps}
-          onNew={() => void onNewThread()}
-          onClose={closeThreads}
-          onExport={() => void onExport()}
-        />
+        <ThreadDrawer {...threadListProps} onNew={() => void onNewThread()} onClose={closeThreads} />
       )}
       {settings && (
         <Settings

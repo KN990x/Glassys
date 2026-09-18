@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useT } from "../i18n";
-import { IconClose, IconExport, IconPlus } from "./Icon";
+import { IconClose, IconPlus } from "./Icon";
 import { ThreadList, type ThreadListProps } from "./ThreadList";
 
 /**
@@ -10,13 +10,11 @@ import { ThreadList, type ThreadListProps } from "./ThreadList";
 export function ThreadDrawer({
   onNew,
   onClose,
-  onExport,
   currentId,
   ...list
 }: ThreadListProps & {
   onNew: () => void;
   onClose: () => void;
-  onExport?: () => void;
 }) {
   const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -61,29 +59,16 @@ export function ThreadDrawer({
       <aside className="thread-panel">
         <header>
           <h2 id="threads-title">{t("threads.title")}</h2>
-          <div className="row">
-            {onExport && currentId && (
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={onExport}
-                aria-label={t("chat.export")}
-                title={t("chat.export")}
-              >
-                <IconExport />
-              </button>
-            )}
-            <button
-              ref={closeRef}
-              type="button"
-              className="icon-btn"
-              onClick={onClose}
-              aria-label={t("threads.close")}
-              title={t("threads.close")}
-            >
-              <IconClose />
-            </button>
-          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label={t("threads.close")}
+            title={t("threads.close")}
+          >
+            <IconClose />
+          </button>
         </header>
         <button
           type="button"
@@ -94,7 +79,6 @@ export function ThreadDrawer({
           <IconPlus />
           {t("threads.new")}
         </button>
-        <p className="muted thread-hint">{t("threads.switchResume")}</p>
         <ThreadList {...list} currentId={currentId} />
       </aside>
     </div>

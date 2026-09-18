@@ -89,7 +89,6 @@ describe("ThreadDrawer", () => {
             onDelete={() => undefined}
             onRename={async () => undefined}
             onClose={() => undefined}
-            onExport={() => undefined}
           />
         </I18nProvider>,
       );

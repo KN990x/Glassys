@@ -256,7 +256,7 @@ describe("Chat composer and layout", () => {
     await renderChat();
     expect(api.adapters).toHaveBeenCalledTimes(1);
     await act(async () => {
-      [...host.querySelectorAll("button")].find((b) => b.textContent === "Settings")?.click();
+      host.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')?.click();
     });
     expect(host.querySelector('[data-testid="settings-stub"]')).toBeTruthy();
     expect(api.adapters).toHaveBeenCalledTimes(1);
@@ -267,7 +267,7 @@ describe("Chat composer and layout", () => {
     expect(api.adapters).toHaveBeenCalledTimes(1);
   });
 
-  it("shows adapter and cwd in the desktop thread rail", async () => {
+  it("names the workspace once, and only badges an adapter that is not the current one", async () => {
     const { api } = await import("./api");
     vi.mocked(api.threads).mockResolvedValueOnce({
       threads: [
@@ -278,13 +278,22 @@ describe("Chat composer and layout", () => {
           cwd: "/tmp/ws",
           updatedAt: "2026-01-01T00:00:00.000Z",
         },
+        {
+          id: "t2",
+          title: "other agent",
+          adapter: "claude",
+          cwd: "/tmp/ws",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
       ],
       currentId: "t1",
     });
     await renderChat();
-    const rail = host.querySelector(".sidebar")?.textContent ?? "";
-    expect(rail).toContain("cursor");
-    expect(rail).toContain("/tmp/ws");
+    const rail = host.querySelector(".sidebar") as HTMLElement;
+    expect(rail.querySelectorAll(".ws-path")).toHaveLength(1);
+    expect(rail.querySelector(".ws-path")?.textContent).toContain("/tmp/ws");
+    const badges = [...rail.querySelectorAll(".thread-meta .badge")].map((el) => el.textContent);
+    expect(badges).toEqual(["claude"]);
   });
 
   it("shows the host user and hostname in the topbar", async () => {

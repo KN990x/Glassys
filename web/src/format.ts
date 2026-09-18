@@ -13,6 +13,24 @@ export function formatRelativeTime(iso: string, now = Date.now(), locale = "en")
   return rtf.format(Math.trunc(diffSec / (86400 * 30)), "month");
 }
 
+/**
+ * Compact age for a list row: "now", "6m", "2h", "3d", then a date. The full
+ * phrase ("6 minutes ago") pushed the thread title out of a 268px rail.
+ */
+export function formatRelativeShort(iso: string, now = Date.now(), locale = "en"): string {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return "";
+  const sec = Math.max(0, Math.round((now - then) / 1000));
+  if (sec < 60) return locale.startsWith("es") ? "ahora" : "now";
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
+  if (sec < 86400 * 7) return `${Math.floor(sec / 86400)}d`;
+  return new Intl.DateTimeFormat(locale.startsWith("es") ? "es" : "en", {
+    month: "short",
+    day: "numeric",
+  }).format(then);
+}
+
 export function groupThreadsByCwd(threads: ThreadSummary[]): Array<{ cwd: string; threads: ThreadSummary[] }> {
   const order: string[] = [];
   const map = new Map<string, ThreadSummary[]>();
