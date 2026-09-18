@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ThreadSummary } from "@glassys/protocol";
 import { useT } from "../i18n";
-import { cwdBasename, formatRelativeTime, formatTokens, groupThreadsByCwd, truncateMiddle } from "../format";
-import { IconPin, IconPinOff, IconRename, IconTrash } from "./Icon";
+import { cwdBasename, formatRelativeShort, groupThreadsByCwd, truncateMiddle } from "../format";
+import { IconChevronRight, IconPin, IconPinOff, IconRename, IconSearch, IconTrash } from "./Icon";
+import { StatusBadge } from "./Primitives";
 
 export type ThreadListProps = {
   threads: ThreadSummary[];
@@ -15,6 +16,7 @@ export type ThreadListProps = {
   onRename: (id: string, title: string) => Promise<void>;
   git?: { branch: string; dirty: boolean };
   currentCwd?: string;
+  currentAdapter?: string;
   pins?: string[];
   recents?: string[];
   onOpenCwd?: (cwd: string) => void;
@@ -22,7 +24,49 @@ export type ThreadListProps = {
   onUnpin?: (cwd: string) => void;
 };
 
-/** The thread list is the same in the desktop rail and the mobile sheet. */
+type Workspace = {
+  cwd: string;
+  threads: ThreadSummary[];
+  pinned: boolean;
+};
+
+/**
+ * One workspace per row, its threads nested under it. The rail used to list the
+ * same directory three times — once under Pinned, once as a group heading, once
+ * as the group's path — before any thread title appeared.
+ */
+export function buildWorkspaces(input: {
+  threads: ThreadSummary[];
+  pins?: string[];
+  recents?: string[];
+  currentCwd?: string;
+}): Workspace[] {
+  const pins = input.pins ?? [];
+  const byCwd = new Map<string, Workspace>();
+  const order: string[] = [];
+  const add = (cwd: string, threads: ThreadSummary[]) => {
+    const existing = byCwd.get(cwd);
+    if (existing) {
+      existing.threads.push(...threads);
+      return;
+    }
+    order.push(cwd);
+    byCwd.set(cwd, { cwd, threads: [...threads], pinned: pins.includes(cwd) });
+  };
+
+  for (const group of groupThreadsByCwd(input.threads)) add(group.cwd, group.threads);
+  for (const cwd of pins) add(cwd, []);
+  for (const cwd of input.recents ?? []) add(cwd, []);
+
+  const list = order.map((cwd) => byCwd.get(cwd)!);
+  // Pinned first, then the workspace being worked in, then the rest as given.
+  return list.sort((a, b) => {
+    const rank = (w: Workspace) => (w.pinned ? 0 : w.cwd === input.currentCwd ? 1 : 2);
+    return rank(a) - rank(b);
+  });
+}
+
+/** The tree is the same in the desktop rail and the mobile sheet. */
 export function ThreadList({
   threads,
   currentId,
@@ -34,6 +78,7 @@ export function ThreadList({
   onRename,
   git,
   currentCwd,
+  currentAdapter,
   pins,
   recents,
   onOpenCwd,
@@ -44,17 +89,21 @@ export function ThreadList({
   const [editing, setEditing] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [filter, setFilter] = useState("");
+  const [collapsed, setCollapsed] = useState<string[]>([]);
   const q = filter.trim().toLowerCase();
   const visible = q
     ? threads.filter((th) => th.title.toLowerCase().includes(q) || th.cwd.toLowerCase().includes(q))
     : threads;
-  const groups = groupThreadsByCwd(visible);
-  const otherRecents = (recents || []).filter((c) => !(pins || []).includes(c));
+  const workspaces = useMemo(
+    () => buildWorkspaces({ threads: visible, pins, recents, currentCwd }),
+    [visible, pins, recents, currentCwd],
+  );
 
   return (
     <div className="thread-list-body">
-      <label className="thread-filter">
+      <label className="thread-filter search-field">
         <span className="visually-hidden">{t("threads.filter")}</span>
+        <IconSearch />
         <input
           type="search"
           value={filter}
@@ -64,153 +113,140 @@ export function ThreadList({
         />
       </label>
 
-      {pins && pins.length > 0 && (
-        <section className="thread-group">
-          <h3 className="thread-context">{t("threads.pins")}</h3>
-          <ul className="thread-list">
-            {pins.map((cwd) => (
-              <li key={`pin:${cwd}`} className="thread-row">
-                <button
-                  type="button"
-                  className={`ghost picker-item${cwd === currentCwd ? " current" : ""}`}
-                  onClick={() => onOpenCwd?.(cwd)}
-                  disabled={busy || waiting}
-                  title={cwd}
-                >
-                  <strong>{cwdBasename(cwd)}</strong>
-                  <span className="muted">{truncateMiddle(cwd)}</span>
-                </button>
-                <span className="row-actions">
+      {threads.length === 0 && !recents?.length && <p className="muted thread-hint">{t("threads.empty")}</p>}
+
+      <nav className="ws-tree" aria-label={t("threads.title")}>
+        {workspaces.map((ws) => {
+          const open = !collapsed.includes(ws.cwd) && (q ? true : ws.threads.length > 0);
+          const isCurrent = ws.cwd === currentCwd;
+          const label = ws.cwd ? cwdBasename(ws.cwd) : t("threads.context");
+          return (
+            <section key={ws.cwd || "none"} className={`ws-group${isCurrent ? " current" : ""}`}>
+              <div className="ws-row">
+                {ws.threads.length > 0 ? (
                   <button
                     type="button"
-                    className="icon-btn sm"
-                    aria-label={t("threads.unpin")}
-                    title={t("threads.unpin")}
-                    onClick={() => onUnpin?.(cwd)}
+                    className={`ws-twisty${open ? " open" : ""}`}
+                    aria-expanded={open}
+                    aria-label={label}
+                    onClick={() =>
+                      setCollapsed((cur) =>
+                        cur.includes(ws.cwd) ? cur.filter((c) => c !== ws.cwd) : [...cur, ws.cwd],
+                      )
+                    }
                   >
-                    <IconPinOff />
+                    <IconChevronRight />
                   </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {otherRecents.length > 0 && (
-        <section className="thread-group">
-          <h3 className="thread-context">{t("threads.recents")}</h3>
-          <ul className="thread-list">
-            {otherRecents.map((cwd) => (
-              <li key={`recent:${cwd}`} className="thread-row">
-                <button
-                  type="button"
-                  className={`ghost picker-item${cwd === currentCwd ? " current" : ""}`}
-                  onClick={() => onOpenCwd?.(cwd)}
-                  disabled={busy || waiting}
-                  title={cwd}
-                >
-                  <strong>{cwdBasename(cwd)}</strong>
-                  <span className="muted">{truncateMiddle(cwd)}</span>
-                </button>
-                <span className="row-actions">
-                  <button
-                    type="button"
-                    className="icon-btn sm"
-                    aria-label={t("threads.pin")}
-                    title={t("threads.pin")}
-                    onClick={() => onPin?.(cwd)}
-                  >
-                    <IconPin />
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {threads.length === 0 && <p className="muted thread-hint">{t("threads.empty")}</p>}
-
-      {groups.map((group) => (
-        <section key={group.cwd || "none"} className="thread-group">
-          <h3 className="thread-context">{group.cwd ? cwdBasename(group.cwd) : t("threads.context")}</h3>
-          {group.cwd ? (
-            <p className="muted thread-cwd" title={group.cwd}>
-              {truncateMiddle(group.cwd, 40)}
-              {git && group.threads.some((th) => th.id === currentId)
-                ? ` · ${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}`
-                : ""}
-            </p>
-          ) : null}
-          <ul className="thread-list">
-            {group.threads.map((th) => (
-              <li key={th.id} className="thread-row">
-                {editing === th.id ? (
-                  <form
-                    className="thread-rename"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void onRename(th.id, draftTitle).then(() => setEditing(null));
-                    }}
-                  >
-                    <input
-                      value={draftTitle}
-                      aria-label={t("threads.rename")}
-                      onChange={(e) => setDraftTitle(e.target.value)}
-                      autoFocus
-                    />
-                    <button type="submit" className="ghost tiny">
-                      {t("threads.saveTitle")}
-                    </button>
-                  </form>
                 ) : (
-                  <>
+                  <span className="ws-twisty empty" aria-hidden="true" />
+                )}
+                <button
+                  type="button"
+                  className="ws-open"
+                  onClick={() => ws.cwd && onOpenCwd?.(ws.cwd)}
+                  disabled={busy || waiting || !ws.cwd}
+                  title={ws.cwd}
+                  aria-current={isCurrent ? "true" : undefined}
+                >
+                  <span className="ws-name truncate">{label}</span>
+                  <span className="ws-path truncate">
+                    {truncateMiddle(ws.cwd, 30)}
+                    {isCurrent && git ? ` · ${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}` : ""}
+                  </span>
+                </button>
+                <span className="ws-meta">
+                  {ws.threads.length > 0 && <span className="ws-count nums">{ws.threads.length}</span>}
+                </span>
+                <span className="row-actions">
+                  {ws.cwd ? (
                     <button
                       type="button"
-                      className={`ghost picker-item${th.id === currentId ? " current" : ""}`}
-                      onClick={() => void onSwitch(th.id)}
+                      className="icon-btn sm"
+                      aria-label={ws.pinned ? t("threads.unpin") : t("threads.pin")}
+                      title={ws.pinned ? t("threads.unpin") : t("threads.pin")}
+                      onClick={() => (ws.pinned ? onUnpin?.(ws.cwd) : onPin?.(ws.cwd))}
                     >
-                      <strong>{th.title}</strong>
-                      <span className="muted">
-                        {th.id === currentId ? `${t("threads.current")} · ` : ""}
-                        {th.adapter} · {formatRelativeTime(th.updatedAt, Date.now(), locale)}
-                        {th.usage && (th.usage.inputTokens || th.usage.outputTokens)
-                          ? ` · ↓${formatTokens(th.usage.inputTokens, locale)} ↑${formatTokens(th.usage.outputTokens, locale)}`
-                          : ""}
-                      </span>
+                      {ws.pinned ? <IconPinOff /> : <IconPin />}
                     </button>
-                    <span className="row-actions">
-                      <button
-                        type="button"
-                        className="icon-btn sm"
-                        aria-label={t("threads.rename")}
-                        title={t("threads.rename")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditing(th.id);
-                          setDraftTitle(th.title);
-                        }}
-                      >
-                        <IconRename />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn sm danger-hover"
-                        aria-label={t("threads.delete")}
-                        title={t("threads.delete")}
-                        onClick={(e) => void onDelete(th.id, e)}
-                      >
-                        <IconTrash />
-                      </button>
-                    </span>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+                  ) : null}
+                </span>
+              </div>
+
+              {open && ws.threads.length > 0 && (
+                <ul className="thread-list">
+                  {ws.threads.map((th) => (
+                    <li key={th.id} className="thread-row">
+                      {editing === th.id ? (
+                        <form
+                          className="thread-rename"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void onRename(th.id, draftTitle).then(() => setEditing(null));
+                          }}
+                        >
+                          <input
+                            value={draftTitle}
+                            aria-label={t("threads.rename")}
+                            onChange={(e) => setDraftTitle(e.target.value)}
+                            autoFocus
+                          />
+                          <button type="submit" className="ghost tiny">
+                            {t("threads.saveTitle")}
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className={`ghost picker-item${th.id === currentId ? " current" : ""}`}
+                            onClick={() => void onSwitch(th.id)}
+                            title={th.title}
+                          >
+                            <strong>{th.title}</strong>
+                            <span className="thread-meta muted">
+                              {th.id === currentId && busy ? (
+                                <span className="pulse thread-live" aria-label={t("status.running")} />
+                              ) : null}
+                              <span className="nums">{formatRelativeShort(th.updatedAt, Date.now(), locale)}</span>
+                              {th.adapter && th.adapter !== currentAdapter ? (
+                                <StatusBadge>{th.adapter}</StatusBadge>
+                              ) : null}
+                            </span>
+                          </button>
+                          <span className="row-actions">
+                            <button
+                              type="button"
+                              className="icon-btn sm"
+                              aria-label={t("threads.rename")}
+                              title={t("threads.rename")}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditing(th.id);
+                                setDraftTitle(th.title);
+                              }}
+                            >
+                              <IconRename />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn sm danger-hover"
+                              aria-label={t("threads.delete")}
+                              title={t("threads.delete")}
+                              onClick={(e) => void onDelete(th.id, e)}
+                            >
+                              <IconTrash />
+                            </button>
+                          </span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          );
+        })}
+      </nav>
     </div>
   );
 }

@@ -236,7 +236,6 @@
   "settings.updateFailed": "La actualización falló.",
   "threads.title": "Hilos",
   "threads.new": "Hilo nuevo",
-  "threads.switchResume": "Al cambiar se reabre ese transcript y se reanuda el agente si el adaptador lo permite.",
   "threads.empty": "Aún no hay hilos.",
   "threads.current": "Actual",
   "threads.delete": "Borrar",
@@ -348,5 +347,9 @@
   "settings.tab.usage": "Uso",
   "settings.unsaved": "Cambios sin guardar",
   "settings.usageEmpty": "Todavía no hay uso registrado.",
-  "boot.unreachableTitle": "No se llega a la pasarela"
+  "boot.unreachableTitle": "No se llega a la pasarela",
+  "nav.collapseRail": "Plegar el panel",
+  "nav.expandRail": "Desplegar el panel",
+  "chat.more": "Acciones del hilo",
+  "chat.searchClose": "Cerrar la búsqueda"
 }

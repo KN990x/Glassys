@@ -236,7 +236,6 @@
   "settings.updateFailed": "Upgrade failed.",
   "threads.title": "Threads",
   "threads.new": "New thread",
-  "threads.switchResume": "Switching reopens that transcript and resumes the agent if the adapter allows.",
   "threads.empty": "No threads yet.",
   "threads.current": "Current",
   "threads.delete": "Delete",
@@ -348,5 +347,9 @@
   "settings.tab.usage": "Usage",
   "settings.unsaved": "Unsaved changes",
   "settings.usageEmpty": "No usage recorded yet.",
-  "boot.unreachableTitle": "Cannot reach the gateway"
+  "boot.unreachableTitle": "Cannot reach the gateway",
+  "nav.collapseRail": "Collapse the rail",
+  "nav.expandRail": "Expand the rail",
+  "chat.more": "Thread actions",
+  "chat.searchClose": "Close search"
 }

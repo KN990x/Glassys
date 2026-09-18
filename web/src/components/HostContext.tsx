@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useT } from "../i18n";
 import { truncateMiddle } from "../format";
-import { IconFolder, IconGit, IconServer, IconTerminal } from "./Icon";
+import { IconCheck, IconCopy, IconServer } from "./Icon";
 
 export type HostInfo = {
   hostLabel: string;
@@ -11,8 +11,9 @@ export type HostInfo = {
 };
 
 /**
- * The rail shows one labelled row per fact. The mobile topbar has no room for
- * that, so it keeps the single clipped line — but both copy the cwd on click.
+ * Which machine this is. The rail shows one card — four 11px labelled rows of
+ * icons took more height than the thread list they sat under. The phone topbar
+ * keeps the single clipped line; both copy the cwd on click.
  */
 export function HostContext({
   info,
@@ -20,7 +21,7 @@ export function HostContext({
   onCopyFailed,
 }: {
   info: HostInfo;
-  variant: "rows" | "inline";
+  variant: "card" | "inline";
   onCopyFailed: () => void;
 }) {
   const t = useT();
@@ -57,47 +58,28 @@ export function HostContext({
   }
 
   return (
-    <dl className="host-context host-rows">
-      {info.hostLabel && (
-        <div className="host-row">
-          <dt>
-            <IconServer />
-            <span className="visually-hidden">{t("host.machine")}</span>
-          </dt>
-          <dd className="truncate" title={info.hostLabel}>
-            {info.hostLabel}
-          </dd>
-        </div>
-      )}
-      <div className="host-row">
-        <dt>
-          <IconFolder />
-          <span className="visually-hidden">{t("host.folder")}</span>
-        </dt>
-        <dd>
-          <button type="button" className="host-copy" title={info.cwd} aria-label={t("chat.copyCwd")} onClick={copy}>
-            {copied ? t("chat.copied") : truncateMiddle(info.cwd, 30) || "—"}
-          </button>
-        </dd>
+    <div className="host-context host-card">
+      <span className="host-glyph" aria-hidden="true">
+        <IconServer />
+      </span>
+      <div className="host-lines">
+        <span className="host-name truncate" title={info.hostLabel}>
+          {info.hostLabel || t("host.machine")}
+        </span>
+        <span className="host-detail truncate" title={[info.cwd, branch].filter(Boolean).join(" · ")}>
+          {truncateMiddle(info.cwd, 26) || "—"}
+          {branch ? ` · ${branch}` : ""}
+        </span>
       </div>
-      {branch && (
-        <div className="host-row">
-          <dt>
-            <IconGit />
-            <span className="visually-hidden">{t("host.branch")}</span>
-          </dt>
-          <dd className="truncate" title={branch}>
-            {branch}
-          </dd>
-        </div>
-      )}
-      <div className="host-row">
-        <dt>
-          <IconTerminal />
-          <span className="visually-hidden">{t("host.agent")}</span>
-        </dt>
-        <dd className="truncate">{info.adapter}</dd>
-      </div>
-    </dl>
+      <button
+        type="button"
+        className="icon-btn sm host-copy-btn"
+        onClick={copy}
+        aria-label={t("chat.copyCwd")}
+        title={copied ? t("chat.copied") : t("chat.copyCwd")}
+      >
+        {copied ? <IconCheck /> : <IconCopy />}
+      </button>
+    </div>
   );
 }

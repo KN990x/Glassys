@@ -31,10 +31,9 @@ import {
   GlassysMark,
   IconAttach,
   IconClose,
-  IconExport,
+  IconMore,
   IconSearch,
   IconSend,
-  IconThreads,
 } from "./components/Icon";
 import type { ToolBlock } from "./transcript";
 
@@ -104,33 +103,33 @@ function Frame({ width, height, children }: { width: number | string; height: nu
   );
 }
 
-function ChatShell({ mobile, empty }: { mobile?: boolean; empty?: boolean }) {
+function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean; mini?: boolean }) {
   return (
-    <div className={`app-shell${mobile ? "" : " has-rail"}`} style={{ height: "100%" }}>
+    <div className={`app-shell${mobile ? "" : mini ? " has-mini-rail" : " has-rail"}`} style={{ height: "100%" }}>
       {!mobile && (
         <Sidebar spaceName="web-01" statusClass="connected" statusLabel="Connected" host={host}
-          threads={threadProps} onNew={() => {}} onSettings={() => {}} onExport={() => {}} canExport onCopyFailed={() => {}} />
+          threads={threadProps} onNew={() => {}} onSettings={() => {}} onCopyFailed={() => {}}
+          collapsed={Boolean(mini)} onCollapse={() => {}} theme="dark" onTheme={() => {}} />
       )}
       <div className="chat-shell">
         <header className="topbar">
           <div className="topbar-inner">
-            {mobile && <button type="button" className="icon-btn" aria-label="Threads"><IconThreads /></button>}
             <div className="topbar-title">
-              <strong className="truncate">{mobile ? "web-01" : "Disk pressure on web-01"}</strong>
+              <button type="button" className="topbar-heading">
+                {mobile && <span className="status dot-only connected" title="Connected" />}
+                <strong className="truncate">Disk pressure on web-01</strong>
+              </button>
               {mobile ? <HostContext info={host} variant="inline" onCopyFailed={() => {}} />
-                      : <span className="host-context muted truncate">current</span>}
+                      : <span className="host-context muted truncate">www · main (dirty)</span>}
             </div>
             <div className="top-actions">
-              {mobile ? <span className="status dot-only connected" title="Connected" />
-                      : <span className="muted usage-chip">↓18.2k ↑3.1k</span>}
+              {!mobile && <span className="muted usage-chip">↓18.2k ↑3.1k</span>}
+              <button type="button" className="icon-btn" aria-label="Search"><IconSearch /></button>
+              <button type="button" className="icon-btn" aria-label="More"><IconMore /></button>
             </div>
           </div>
         </header>
         <main className="chat-main">
-          <div className="transcript-toolbar">
-            <span className="search-field"><IconSearch /><input type="search" placeholder="Search this thread" /></span>
-            <button type="button" className="icon-btn" aria-label="Export"><IconExport /></button>
-          </div>
           <div className="transcript">
             <div className="transcript-inner">
               {empty ? (
@@ -261,6 +260,9 @@ function Gallery() {
       </Row>
       <Row title="Shell — phone">
         <Frame width={390} height={720}><ChatShell mobile /></Frame>
+      </Row>
+      <Row title="Shell — collapsed rail" note="A 56px strip keeps the two controls the operator reaches for.">
+        <Frame width="100%" height={420}><ChatShell mini /></Frame>
       </Row>
 
       <Row title="Tool cards" note="Every status pill must end at the same x, with or without a copy button.">
