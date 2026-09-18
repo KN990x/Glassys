@@ -36,30 +36,7 @@ const SCALED = new Set([
  */
 const ALLOWED = new Map([
   ["--", "token definitions are the scale itself"],
-  [".panel", "gate card width is a layout choice, not a spacing step"],
-  [".gate.wide .panel", "wide gate card width"],
-  [".settings-dialog", "dialog width"],
-  [".confirm-panel", "dialog width"],
-  [".palette-panel", "palette width and max height"],
-  [".palette-inline", "inline palette max height"],
-  [".thread-drawer", "sheet width"],
-  [".thread-panel", "sheet width"],
-  [".chip-pop", "popover min and max width"],
-  [".qr", "QR code is a fixed square"],
-  [".thumbs img, .thumb-remove img", "attachment thumbnail is a fixed square"],
-  [".thumb-badge", "remove badge is a fixed circle nudged over the corner"],
-  [".file-chip", "chip max width"],
-  [".steps li", "progress bar hairline"],
-  [".picker-item.current::before", "active marker hairline"],
-  [".preview, .diff", "code block max height"],
-  [".composer-box textarea", "composer max height and optical padding"],
-  [".empty-action", "flex basis, not a spacing step"],
-  [".composer-meta .warn,\n.composer-meta .composer-hint", "hint max width"],
-  [".settings-section", "reading measure"],
-  [".settings-section > label:not(.choice)", "control column width"],
-  [".settings-section > label.choice", "control column width"],
-  [".settings-section input[type=\"number\"]", "number field max width"],
-  [".settings-layout", "settings rail width"],
+  [".composer-box textarea", "optical centring against the send button, derived from its em box"],
   [".visually-hidden", "the standard clip pattern"],
   [".md :not(pre) > code", "inline code tracks its paragraph, so em not px"],
   ['input:not([type="checkbox"]):not([type="radio"]), textarea', "16px is the iOS focus-zoom floor, not a type step"],
@@ -155,7 +132,9 @@ function walk(dir, acc = []) {
   return acc;
 }
 const markup = walk(join(root, "web/src")).map((f) => readFileSync(f, "utf8")).join("\n");
-const declared = new Set([...css.matchAll(/\.([a-z][a-z0-9-]{2,})/g)].map((m) => m[1]));
+/* A file extension inside url() or format() is not a class name. */
+const selectable = css.replace(/url\([^)]*\)/g, "").replace(/format\([^)]*\)/g, "");
+const declared = new Set([...selectable.matchAll(/\.([a-z][a-z0-9-]{2,})/g)].map((m) => m[1]));
 /** Rendered by a library or by markdown, not by our own JSX. */
 const EXTERNAL = new Set(["org"]);
 for (const cls of [...declared].sort()) {

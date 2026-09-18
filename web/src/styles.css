@@ -1,4 +1,31 @@
 /* ---------------------------------------------------------------------------
+   Typeface. Only the two Latin subsets are declared, so the gateway ships
+   133 KB of font instead of the whole family, and nothing is fetched from a
+   CDN. `unicode-range` keeps the extended file off the wire until a glyph
+   outside ASCII needs it.
+   --------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../node_modules/@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------------------------------------------------------------------------
    Glassys design tokens.
    Every rule below consumes these; no loose rem/px literals in component CSS.
    --------------------------------------------------------------------------- */
@@ -29,11 +56,17 @@
   --warn-bg: color-mix(in srgb, var(--warn) 14%, transparent);
   --info-bg: color-mix(in srgb, var(--muted) 12%, transparent);
 
+  /* Interaction. Hover is neutral and selection is accented, so the two can
+     never be confused; every list row, tab and card uses this one pair. */
+  --hover-bg: color-mix(in srgb, var(--text) 7%, transparent);
+  --selected-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+  --selected-ink: var(--text);
+
   /* Button surfaces */
   --btn: #fafafa;
   --btn-fg: #0a0a0a;
   --btn-hover: #e5e5e5;
-  --ghost-hover: var(--surface-2);
+  --ghost-hover: var(--hover-bg);
 
   /* Content surfaces */
   --user: var(--surface-2);
@@ -41,7 +74,15 @@
   --input-bg: var(--surface-2);
   --diff-add: #46a758;
   --diff-del: #e5484d;
+  --diff-add-bg: color-mix(in srgb, var(--diff-add) 14%, transparent);
+  --diff-del-bg: color-mix(in srgb, var(--diff-del) 14%, transparent);
   --scrim: color-mix(in srgb, #000 62%, transparent);
+
+  /* Floating chrome. A shadow is nearly invisible on a dark page, so an
+     overlay also gets a one-pixel top highlight to lift its edge. */
+  --glass-bg: color-mix(in srgb, var(--surface-1) 82%, transparent);
+  --hairline: inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent);
+  --scrollbar: color-mix(in srgb, var(--text) 18%, transparent);
 
   /* Spacing scale — 4px base */
   /* --s-05 exists because eight rules were already using a bare 2px. */
@@ -55,21 +96,26 @@
   --s-7: 32px;
   --s-8: 48px;
 
-  /* Type scale */
+  /* Type scale. --fs-chat is the transcript's reading size; the app chrome
+     stays on --fs-base so a message is never the same weight as a control. */
   --fs-xs: 11px;
   --fs-sm: 12px;
   --fs-base: 14px;
   --fs-md: 15px;
+  --fs-chat: 15px;
   --fs-lg: 17px;
   --fs-xl: 20px;
   --lh-tight: 1.3;
   --lh-body: 1.6;
+  --track-tight: -0.011em;
 
-  /* Radii */
+  /* Radii. --r-inner is --r-xl minus the composer's own padding, so a button
+     inside a rounded box is concentric with it instead of nearly square. */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
+  --r-inner: 16px;
   --r-full: 999px;
 
   /* Elevation */
@@ -85,8 +131,9 @@
   --dur: 180ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 
-  /* Typefaces */
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Typefaces. Inter ships with the gateway so the product reads the same on
+     every host; the system stack stays as the fallback while it loads. */
+  --font: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Layout */
@@ -94,12 +141,47 @@
   --page-gutter: var(--s-4);
   --rail-w: 268px;
   --rail-w-sm: 208px;
+  --rail-w-mini: 56px;
+  --inspector-w: 320px;
   --topbar-h: 57px;
   --dot: 8px;
   --lh-code: 1.55;
   --tabbar-h: 56px;
   --control-h: 36px;
   --control-h-sm: 30px;
+  --row-h: 32px;
+
+  /* Fixed dimensions of single elements. They are not rhythm steps, but they
+     belong in one place so two dialogs cannot disagree about their width. */
+  --w-panel: 460px;
+  --w-panel-wide: 680px;
+  --w-dialog: 920px;
+  --w-dialog-sm: 400px;
+  --h-dialog: 720px;
+  --w-palette: 36rem;
+  --h-palette: 26rem;
+  --h-palette-inline: 15rem;
+  --w-sheet: 22rem;
+  --w-pop: 16rem;
+  --w-control: 15rem;
+  --w-measure: 34rem;
+  --w-chip-max: 12rem;
+  --w-hint-max: 18rem;
+  --w-number: 7rem;
+  --code-max: 22rem;
+  --composer-max: 160px;
+  --qr-size: 9rem;
+  --thumb: 56px;
+  --badge: 18px;
+
+  /* Stacking order, so a new overlay is placed rather than guessed. */
+  --z-sticky: 2;
+  --z-pop: 5;
+  --z-tabbar: 16;
+  --z-drawer: 18;
+  --z-settings: 20;
+  --z-palette: 40;
+  --z-confirm: 60;
 
   /* Icon scale. Glyphs pair with a control box or a line of text, never a
      one-off number. */
@@ -136,17 +218,26 @@ html[data-theme="light"] {
   --ok: #2f7d32;
   --warn: #9a5800;
 
+  --hover-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  --selected-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+
   --btn: #18181b;
   --btn-fg: #fafafa;
   --btn-hover: #3f3f46;
-  --ghost-hover: var(--surface-2);
+  --ghost-hover: var(--hover-bg);
 
   --user: var(--surface-2);
   --code-bg: var(--surface-2);
   --input-bg: var(--surface-2);
   --diff-add: #2f7d32;
   --diff-del: #c62828;
+  --diff-add-bg: color-mix(in srgb, var(--diff-add) 10%, transparent);
+  --diff-del-bg: color-mix(in srgb, var(--diff-del) 10%, transparent);
   --scrim: color-mix(in srgb, #18181b 40%, transparent);
+
+  --glass-bg: color-mix(in srgb, var(--surface-1) 80%, transparent);
+  --hairline: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent);
+  --scrollbar: color-mix(in srgb, var(--text) 22%, transparent);
 
   --e-1: 0 1px 2px color-mix(in srgb, #18181b 8%, transparent),
          0 4px 12px color-mix(in srgb, #18181b 6%, transparent);
@@ -171,7 +262,22 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Inter's single-storey a and straight-tailed l read better than the
+     defaults at 11-14px, which is most of this interface. */
+  font-feature-settings: "cv05", "cv11", "ss03";
 }
+
+/* Default scrollbars sit as a light grey slab on a near-black page. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+::-webkit-scrollbar { width: var(--s-2); height: var(--s-2); }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: var(--r-full);
+}
+::-webkit-scrollbar-track { background: transparent; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { touch-action: manipulation; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -185,7 +291,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   outline-offset: 2px;
 }
 
-h1, h2, h3, h4 { text-wrap: pretty; line-height: var(--lh-tight); }
+h1, h2, h3, h4 {
+  text-wrap: pretty;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+}
 
 /* ---------------------------------------------------------------------------
    Form controls
@@ -251,7 +361,14 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .error-text { color: var(--danger); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .ok { color: var(--ok); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .warn { color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-body); overflow-wrap: break-word; }
-.eyebrow {
+/* One uppercase label style. The rail's group headings, the palette's group
+   rows, the settings section title and the usage table head all used to carry
+   their own copy of these five declarations. */
+.eyebrow,
+.thread-context,
+.palette-group,
+.settings-section > h3,
+.usage-table thead th {
   font-size: var(--fs-xs);
   color: var(--muted);
   text-transform: uppercase;
@@ -367,7 +484,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 }
 .panel {
   position: relative;
-  width: min(460px, 100%);
+  width: min(var(--w-panel), 100%);
   background: var(--bg-elev);
   border: 1px solid var(--stroke);
   border-radius: var(--r-xl);
@@ -378,16 +495,16 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   align-content: start;
 }
 /* .gate.wide must widen the panel: .panel sets `width`, so max-width alone did nothing. */
-.gate.wide .panel { width: min(680px, 100%); }
+.gate.wide .panel { width: min(var(--w-panel-wide), 100%); }
 .panel > * { min-width: 0; }
 .brand { display: flex; gap: var(--s-3); align-items: flex-start; }
 .brand > svg { margin-top: 2px; flex: none; }
-.brand h1 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.brand h1 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
 .brand.tight { margin: 0; }
 .brand.tight strong { margin: 0; font-weight: 600; font-size: var(--fs-base); }
 /* Every gap in the panel measured exactly 16px, so headings floated. Pull the
    following block closer: 16px above a heading, 8px below. */
-.panel h2 { margin: 0 0 calc(var(--s-2) - var(--s-4)); font-size: var(--fs-xl); font-weight: 650; }
+.panel h2 { margin: 0 0 calc(var(--s-2) - var(--s-4)); font-size: var(--fs-xl); font-weight: 600; }
 .panel > p { margin: 0; }
 .choice {
   display: flex;
@@ -482,8 +599,7 @@ details label { margin-top: var(--s-2); }
   background: var(--bg);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.adapter-card:hover:not(.disabled) { border-color: var(--stroke-strong); background: var(--surface-2); }
-.adapter-card.current { border-color: var(--accent); background: var(--accent-bg); }
+.adapter-card:hover:not(.disabled) { border-color: var(--stroke-strong); background: var(--hover-bg); }
 .adapter-card input { margin-top: 0; }
 .adapter-card-body { display: grid; gap: var(--s-05); min-width: 0; }
 .adapter-card-body strong { font-weight: 600; }
@@ -569,7 +685,7 @@ details label { margin-top: var(--s-2); }
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 16;
+  z-index: var(--z-tabbar);
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
@@ -591,7 +707,6 @@ details label { margin-top: var(--s-2); }
   transition: color var(--dur) var(--ease);
 }
 .tabbar-item.current { color: var(--text); }
-.tabbar-item.current svg { color: var(--accent); }
 
 .topbar-title { display: grid; gap: 0; min-width: 0; flex: 1; }
 .topbar-title strong { font-size: var(--fs-base); font-weight: 600; }
@@ -685,7 +800,7 @@ details label { margin-top: var(--s-2); }
 .status.reconnecting, .status.connecting, .status.queued, .status.running { color: var(--warn); }
 .status.error { color: var(--danger); }
 .status.dot-only { gap: 0; flex: none; }
-.host-context { display: block; font-size: var(--fs-xs); max-width: min(22rem, calc(100vw - 8rem)); }
+.host-context { display: block; font-size: var(--fs-xs); max-width: min(var(--w-sheet), calc(100vw - var(--w-number))); }
 button.host-copy {
   display: block;
   width: 100%;
@@ -755,7 +870,7 @@ button.host-copy:hover { color: var(--text); }
   margin: var(--s-6) 0 var(--s-4);
   padding: var(--s-5) var(--s-4);
 }
-.empty h2 { margin: var(--s-2) 0 0; font-size: var(--fs-xl); font-weight: 650; color: var(--text); }
+.empty h2 { margin: var(--s-2) 0 0; font-size: var(--fs-xl); font-weight: 600; color: var(--text); }
 .empty p { margin: 0; }
 .empty-host { font-size: var(--fs-xs); font-family: var(--mono); overflow-wrap: anywhere; }
 /* Flex, not auto-fit grid: with three cards at ~420px the grid left two on the
@@ -862,7 +977,7 @@ button.host-copy:hover { color: var(--text); }
   border-radius: var(--r-full);
   background: var(--bg-elev);
   box-shadow: var(--e-1);
-  z-index: 2;
+  z-index: var(--z-sticky);
 }
 .usage { font-size: var(--fs-sm); margin: 0; font-variant-numeric: tabular-nums; }
 
@@ -958,7 +1073,7 @@ button.host-copy:hover { color: var(--text); }
   border-radius: var(--r-md);
   padding: var(--s-3);
 }
-.preview, .diff { max-height: 22rem; }
+.preview, .diff { max-height: var(--code-max); }
 .diff .add { color: var(--diff-add); }
 .diff .del { color: var(--diff-del); }
 .hunk { display: grid; gap: var(--s-2); }
@@ -1013,7 +1128,7 @@ button.host-copy:hover { color: var(--text); }
 .composer-meta .composer-hint {
   font-size: var(--fs-xs);
   min-width: 0;
-  max-width: 18rem;
+  max-width: var(--w-hint-max);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1052,7 +1167,7 @@ button.host-copy:hover { color: var(--text); }
   resize: none;
   height: var(--composer-btn);
   min-height: var(--composer-btn);
-  max-height: 160px;
+  max-height: var(--composer-max);
   min-width: 0;
   width: auto;
   line-height: 1.375;
@@ -1086,8 +1201,8 @@ button.host-copy:hover { color: var(--text); }
 
 .thumbs { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .thumbs img, .thumb-remove img {
-  width: 56px;
-  height: 56px;
+  width: var(--thumb);
+  height: var(--thumb);
   object-fit: cover;
   border-radius: var(--r-md);
   border: 1px solid var(--stroke);
@@ -1100,8 +1215,8 @@ button.host-copy:hover { color: var(--text); }
   right: -5px;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: var(--badge);
+  height: var(--badge);
   border-radius: var(--r-full);
   background: var(--surface-3);
   border: 1px solid var(--stroke);
@@ -1111,7 +1226,7 @@ button.host-copy:hover { color: var(--text); }
 .file-chip {
   display: inline-flex;
   align-items: center;
-  max-width: 12rem;
+  max-width: var(--w-chip-max);
   min-height: var(--control-h-sm);
   padding: 0 var(--s-2);
   border-radius: var(--r-md);
@@ -1193,11 +1308,19 @@ button.host-copy:hover { color: var(--text); }
 .picker-item > * { max-width: 100%; }
 .picker-item span { font-size: var(--fs-xs); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-item strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The current row used --stroke, which is the same colour as an ordinary border. */
-.picker-item.current {
-  background: var(--surface-2);
-  border-color: var(--stroke);
+/* One selected recipe for every list row, tab and card: accent wash, accent
+   glyph, and for a list row a 2px marker on the leading edge. Hover stays
+   neutral (--hover-bg) so the two states can never be mistaken. */
+.picker-item.current,
+.settings-tab.current,
+.adapter-card.current {
+  background: var(--selected-bg);
+  color: var(--selected-ink);
+  border-color: transparent;
 }
+.picker-item.current svg,
+.settings-tab.current svg,
+.tabbar-item.current svg { color: var(--accent); }
 .picker-item.current::before {
   content: "";
   position: absolute;
@@ -1214,8 +1337,8 @@ button.host-copy:hover { color: var(--text); }
   position: absolute;
   left: 0;
   bottom: calc(100% + var(--s-2));
-  z-index: 5;
-  min-width: min(16rem, calc(100vw - var(--s-7)));
+  z-index: var(--z-pop);
+  min-width: min(var(--w-pop), calc(100vw - var(--s-7)));
   max-width: calc(100vw - var(--s-6));
   background: var(--bg-elev);
   border: 1px solid var(--stroke);
@@ -1232,9 +1355,9 @@ button.host-copy:hover { color: var(--text); }
 .thread-drawer {
   position: fixed;
   inset: 0;
-  z-index: 18;
+  z-index: var(--z-drawer);
   display: grid;
-  grid-template-columns: min(22rem, 88%) 1fr;
+  grid-template-columns: min(var(--w-sheet), 88%) 1fr;
 }
 .thread-scrim {
   position: absolute;
@@ -1264,17 +1387,10 @@ button.host-copy:hover { color: var(--text); }
   align-items: center;
   gap: var(--s-2);
 }
-.thread-panel h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.thread-panel h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
 .thread-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
 .thread-group { display: grid; gap: var(--s-1); margin-top: var(--s-2); }
-.thread-context {
-  margin: 0;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
+.thread-context { margin: 0; }
 .thread-cwd { margin: 0; font-size: var(--fs-xs); word-break: break-all; }
 .thread-row { display: grid; grid-template-columns: 1fr auto; gap: var(--s-1); align-items: center; }
 .thread-row .picker-item { min-width: 0; }
@@ -1293,7 +1409,7 @@ button.host-copy:hover { color: var(--text); }
 .palette-overlay {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-palette);
   display: grid;
   place-items: start center;
   padding: 12vh var(--s-4) var(--s-4);
@@ -1302,8 +1418,8 @@ button.host-copy:hover { color: var(--text); }
 .palette-panel {
   position: relative;
   z-index: 1;
-  width: min(36rem, 100%);
-  max-height: min(26rem, 70vh);
+  width: min(var(--w-palette), 100%);
+  max-height: min(var(--h-palette), 70vh);
   overflow: auto;
   display: grid;
   gap: var(--s-2);
@@ -1321,22 +1437,15 @@ button.host-copy:hover { color: var(--text); }
   right: 0;
   bottom: calc(100% + var(--s-2));
   width: auto;
-  max-height: 15rem;
+  max-height: var(--h-palette-inline);
 }
 .palette-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
-.palette-group {
-  padding: var(--s-2) var(--s-2) var(--s-1);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  list-style: none;
-}
+.palette-group { padding: var(--s-2) var(--s-2) var(--s-1); list-style: none; }
 
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-confirm);
   display: grid;
   place-items: center;
   padding: max(var(--s-4), env(safe-area-inset-top)) max(var(--s-4), env(safe-area-inset-right))
@@ -1345,7 +1454,7 @@ button.host-copy:hover { color: var(--text); }
   animation: fade-in var(--dur) var(--ease);
 }
 .confirm-panel {
-  width: min(400px, 100%);
+  width: min(var(--w-dialog-sm), 100%);
   display: grid;
   gap: var(--s-3);
   padding: var(--s-5);
@@ -1355,7 +1464,7 @@ button.host-copy:hover { color: var(--text); }
   box-shadow: var(--e-3);
   animation: rise var(--dur) var(--ease);
 }
-.confirm-panel h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.confirm-panel h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
 .confirm-panel p { margin: 0; font-size: var(--fs-base); }
 .confirm-panel .row { margin-top: var(--s-2); }
 .confirm-icon {
@@ -1380,7 +1489,7 @@ button.host-copy:hover { color: var(--text); }
 .settings-overlay {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: var(--z-settings);
   display: grid;
   place-items: center;
   padding: max(var(--s-4), env(safe-area-inset-top)) max(var(--s-4), env(safe-area-inset-right))
@@ -1389,7 +1498,7 @@ button.host-copy:hover { color: var(--text); }
   animation: fade-in var(--dur) var(--ease);
 }
 .settings-dialog {
-  width: min(920px, 100%);
+  width: min(var(--w-dialog), 100%);
   max-width: 100%;
   max-height: min(88dvh, 100%);
   min-width: 0;
@@ -1413,7 +1522,7 @@ button.host-copy:hover { color: var(--text); }
 }
 .settings-dialog header { border-bottom: 1px solid var(--stroke); }
 .settings-dialog footer { border-top: 1px solid var(--stroke); }
-.settings-dialog h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.settings-dialog h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
 .settings-layout { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
 .settings-body { overflow: auto; padding: var(--s-4); display: grid; gap: var(--s-4); min-width: 0; align-content: start; }
 .settings-tabs {
@@ -1442,8 +1551,6 @@ button.host-copy:hover { color: var(--text); }
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .settings-tab:hover { background: var(--ghost-hover); color: var(--text); }
-.settings-tab.current { background: var(--surface-2); color: var(--text); }
-.settings-tab.current svg { color: var(--accent); }
 .settings-dirty { font-size: var(--fs-xs); }
 
 
@@ -1455,7 +1562,7 @@ button.host-copy:hover { color: var(--text); }
 
 .usage-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .usage-table th, .usage-table td { padding: var(--s-2); border-bottom: 1px solid var(--stroke); text-align: left; }
-.usage-table thead th { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
 .usage-table td { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-table tbody th { font-weight: 400; color: var(--text); }
 
@@ -1477,15 +1584,7 @@ button.host-copy:hover { color: var(--text); }
   gap: var(--s-3);
   min-width: 0;
 }
-.settings-section h3 {
-  margin: 0;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: calc(var(--s-2) - var(--s-3));
-}
+.settings-section > h3 { margin: 0 0 calc(var(--s-2) - var(--s-3)); }
 .schedule-list { display: grid; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }
 .schedule-list li {
   display: grid;
@@ -1498,7 +1597,7 @@ button.host-copy:hover { color: var(--text); }
 .schedule-list li p { margin: 0; font-size: var(--fs-sm); }
 
 /* Number fields should not span the control column. */
-.settings-section input[type="number"] { max-width: 7rem; }
+.settings-section input[type="number"] { max-width: var(--w-number); }
 
 @media (min-width: 860px) {
   .settings-layout { grid-template-columns: var(--rail-w-sm) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
@@ -1511,7 +1610,6 @@ button.host-copy:hover { color: var(--text); }
     background: var(--bg);
     padding: var(--s-3);
   }
-  .settings-tab.current { background: var(--surface-3); }
   .settings-tab { justify-content: flex-start; width: 100%; }
   .settings-section { border: 0; padding: 0; background: transparent; }
   .settings-body { padding: var(--s-5); }
@@ -1521,9 +1619,9 @@ button.host-copy:hover { color: var(--text); }
    the dialog. Narrow screens keep the stacked form: two columns clipped the
    label text. */
 @media (min-width: 860px) {
-  .settings-section { max-width: 34rem; }
+  .settings-section { max-width: var(--w-measure); }
   .settings-section > label:not(.choice) {
-    grid-template-columns: minmax(0, 1fr) 15rem;
+    grid-template-columns: minmax(0, 1fr) var(--w-control);
     align-items: center;
     gap: var(--s-3);
     min-height: var(--control-h);
@@ -1536,7 +1634,7 @@ button.host-copy:hover { color: var(--text); }
      while every other control is right-aligned. */
   .settings-section > label.choice {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 15rem;
+    grid-template-columns: minmax(0, 1fr) var(--w-control);
     align-items: center;
     gap: var(--s-3);
     min-height: var(--control-h);
@@ -1544,7 +1642,7 @@ button.host-copy:hover { color: var(--text); }
   .settings-section > label.choice > input { grid-column: 2; grid-row: 1; justify-self: start; margin-top: 0; }
 }
 
-.qr { width: 9rem; height: 9rem; background: #fff; border-radius: var(--r-md); padding: var(--s-2); }
+.qr { width: var(--qr-size); height: var(--qr-size); background: #fff; border-radius: var(--r-md); padding: var(--s-2); }
 
 /* ---------------------------------------------------------------------------
    Markdown
@@ -1553,7 +1651,7 @@ button.host-copy:hover { color: var(--text); }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md p { margin: 0 0 var(--s-3); }
-.md h1, .md h2, .md h3 { font-size: var(--fs-lg); font-weight: 650; margin: var(--s-5) 0 var(--s-2); }
+.md h1, .md h2, .md h3 { font-size: var(--fs-lg); font-weight: 600; margin: var(--s-5) 0 var(--s-2); }
 .md h4, .md h5, .md h6 { font-size: var(--fs-md); font-weight: 600; margin: var(--s-4) 0 var(--s-2); }
 .md a { color: var(--accent); text-underline-offset: 2px; }
 .md hr { border: 0; border-top: 1px solid var(--stroke); margin: var(--s-5) 0; }
@@ -1608,7 +1706,7 @@ button.host-copy:hover { color: var(--text); }
   .composer {
     padding-bottom: calc(var(--s-3) + var(--tabbar-h) + env(safe-area-inset-bottom));
   }
-  .thread-drawer { z-index: 18; }
+  .thread-drawer { z-index: var(--z-drawer); }
 }
 
 @media (max-width: 640px) {
@@ -1616,8 +1714,8 @@ button.host-copy:hover { color: var(--text); }
   .empty { margin-top: var(--s-3); padding: var(--s-3) var(--s-2); }
   .empty h2 { font-size: var(--fs-lg); }
   .top-actions .ghost { padding: 0 var(--s-2); }
-  .thread-drawer { grid-template-columns: min(100%, 22rem) 1fr; }
-  .thread-panel { width: min(22rem, 100%); }
+  .thread-drawer { grid-template-columns: min(100%, var(--w-sheet)) 1fr; }
+  .thread-panel { width: min(var(--w-sheet), 100%); }
   .panel { padding: var(--s-4); border-radius: var(--r-lg); }
 }
 
