@@ -1,7 +1,11 @@
 import {
+  Activity,
   AlertTriangle,
-  BarChart3,
+  Archive,
   ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Brain,
   Check,
   ChevronDown,
   ChevronRight,
@@ -10,29 +14,45 @@ import {
   Command,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   FilePen,
   FileText,
   Folder,
   GitBranch,
+  HardDrive,
+  History,
   Info,
+  ListChecks,
+  Loader2,
   MessageSquare,
+  Monitor,
+  Moon,
   MoreHorizontal,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Paperclip,
   Pencil,
   Pin,
   PinOff,
   Plus,
   RefreshCw,
+  ScrollText,
   Search,
   Send,
   Server,
   Settings as SettingsGlyph,
+  Shield,
+  ShieldAlert,
+  ShieldOff,
   Smartphone,
   Square,
+  Sun,
   Terminal,
   Trash2,
   X,
+  Zap,
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
@@ -44,7 +64,27 @@ function icon(Base: LucideIcon) {
   };
 }
 
+export const IconActivity = icon(Activity);
 export const IconAlert = icon(AlertTriangle);
+export const IconArchive = icon(Archive);
+export const IconArrowUp = icon(ArrowUp);
+export const IconBrain = icon(Brain);
+export const IconDisk = icon(HardDrive);
+export const IconEye = icon(Eye);
+export const IconEyeOff = icon(EyeOff);
+export const IconHistory = icon(History);
+export const IconChecks = icon(ListChecks);
+export const IconLogs = icon(ScrollText);
+export const IconMonitor = icon(Monitor);
+export const IconMoon = icon(Moon);
+export const IconRailClose = icon(PanelLeftClose);
+export const IconRailOpen = icon(PanelLeftOpen);
+export const IconShield = icon(Shield);
+export const IconShieldAlert = icon(ShieldAlert);
+export const IconShieldOff = icon(ShieldOff);
+export const IconSpinner = icon(Loader2);
+export const IconSun = icon(Sun);
+export const IconZap = icon(Zap);
 export const IconChart = icon(BarChart3);
 export const IconPalette = icon(Palette);
 export const IconPhone = icon(Smartphone);

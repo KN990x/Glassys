@@ -21,6 +21,10 @@ import { MarkdownBody } from "./components/MarkdownBody";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThreadList } from "./components/ThreadList";
+import { Switch } from "./components/Switch";
+import { SegmentedControl } from "./components/SegmentedControl";
+import { PopAnchor, Popover } from "./components/Popover";
+import { Callout, Disclosure, Kbd, SettingGroup, SettingRow, Skeleton, StatusBadge } from "./components/Primitives";
 import { Settings } from "./pages/Settings";
 import { Wizard } from "./pages/Wizard";
 import {
@@ -178,6 +182,61 @@ function ChatShell({ mobile, empty }: { mobile?: boolean; empty?: boolean }) {
   );
 }
 
+function Primitives() {
+  const [on, setOn] = useState(true);
+  const [seg, setSeg] = useState<"commands" | "files">("commands");
+  const [pop, setPop] = useState(false);
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ display: "grid", gap: "16px", width: "min(760px, 100%)" }}>
+      <div className="row wrap" style={{ alignItems: "center" }}>
+        <StatusBadge tone="ok" dot>Signed in</StatusBadge>
+        <StatusBadge tone="warn" dot>Auto-run</StatusBadge>
+        <StatusBadge tone="danger" dot>Unavailable</StatusBadge>
+        <StatusBadge tone="accent">Running</StatusBadge>
+        <StatusBadge mono>main@9f2c1ab</StatusBadge>
+        <span className="muted">Send with <Kbd>⏎</Kbd>, newline with <Kbd>⇧⏎</Kbd></span>
+        <SegmentedControl
+          label="Activity view"
+          value={seg}
+          onChange={setSeg}
+          options={[{ value: "commands", label: "Commands" }, { value: "files", label: "Files" }]}
+        />
+        <PopAnchor>
+          <button type="button" className="ghost tiny" aria-expanded={pop} onClick={() => setPop((v) => !v)}>
+            Popover
+          </button>
+          <Popover open={pop} onClose={() => setPop(false)} label="Demo" side="bottom">
+            <div className="pop-section">
+              <p className="eyebrow">Section</p>
+              <Switch checked={on} onChange={setOn} label="Auto-run" hint="Tools run without asking." />
+            </div>
+          </Popover>
+        </PopAnchor>
+      </div>
+      <Callout tone="warn">Changing the adapter archives this chat and starts a new thread.</Callout>
+      <Callout tone="danger" action={<button type="button" className="ghost tiny">Retry</button>}>
+        Could not load adapters.
+      </Callout>
+      <Disclosure open={open} onToggle={() => setOpen((v) => !v)} summary={<span>Thinking · 4s</span>}>
+        <p className="muted" style={{ margin: 0 }}>Check df first, then du on the largest mount.</p>
+      </Disclosure>
+      <SettingGroup title="Execution" hint="How much the agent may do without asking.">
+        <SettingRow label="Sandbox" hint="Run tools in Cursor's sandbox.">
+          <Switch checked={false} onChange={() => {}} label="Sandbox" hideLabel />
+        </SettingRow>
+        <SettingRow label="Auto-run" hint="Off means the classifier denies the call.">
+          <Switch checked={on} onChange={setOn} label="Auto-run" hideLabel />
+        </SettingRow>
+        <SettingRow label="Visible shell lines">
+          <input type="number" defaultValue={12} />
+        </SettingRow>
+      </SettingGroup>
+      <Skeleton label="Loading the transcript" />
+    </div>
+  );
+}
+
 function Gallery() {
   const [overlay, setOverlay] = useState<"" | "settings" | "wizard" | "palette" | "confirm">("");
   return (
@@ -248,6 +307,10 @@ function Gallery() {
           <span className="pill denied">Denied</span>
           <span className="status connected">Connected</span>
         </div>
+      </Row>
+
+      <Row title="Primitives" note="One switch, one badge, one callout, one disclosure, one setting row.">
+        <Primitives />
       </Row>
 
       {overlay === "settings" && (

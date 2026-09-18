@@ -137,9 +137,16 @@ const selectable = css.replace(/url\([^)]*\)/g, "").replace(/format\([^)]*\)/g, 
 const declared = new Set([...selectable.matchAll(/\.([a-z][a-z0-9-]{2,})/g)].map((m) => m[1]));
 /** Rendered by a library or by markdown, not by our own JSX. */
 const EXTERNAL = new Set(["org"]);
+/**
+ * A component that renders `pop-${side}` or `tone-${tone}` does render the
+ * variants, so the prefix counts as rendering every class that starts with it.
+ */
+const composed = [...markup.matchAll(/([a-z][a-z0-9-]*-)\$\{/g)].map((m) => m[1]);
 for (const cls of [...declared].sort()) {
   if (EXTERNAL.has(cls)) continue;
-  if (!markup.includes(cls)) failures.push(`dead selector: .${cls} is declared in styles.css but nothing renders it`);
+  if (markup.includes(cls)) continue;
+  if (composed.some((prefix) => cls.startsWith(prefix))) continue;
+  failures.push(`dead selector: .${cls} is declared in styles.css but nothing renders it`);
 }
 
 // ----------------------------------------------------------------- report
