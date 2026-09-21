@@ -16,10 +16,10 @@
   "dependencies": {
     "@glassys/adapter-contract": "workspace:*",
     "@glassys/protocol": "workspace:*",
-    "@opencode-ai/sdk": "^1.18.0"
+    "@opencode-ai/sdk": "^1.18.31"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
+    "@types/node": "^24.13.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }
