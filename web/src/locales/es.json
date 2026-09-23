@@ -119,7 +119,7 @@
   "chat.pendingAttach": "Adjunto",
   "chat.pending": "En espera",
   "chat.retracted": "Retirado",
-  "chat.elapsed": "Trabajando",
+  "chat.elapsed": "Transcurrido",
   "chat.lastTool": "Última tool",
   "chat.attach": "Adjuntar archivo",
   "chat.attachFailed": "No se pudo subir ese archivo.",
@@ -351,5 +351,8 @@
   "nav.collapseRail": "Plegar el panel",
   "nav.expandRail": "Desplegar el panel",
   "chat.more": "Acciones del hilo",
-  "chat.searchClose": "Cerrar la búsqueda"
+  "chat.searchClose": "Cerrar la búsqueda",
+  "chat.code": "código",
+  "tool.steps": "pasos",
+  "tool.files": "archivos"
 }

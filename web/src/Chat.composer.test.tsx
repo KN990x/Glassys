@@ -222,10 +222,11 @@ describe("Chat composer and layout", () => {
     const send = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
     await typeIn(textarea, "hello");
     expect(send().disabled).toBe(true);
-    expect(host.querySelector(".empty")?.textContent).toMatch(/connecting/i);
+    expect(host.querySelector(".skeleton")?.getAttribute("aria-label")).toMatch(/connecting/i);
     await act(async () => {
       socket.emit({ type: "transcript.snapshot", events: [] });
     });
+    expect(host.querySelector(".skeleton")).toBeNull();
     expect(host.querySelector(".empty")?.textContent).toBeTruthy();
     await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "hello");
     expect(send().disabled).toBe(false);

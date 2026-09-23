@@ -119,7 +119,7 @@
   "chat.pendingAttach": "Attachment",
   "chat.pending": "Waiting",
   "chat.retracted": "Removed",
-  "chat.elapsed": "Working",
+  "chat.elapsed": "Elapsed",
   "chat.lastTool": "Last tool",
   "chat.attach": "Attach file",
   "chat.attachFailed": "Could not upload that file.",
@@ -351,5 +351,8 @@
   "nav.collapseRail": "Collapse the rail",
   "nav.expandRail": "Expand the rail",
   "chat.more": "Thread actions",
-  "chat.searchClose": "Close search"
+  "chat.searchClose": "Close search",
+  "chat.code": "code",
+  "tool.steps": "steps",
+  "tool.files": "files"
 }
