@@ -320,7 +320,6 @@
   "protocol.expected": "se esperaba",
   "protocol.got": "se recibió",
   "nav.chat": "Chat",
-  "nav.ops": "Comandos",
   "nav.primary": "Navegación principal",
   "threads.untitled": "Hilo nuevo",
   "host.machine": "Máquina",
@@ -357,5 +356,12 @@
   "tool.files": "archivos",
   "chat.hintSend": "para enviar",
   "chat.hintNewline": "para salto de línea",
-  "chat.hintSlash": "para prompts guardados"
+  "chat.hintSlash": "para prompts guardados",
+  "nav.activity": "Actividad",
+  "chat.activityClose": "Cerrar actividad",
+  "activity.commands": "Comandos",
+  "activity.files": "Archivos",
+  "activity.emptyCommands": "Todavía no se ha ejecutado ningún comando en este hilo.",
+  "activity.emptyFiles": "Todavía no se ha leído ni cambiado ningún archivo.",
+  "activity.diff": "Ver el cambio"
 }

@@ -26,7 +26,9 @@ import { operatorError, shouldSubmitOnEnter } from "../operatorError";
 import { blockMatchesQuery, cwdBasename, formatTokens, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
+import { ActivityPanel } from "../components/ActivityPanel";
 import {
+  IconActivity,
   IconArrowDown,
   IconClose,
   IconExport,
@@ -46,6 +48,8 @@ import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 const COMPOSER_MAX_PX = 160;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
 const RAIL_KEY = "glassys.railCollapsed";
+const ACTIVITY_KEY = "glassys.activityOpen";
+const INSPECTOR_QUERY = "(min-width: 1280px)";
 const OPS_CHIP_IDS = ["status", "disk", "failed-units"] as const;
 
 export { shouldSubmitOnEnter };
@@ -149,6 +153,13 @@ export function Chat({
   const [railCollapsed, setRailCollapsed] = useState(() => {
     try {
       return localStorage.getItem(RAIL_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [activityOpen, setActivityOpen] = useState(() => {
+    try {
+      return localStorage.getItem(ACTIVITY_KEY) === "1";
     } catch {
       return false;
     }
@@ -383,8 +394,22 @@ export function Chat({
     }
   }, []);
 
+  const toggleActivity = useCallback((next: boolean) => {
+    setActivityOpen(next);
+    try {
+      localStorage.setItem(ACTIVITY_KEY, next ? "1" : "0");
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        toggleActivity(!activityOpen);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         collapseRail(!railCollapsed);
@@ -429,7 +454,20 @@ export function Chat({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settings, threadOpen, closeThreads, paletteOpen, slashOpen, searchOpen, railCollapsed, collapseRail, busy, caps]);
+  }, [
+    settings,
+    threadOpen,
+    closeThreads,
+    paletteOpen,
+    slashOpen,
+    searchOpen,
+    railCollapsed,
+    collapseRail,
+    busy,
+    caps,
+    activityOpen,
+    toggleActivity,
+  ]);
 
   useEffect(() => {
     function onPop() {
@@ -792,6 +830,7 @@ export function Chat({
 
 
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const hasInspectorColumn = useMediaQuery(INSPECTOR_QUERY);
   const spaceName = config.space.name.trim() || t("app.name");
   const currentThread = threads.find((th) => th.id === currentThreadId);
   const threadTitle = currentThread?.title || t("threads.untitled");
@@ -822,7 +861,13 @@ export function Chat({
     onUnpin: (cwd: string) => void onUnpin(cwd),
   };
 
-  const navTarget: NavTarget = settings ? "settings" : threadOpen ? "threads" : paletteOpen ? "ops" : "chat";
+  const navTarget: NavTarget = settings
+    ? "settings"
+    : threadOpen
+      ? "threads"
+      : activityOpen
+        ? "activity"
+        : "chat";
 
   function openThreads() {
     pushOverlay("threads");
@@ -876,7 +921,15 @@ export function Chat({
   if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
 
   return (
-    <div className={`app-shell${isDesktop ? (railCollapsed ? " has-mini-rail" : " has-rail") : ""}`}>
+    <div
+      className={[
+        "app-shell",
+        isDesktop ? (railCollapsed ? "has-mini-rail" : "has-rail") : "",
+        activityOpen && hasInspectorColumn ? "has-inspector" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {isDesktop && (
         <Sidebar
           spaceName={spaceName}
@@ -1000,6 +1053,18 @@ export function Chat({
                   >
                     <IconSearch />
                   </button>
+                  {isDesktop && (
+                    <button
+                      type="button"
+                      className={`icon-btn${activityOpen ? " current" : ""}`}
+                      aria-pressed={activityOpen}
+                      onClick={() => toggleActivity(!activityOpen)}
+                      aria-label={t("nav.activity")}
+                      title={t("nav.activity")}
+                    >
+                      <IconActivity />
+                    </button>
+                  )}
                   <PopAnchor>
                     <button
                       type="button"
@@ -1203,18 +1268,37 @@ export function Chat({
               openSettings();
               return;
             }
-            if (target === "ops") {
-              setSlashOpen(false);
-              setPaletteQuery("");
-              setPaletteOpen(true);
+            if (target === "activity") {
+              if (threadOpen) closeThreads();
+              toggleActivity(true);
               return;
             }
             if (threadOpen) closeThreads();
             if (settings) closeSettings();
+            toggleActivity(false);
             composer.current?.focus();
           }}
         />
       )}
+      {activityOpen &&
+        (hasInspectorColumn ? (
+          <ActivityPanel
+            blocks={blocks}
+            locale={config.space.locale}
+            onClose={() => toggleActivity(false)}
+            duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
+          />
+        ) : (
+          <div className="inspector-sheet" role="dialog" aria-modal="true" aria-label={t("nav.activity")}>
+            <div className="thread-scrim" onClick={() => toggleActivity(false)} aria-hidden="true" />
+            <ActivityPanel
+              blocks={blocks}
+              locale={config.space.locale}
+              onClose={() => toggleActivity(false)}
+              duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
+            />
+          </div>
+        ))}
       {threadOpen && !isDesktop && (
         <ThreadDrawer {...threadListProps} onNew={() => void onNewThread()} onClose={closeThreads} />
       )}
