@@ -390,5 +390,7 @@
   "settings.updateActions": "Acciones",
   "palette.move": "para moverte",
   "palette.run": "para ejecutar",
-  "palette.close": "para cerrar"
+  "palette.close": "para cerrar",
+  "login.reveal": "Mostrar la contraseña",
+  "login.hide": "Ocultar la contraseña"
 }

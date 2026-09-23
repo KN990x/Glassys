@@ -167,8 +167,11 @@ function BootScreen() {
   const t = useT();
   return (
     <main className="gate" aria-busy="true">
-      <div className="panel stack boot-panel">
-        <div className="spinner" aria-hidden="true" />
+      {/* The mark, breathing. A card with a spinner in it implied a dialog. */}
+      <div className="boot">
+        <span className="boot-mark">
+          <GlassysMark size={40} />
+        </span>
         <p className="muted">{t("status.connecting")}</p>
       </div>
     </main>
@@ -180,17 +183,16 @@ function Unreachable({ onRetry }: { onRetry: () => void }) {
   return (
     <main className="gate">
       <div className="panel">
-        <div className="brand">
-          <GlassysMark size={36} />
-          <div>
-            <h1>{t("app.name")}</h1>
-            <p className="muted">{t("app.tagline")}</p>
-          </div>
+        <div className="brand tight">
+          <GlassysMark size={22} />
+          <strong>{t("app.name")}</strong>
         </div>
-        <h2>{t("boot.unreachableTitle")}</h2>
-        <p className="muted" role="alert">
-          {t("boot.unreachable")}
-        </p>
+        <div className="panel-heading">
+          <h2>{t("boot.unreachableTitle")}</h2>
+          <p className="muted" role="alert">
+            {t("boot.unreachable")}
+          </p>
+        </div>
         <button type="button" className="primary" onClick={onRetry}>
           {t("boot.retry")}
         </button>

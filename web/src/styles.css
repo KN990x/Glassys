@@ -725,9 +725,14 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
    Gates: boot, setup, login, wizard
    --------------------------------------------------------------------------- */
 .gate {
+  position: relative;
   min-height: 100%;
   display: grid;
   place-items: center;
+  /* A very quiet wash, so an empty page is not a flat rectangle. */
+  background:
+    radial-gradient(60rem 30rem at 50% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+    var(--bg);
   padding: max(var(--s-6), env(safe-area-inset-top)) max(var(--s-6), env(safe-area-inset-right))
            max(var(--s-6), env(safe-area-inset-bottom)) max(var(--s-6), env(safe-area-inset-left));
   overflow: auto;
@@ -746,12 +751,26 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 }
 /* .gate.wide must widen the panel: .panel sets `width`, so max-width alone did nothing. */
 .gate.wide .panel { width: min(var(--w-panel-wide), 100%); }
+.gate-corner {
+  position: absolute;
+  top: max(var(--s-3), env(safe-area-inset-top));
+  right: max(var(--s-3), env(safe-area-inset-right));
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+}
+.boot { display: grid; justify-items: center; gap: var(--s-3); }
+.boot-mark { color: var(--muted); animation: pulse 1.8s ease-in-out infinite; }
+.input-reveal { position: relative; display: flex; align-items: center; min-width: 0; }
+.input-reveal input { padding-right: var(--s-7); }
+.input-reveal .icon-btn { position: absolute; right: var(--s-1); }
+.spinner.sm { width: var(--icon-md); height: var(--icon-md); border-width: 2px; }
+.reserved { visibility: hidden; }
 .panel > * { min-width: 0; }
 .brand { display: flex; gap: var(--s-3); align-items: flex-start; }
 .brand > svg { margin-top: 2px; flex: none; }
-.brand h1 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
-.brand.tight { margin: 0; }
-.brand.tight strong { margin: 0; font-weight: 600; font-size: var(--fs-base); }
+.brand.tight { margin: 0; align-items: center; gap: var(--s-2); }
+.brand.tight strong { margin: 0; font-weight: 600; font-size: var(--fs-base); letter-spacing: var(--track-tight); }
 /* Every gap in the panel measured exactly 16px, so headings floated. Pull the
    following block closer: 16px above a heading, 8px below. */
 .panel h2 { margin: 0 0 calc(var(--s-2) - var(--s-4)); font-size: var(--fs-xl); font-weight: 600; }
@@ -777,7 +796,6 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   border-radius: var(--r-md);
   padding: var(--s-2) var(--s-3);
 }
-.boot-panel { justify-items: center; text-align: center; border: 0; background: transparent; box-shadow: none; }
 
 details {
   border: 1px solid var(--stroke);
@@ -809,25 +827,32 @@ details summary:hover { color: var(--text); }
 details[open] summary { margin-bottom: var(--s-2); }
 details label { margin-top: var(--s-2); }
 
-.steps { display: flex; gap: var(--s-1); padding: 0; margin: 0; list-style: none; }
-.steps li {
-  flex: 1;
+.steps { display: flex; gap: var(--s-2); padding: 0; margin: 0; list-style: none; }
+.steps li { flex: 1; display: grid; gap: var(--s-1); min-width: 0; }
+.step-bar {
   height: 3px;
   border-radius: var(--r-full);
   background: var(--stroke);
   transition: background var(--dur) var(--ease);
 }
-.steps li.done { background: var(--stroke-strong); }
-.steps li.active { background: var(--accent); }
-.steps-row { display: flex; align-items: center; gap: var(--s-3); }
-.steps-row .steps { flex: 1; }
-.steps-count { font-size: var(--fs-xs); flex: none; }
+.step-name {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.steps li.done .step-bar { background: var(--stroke-strong); }
+.steps li.active .step-bar { background: var(--accent); }
+.steps li.active .step-name { color: var(--text); }
+/* On a phone only the step you are on can afford a name. */
+@media (max-width: 640px) {
+  .steps li:not(.active) .step-name { display: none; }
+}
 
-.panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
 .panel-heading { display: grid; gap: var(--s-1); min-width: 0; }
 .panel-heading .eyebrow { margin: 0; }
-.panel-tools { display: flex; gap: var(--s-2); align-items: center; flex: none; }
-.panel-tools select {
+.gate-corner select {
   width: auto;
   height: var(--control-h-sm);
   min-height: var(--control-h-sm);
@@ -837,20 +862,39 @@ details label { margin-top: var(--s-2); }
   background-position: right var(--s-1) center;
   background-size: var(--icon-sm) var(--icon-sm);
 }
-.panel-tools-corner { justify-content: flex-end; }
 
 /* Adapter choices were native radios followed by a run-on sentence. */
 .adapter-card {
+  display: flex;
   align-items: center;
   gap: var(--s-3);
+  width: 100%;
   padding: var(--s-3);
   border: 1px solid var(--stroke);
   border-radius: var(--r-lg);
   background: var(--bg);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
+.adapter-card.disabled, .adapter-card:disabled { opacity: 0.6; cursor: not-allowed; }
+.adapter-mono {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  border-radius: var(--r-md);
+  background: var(--bg-muted);
+  color: var(--muted);
+  font-weight: 600;
+}
+.adapter-card-state { margin-left: auto; display: flex; align-items: center; gap: var(--s-2); flex: none; }
+.adapter-check { display: grid; place-items: center; color: var(--accent); }
+.adapter-check svg { width: var(--icon-md); height: var(--icon-md); }
+.adapter-card.current .adapter-mono { background: var(--accent-bg); color: var(--accent); }
 .adapter-card:hover:not(.disabled) { border-color: var(--stroke-strong); background: var(--hover-bg); }
-.adapter-card input { margin-top: 0; }
 .adapter-card-body { display: grid; gap: var(--s-05); min-width: 0; }
 .adapter-card-body strong { font-weight: 600; }
 .adapter-card-body span { font-size: var(--fs-sm); }

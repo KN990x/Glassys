@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { api, setToken } from "../api";
 import { useT, type Locale } from "../i18n";
 import { LocaleSwitch } from "../components/LocaleSwitch";
-import { GlassysMark } from "../components/Icon";
+import { GlassysMark, IconEye, IconEyeOff } from "../components/Icon";
+import { Callout } from "../components/Primitives";
 
 export function Login({
   onDone,
@@ -15,6 +16,7 @@ export function Login({
 }) {
   const t = useT();
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -43,25 +45,44 @@ export function Login({
 
   return (
     <main className="gate">
+      <div className="gate-corner">
+        <LocaleSwitch locale={locale} onChange={onLocale} />
+      </div>
       <div className="panel">
-        <div className="panel-tools panel-tools-corner">
-          <LocaleSwitch locale={locale} onChange={onLocale} />
+        {/* The product name is a lockup, not the page's heading: it used to be
+            an h1 three points smaller than the h2 under it. */}
+        <div className="brand tight">
+          <GlassysMark size={22} />
+          <strong>{t("app.name")}</strong>
         </div>
-        <div className="brand">
-          <GlassysMark size={36} />
-          <div>
-            <h1>{t("app.name")}</h1>
-            <p className="muted">{t("app.tagline")}</p>
-          </div>
+        <div className="panel-heading">
+          <h2>{t("login.title")}</h2>
+          <p className="muted">{t("app.tagline")}</p>
         </div>
-        <h2>{t("login.title")}</h2>
         <form onSubmit={submit} className="stack">
           <label>
             {t("login.password")}
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <span className="input-reveal">
+              <input
+                type={reveal ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="icon-btn sm"
+                aria-label={t(reveal ? "login.hide" : "login.reveal")}
+                title={t(reveal ? "login.hide" : "login.reveal")}
+                onClick={() => setReveal((v) => !v)}
+              >
+                {reveal ? <IconEyeOff /> : <IconEye />}
+              </button>
+            </span>
           </label>
-          {error && <p className="error-text">{error}</p>}
+          {error && <Callout tone="danger">{error}</Callout>}
           <button className="primary" type="submit" disabled={submitting}>
+            {submitting && <span className="spinner sm" aria-hidden="true" />}
             {t("login.submit")}
           </button>
         </form>
