@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
-import { IconAlert } from "./Icon";
+import { IconAlert, IconArchive, IconInfo } from "./Icon";
 
 export type ConfirmRequest = {
   message: string;
   title?: string;
   confirmLabel?: string;
   destructive?: boolean;
+  /** Archiving a thread is not destruction; it should not wear the same glyph. */
+  kind?: "archive" | "info";
 };
 
 type Pending = ConfirmRequest & { resolve: (value: boolean) => void };
@@ -70,8 +72,10 @@ export function ConfirmDialog({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
-        <span className={`confirm-icon${request.destructive ? " destructive" : ""}`}>
-          <IconAlert />
+        <span
+          className={`confirm-icon${request.destructive ? " destructive" : request.kind ? ` ${request.kind}` : ""}`}
+        >
+          {request.destructive ? <IconAlert /> : request.kind === "archive" ? <IconArchive /> : <IconInfo />}
         </span>
         <h2 id="confirm-title">{request.title || t("confirm.title")}</h2>
         <p className="muted">{request.message}</p>

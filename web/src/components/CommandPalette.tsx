@@ -1,6 +1,8 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import type { PromptTemplate } from "@glassys/protocol";
+import { Kbd } from "./Primitives";
+import { IconSearch, IconZap } from "./Icon";
 
 export type PaletteGroup = "product" | "workspace" | "template";
 
@@ -9,6 +11,8 @@ export type PaletteItem = {
   group: PaletteGroup;
   label: string;
   hint?: string;
+  glyph?: ReactNode;
+  kbd?: string;
   run: () => void;
 };
 
@@ -95,13 +99,16 @@ export function CommandPalette({
   const panel = (
     <div className={`palette-panel${inline ? " palette-inline" : ""}`} role={inline ? "listbox" : undefined}>
       {!hideSearch && (
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => onQuery?.(e.target.value)}
-          placeholder={t("palette.placeholder")}
-          aria-label={t("palette.placeholder")}
-        />
+        <span className="search-field palette-search">
+          <IconSearch />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => onQuery?.(e.target.value)}
+            placeholder={t("palette.placeholder")}
+            aria-label={t("palette.placeholder")}
+          />
+        </span>
       )}
       <ul className="palette-list">
         {filtered.map((item, i) => {
@@ -120,15 +127,35 @@ export function CommandPalette({
                   onMouseEnter={() => setActive(i)}
                   onClick={() => choose(i)}
                 >
-                  <strong>{item.label}</strong>
-                  {item.hint ? <span className="muted">{item.hint}</span> : null}
+                  <span className="palette-glyph" aria-hidden="true">
+                    {item.glyph ?? <IconZap />}
+                  </span>
+                  <span className="palette-text">
+                    <strong>{item.label}</strong>
+                    {item.hint ? <span className="muted">{item.hint}</span> : null}
+                  </span>
+                  {item.kbd ? <Kbd>{item.kbd}</Kbd> : null}
                 </button>
               </li>
             </Fragment>
           );
         })}
-        {filtered.length === 0 && <li className="muted">{t("palette.empty")}</li>}
+        {filtered.length === 0 && <li className="muted palette-empty">{t("palette.empty")}</li>}
       </ul>
+      {!inline && (
+        <footer className="palette-foot muted">
+          <span>
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> {t("palette.move")}
+          </span>
+          <span>
+            <Kbd>⏎</Kbd> {t("palette.run")}
+          </span>
+          <span>
+            <Kbd>esc</Kbd> {t("palette.close")}
+          </span>
+        </footer>
+      )}
     </div>
   );
 

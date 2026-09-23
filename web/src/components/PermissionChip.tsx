@@ -53,7 +53,7 @@ export function PermissionChip({
   const glyph = tone === "ok" ? <IconShield /> : tone === "warn" ? <IconShieldAlert /> : <IconShieldOff />;
 
   async function patch(options: Record<string, unknown>) {
-    if (!(await confirm({ message: t("chip.archiveConfirm"), confirmLabel: t("confirm.archive") }))) return;
+    if (!(await confirm({ message: t("chip.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" }))) return;
     try {
       setError("");
       onConfig(await api.saveConfig({ agent: { options } }));

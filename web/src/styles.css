@@ -450,6 +450,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 
 @media (pointer: coarse) {
   .tiny { min-height: var(--tap); padding: 0 var(--s-3); }
+  .settings-tab { min-height: var(--tap); }
   .icon-btn.sm { width: var(--tap); height: var(--tap); min-height: var(--tap); }
   /* iOS zooms the page when a text field under 16px takes focus, because the
      keyboard needs a legible caret. A <select> opens a picker wheel instead, so
@@ -1971,6 +1972,12 @@ mark {
 .model-picker.compact select:hover { background-color: var(--ghost-hover); border-color: var(--stroke-strong); }
 
 .picker-list { display: grid; gap: var(--s-1); }
+.picker-list .eyebrow { margin: 0 0 var(--s-05); }
+.picker-list .picker-item { grid-template-columns: var(--icon-md) minmax(0, 1fr); column-gap: var(--s-2); align-items: center; }
+.picker-list .picker-item svg { grid-row: 1 / -1; color: var(--faint); width: var(--icon-sm); height: var(--icon-sm); }
+.input-group { display: flex; gap: var(--s-2); align-items: center; min-width: 0; }
+.input-group input { flex: 1; min-width: 0; }
+.input-group > button { flex: none; }
 .picker-item {
   position: relative;
   display: grid;
@@ -2143,11 +2150,25 @@ mark {
   color: var(--warn);
 }
 .confirm-icon.destructive { background: var(--danger-bg); color: var(--danger); }
+.confirm-icon.archive, .confirm-icon.info { background: var(--accent-bg); color: var(--accent); }
 
 .palette-group + li .picker-item { margin-top: 0; }
-.palette-list .picker-item { min-height: var(--control-h); }
+.palette-list .picker-item { min-height: var(--control-h); display: flex; align-items: center; gap: var(--s-2); }
 .palette-list .picker-item strong { font-weight: 500; }
-.palette-panel > input { margin-bottom: var(--s-1); }
+.palette-glyph { display: grid; place-items: center; flex: none; color: var(--faint); }
+.palette-glyph svg { width: var(--icon-sm); height: var(--icon-sm); }
+.palette-text { display: grid; gap: 0; min-width: 0; flex: 1; text-align: left; }
+.palette-empty { padding: var(--s-2) var(--s-3); font-size: var(--fs-sm); }
+.palette-search { margin-bottom: var(--s-1); }
+.palette-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-1);
+  border-top: 1px solid var(--stroke);
+  font-size: var(--fs-xs);
+}
+.palette-foot span { display: inline-flex; align-items: center; gap: var(--s-1); }
 
 /* ---------------------------------------------------------------------------
    Settings dialog
@@ -2166,6 +2187,9 @@ mark {
 .settings-dialog {
   width: min(var(--w-dialog), 100%);
   max-width: 100%;
+  /* A fixed height: the dialog used to grow and shrink with each tab, so the
+     header and the tab you were aiming at moved as you switched. */
+  height: min(var(--h-dialog), 88dvh);
   max-height: min(88dvh, 100%);
   min-width: 0;
   background: var(--bg-elev);
@@ -2189,22 +2213,26 @@ mark {
 .settings-dialog header { border-bottom: 1px solid var(--stroke); }
 .settings-dialog footer { border-top: 1px solid var(--stroke); }
 .settings-dialog h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
-.settings-layout { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.settings-layout { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
 .settings-body { overflow: auto; padding: var(--s-4); display: grid; gap: var(--s-4); min-width: 0; align-content: start; }
 .settings-tabs {
-  display: flex;
+  display: grid;
   gap: var(--s-1);
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: auto;
   padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--stroke);
 }
-.settings-tabs::-webkit-scrollbar { display: none; }
+.settings-tab-chevron { margin-left: auto; color: var(--faint); display: grid; place-items: center; }
+.settings-tab-chevron svg { width: var(--icon-sm); height: var(--icon-sm); }
+.settings-back { justify-self: start; }
+/* One pane at a time on a phone: the list, or the section you drilled into. */
+.settings-layout.browsing .settings-body { display: none; }
+.settings-layout.drilled .settings-tabs { display: none; }
 .settings-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
   flex: none;
+  width: 100%;
   min-height: var(--control-h);
   padding: 0 var(--s-3);
   border: 0;
@@ -2232,35 +2260,36 @@ mark {
 .usage-table td { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-table tbody th { font-weight: 400; color: var(--text); }
 
-.prompt-row {
-  display: grid;
-  gap: var(--s-2);
-  padding: var(--s-3);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
-  background: var(--bg-elev);
-}
-.prompt-row > .ghost { justify-self: start; }
 .settings-section {
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-lg);
-  padding: var(--s-4);
-  background: var(--bg);
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
   min-width: 0;
 }
-.settings-section > h3 { margin: 0 0 calc(var(--s-2) - var(--s-3)); }
-.schedule-list { display: grid; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }
-.schedule-list li {
-  display: grid;
-  gap: var(--s-1);
-  padding: var(--s-3);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
-  background: var(--bg-elev);
+.settings-section-head { display: grid; gap: var(--s-05); }
+/* The section title is a title now; it used to repeat the tab label in 11px
+   uppercase, which read as a caption for the tab you had just clicked. */
+.settings-section > .settings-section-head > h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: var(--track-tight);
 }
-.schedule-list li p { margin: 0; font-size: var(--fs-sm); }
+.prompt-summary { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.prompt-summary code {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  padding: 0 var(--s-1);
+  border-radius: var(--r-sm);
+  background: var(--bg-muted);
+  border: 1px solid var(--stroke);
+  flex: none;
+}
+.schedule-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
+.reach { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; }
+.reach-body { display: grid; gap: var(--s-3); flex: 1; min-width: 0; }
+.reach-body > button { justify-self: start; }
 
 /* Number fields should not span the control column. */
 .settings-section input[type="number"] { max-width: var(--w-number); }
@@ -2268,44 +2297,27 @@ mark {
 @media (min-width: 860px) {
   .settings-layout { grid-template-columns: var(--rail-w-sm) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .settings-tabs {
-    flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto;
-    border-bottom: 0;
     border-right: 1px solid var(--stroke);
     background: var(--bg);
     padding: var(--s-3);
   }
+  .settings-tab-chevron { display: none; }
   .settings-tab { justify-content: flex-start; width: 100%; }
-  .settings-section { border: 0; padding: 0; background: transparent; }
   .settings-body { padding: var(--s-5); }
 }
 
-/* Label on the left, control on the right, instead of every select spanning
-   the dialog. Narrow screens keep the stacked form: two columns clipped the
-   label text. */
 @media (min-width: 860px) {
   .settings-section { max-width: var(--w-measure); }
-  .settings-section > label:not(.choice) {
-    grid-template-columns: minmax(0, 1fr) var(--w-control);
-    align-items: center;
-    gap: var(--s-3);
-    min-height: var(--control-h);
-  }
-  .settings-section > label:not(.choice) > input,
-  .settings-section > label:not(.choice) > select,
-  .settings-section > label:not(.choice) > textarea { justify-self: stretch; }
-  .settings-section > label:not(.choice) > textarea { grid-column: 1 / -1; }
-  /* Checkboxes share the control column instead of hanging off the left edge
-     while every other control is right-aligned. */
-  .settings-section > label.choice {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--w-control);
-    align-items: center;
-    gap: var(--s-3);
-    min-height: var(--control-h);
-  }
-  .settings-section > label.choice > input { grid-column: 2; grid-row: 1; justify-self: start; margin-top: 0; }
+}
+
+/* Below the two-column breakpoint a setting row stacks, so a long label and a
+   full-width control do not fight over one line. */
+@media (max-width: 640px) {
+  .setting-row { display: grid; gap: var(--s-2); }
+  .setting-control { justify-content: flex-start; }
+  .setting-control > select,
+  .setting-control > input:not([type="checkbox"]) { width: 100%; }
+  .setting-row .switch-row { justify-content: space-between; width: 100%; }
 }
 
 .qr { width: var(--qr-size); height: var(--qr-size); background: #fff; border-radius: var(--r-md); padding: var(--s-2); }

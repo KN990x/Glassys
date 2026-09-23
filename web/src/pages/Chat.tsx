@@ -30,15 +30,24 @@ import { ActivityPanel } from "../components/ActivityPanel";
 import {
   IconActivity,
   IconArrowDown,
+  IconClock,
   IconClose,
   IconExport,
+  IconFolder,
+  IconMoon,
   IconMore,
+  IconPlus,
+  IconRailClose,
+  IconRailOpen,
+  IconRefresh,
   IconRename,
   IconSearch,
+  IconSettings,
+  IconStop,
   IconTrash,
 } from "../components/Icon";
 import { PopAnchor, Popover } from "../components/Popover";
-import { Sidebar } from "../components/Sidebar";
+import { Sidebar, nextTheme } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
 import { HostContext, type HostInfo } from "../components/HostContext";
 import { AlertStack, type Alert } from "../components/AlertStack";
@@ -656,7 +665,7 @@ export function Chat({
       return;
     }
     const hasThread = threads.some((th) => th.cwd === cwd);
-    if (!hasThread && !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive") })))
+    if (!hasThread && !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" })))
       return;
     const prevBlocks = blocks;
     try {
@@ -706,32 +715,63 @@ export function Chat({
   }
 
   const paletteItems: PaletteItem[] = [
-    { id: "new", group: "product", label: t("palette.newThread"), run: () => void onNewThread() },
-    { id: "cancel", group: "product", label: t("palette.cancel"), run: cancelRun },
-    { id: "export", group: "product", label: t("palette.export"), run: () => void onExport() },
+    { id: "new", group: "product", label: t("palette.newThread"), glyph: <IconPlus />, kbd: "⌘⇧O", run: () => void onNewThread() },
+    { id: "cancel", group: "product", label: t("palette.cancel"), glyph: <IconStop />, kbd: "esc", run: cancelRun },
+    { id: "export", group: "product", label: t("palette.export"), glyph: <IconExport />, run: () => void onExport() },
     {
       id: "settings",
       group: "product",
       label: t("palette.settings"),
+      glyph: <IconSettings />,
       run: () => openSettings(),
+    },
+    {
+      id: "activity",
+      group: "product",
+      label: t("nav.activity"),
+      glyph: <IconActivity />,
+      kbd: "⌘I",
+      run: () => toggleActivity(!activityOpen),
+    },
+    {
+      id: "rail",
+      group: "product",
+      label: t(railCollapsed ? "nav.expandRail" : "nav.collapseRail"),
+      glyph: railCollapsed ? <IconRailOpen /> : <IconRailClose />,
+      kbd: "⌘B",
+      run: () => collapseRail(!railCollapsed),
+    },
+    {
+      id: "theme",
+      group: "product",
+      label: t("settings.theme"),
+      glyph: <IconMoon />,
+      run: () => void changeTheme(nextTheme(config.space.theme)),
     },
     {
       id: "search",
       group: "product",
       label: t("palette.search"),
-      run: () => searchRef.current?.focus(),
+      glyph: <IconSearch />,
+      kbd: "⌘F",
+      run: () => {
+        setSearchOpen(true);
+        queueMicrotask(() => searchRef.current?.focus());
+      },
     },
-    { id: "restart", group: "product", label: t("palette.restart"), run: () => void onRestart() },
+    { id: "restart", group: "product", label: t("palette.restart"), glyph: <IconRefresh />, run: () => void onRestart() },
     {
       id: "upgrade",
       group: "product",
       label: t("palette.upgrade"),
+      glyph: <IconRefresh />,
       run: () => openSettings("updates"),
     },
     {
       id: "schedule",
       group: "product",
       label: t("palette.schedule"),
+      glyph: <IconClock />,
       run: () => {
         const body = text.trim();
         if (!body) return;
@@ -743,6 +783,7 @@ export function Chat({
       group: "workspace" as const,
       label: cwdBasename(cwd),
       hint: cwd,
+      glyph: <IconFolder />,
       run: () => void onOpenCwd(cwd),
     })),
     ...templatePaletteItems(config.prompts?.templates ?? [], t, insertTemplate),

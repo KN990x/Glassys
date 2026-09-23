@@ -18,6 +18,8 @@ import { enableWebPush, disableWebPush } from "../push";
 import { useConfirm } from "../components/ConfirmDialog";
 import {
   IconChart,
+  IconChevronLeft,
+  IconChevronRight,
   IconClock,
   IconClose,
   IconCommand,
@@ -27,6 +29,8 @@ import {
   IconServer,
   IconTerminal,
 } from "../components/Icon";
+import { Callout } from "../components/Primitives";
+import { useMediaQuery } from "../useMediaQuery";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { AgentTab } from "./settings/AgentTab";
 import { SessionTab } from "./settings/SessionTab";
@@ -66,6 +70,10 @@ export function Settings({
   const t = useT();
   const { confirm, confirmDialog } = useConfirm();
   const [tab, setTab] = useState<SettingsTab>(focusSection ?? "appearance");
+  /* On a phone the rail becomes a list you drill into, the way a system
+     settings app does; a horizontal strip of eight tabs was a scroller. */
+  const narrow = useMediaQuery("(max-width: 859px)");
+  const [browsing, setBrowsing] = useState(!focusSection);
   const [draft, setDraft] = useState(config);
   const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -98,6 +106,20 @@ export function Settings({
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  /* Theme and language apply as the operator picks them, so the choice can be
+     judged against the actual interface. Discard puts the space back. */
+  const originalSpace = useRef(config.space);
+  const onConfigRef = useRef(onConfig);
+  onConfigRef.current = onConfig;
+
+  function previewSpace(next: RedactedConfig) {
+    setDraft(next);
+    onConfigRef.current({ ...config, space: next.space });
+  }
+
+  function revertPreview() {
+    onConfigRef.current({ ...config, space: originalSpace.current });
+  }
 
   const dirty =
     Boolean(password || apiKey || clearKey) ||
@@ -119,6 +141,7 @@ export function Settings({
   async function requestClose() {
     if (dirty && !(await confirm({ message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
       return;
+    revertPreview();
     onCloseRef.current();
   }
   const requestCloseRef = useRef(requestClose);
@@ -288,7 +311,7 @@ export function Settings({
     }
     if (
       archivesLiveThread(config.agent, draft.agent) &&
-      !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive") }))
+      !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" }))
     ) {
       return;
     }
@@ -451,7 +474,7 @@ export function Settings({
             <IconClose />
           </button>
         </header>
-        <div className="settings-layout">
+        <div className={`settings-layout${narrow ? (browsing ? " browsing" : " drilled") : ""}`}>
           {/* Eight sections stacked in a 520px column needed an anchor index to
               navigate. Tabs remove the need for one. */}
           <nav className="settings-tabs" aria-label={t("settings.title")}>
@@ -461,35 +484,53 @@ export function Settings({
                 type="button"
                 className={`settings-tab${tab === item.id ? " current" : ""}`}
                 aria-current={tab === item.id ? "true" : undefined}
-                onClick={() => setTab(item.id)}
+                onClick={() => {
+                  setTab(item.id);
+                  setBrowsing(false);
+                }}
               >
                 {item.glyph}
                 <span>{item.label}</span>
+                <span className="settings-tab-chevron" aria-hidden="true">
+                  <IconChevronRight />
+                </span>
               </button>
             ))}
           </nav>
           <div className="settings-body">
             {config.restartRequired && (
-              <p className="warn">
-                {t("settings.restartRequired")}{" "}
-                <button
-                  type="button"
-                  className="ghost tiny"
-                  onClick={() => {
-                    setRestartNote(t("settings.restarting"));
-                    void api.restart().catch((err) => {
-                      setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-                    });
-                  }}
-                >
-                  {t("settings.restart")}
-                </button>
+              <Callout
+                tone="warn"
+                action={
+                  <button
+                    type="button"
+                    className="ghost tiny"
+                    onClick={() => {
+                      setRestartNote(t("settings.restarting"));
+                      void api.restart().catch((err) => {
+                        setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
+                      });
+                    }}
+                  >
+                    {t("settings.restart")}
+                  </button>
+                }
+              >
+                {t("settings.restartRequired")}
                 {restartNote ? ` ${restartNote}` : ""}
-              </p>
+              </Callout>
             )}
             <section className="settings-section" id={`settings-${tab}`}>
-              <h3>{tabs.find((item) => item.id === tab)?.heading}</h3>
-              {tab === "appearance" && <AppearanceTab draft={draft} setDraft={setDraft} />}
+              <div className="settings-section-head">
+                {narrow && (
+                  <button type="button" className="ghost tiny settings-back" onClick={() => setBrowsing(true)}>
+                    <IconChevronLeft />
+                    {t("settings.title")}
+                  </button>
+                )}
+                <h3>{tabs.find((item) => item.id === tab)?.heading}</h3>
+              </div>
+              {tab === "appearance" && <AppearanceTab draft={draft} setDraft={previewSpace} />}
               {tab === "agent" && (
                 <AgentTab
                   draft={draft}
@@ -566,21 +607,36 @@ export function Settings({
               {tab === "phone" && <PhoneTab />}
               {tab === "usage" && <UsageTab usage={usage} threadUsage={threadUsage} locale={draft.space.locale} />}
             </section>
-            {error && <p className="error-text">{error}</p>}
-            {saved && <p className="ok">{saved}</p>}
+            {error && <Callout tone="danger">{error}</Callout>}
+            {saved && <Callout tone="ok">{saved}</Callout>}
           </div>
         </div>
-        <footer>
-          <span className="muted settings-dirty">{dirty ? t("settings.unsaved") : ""}</span>
-          <div className="row">
-            <button type="button" className="ghost" onClick={() => void requestClose()}>
-              {t("confirm.cancel")}
-            </button>
-            <button type="button" className="primary" onClick={() => void save()} disabled={submitting || !dirty}>
-              {t("settings.save")}
-            </button>
-          </div>
-        </footer>
+        {/* The footer used to sit there with a disabled Save on tabs where
+            nothing is drafted at all. It now appears when there is something
+            to save, and says what will be lost. */}
+        {dirty && (
+          <footer>
+            <span className="muted settings-dirty">{t("settings.unsaved")}</span>
+            <div className="row">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setDraft(config);
+                  setApiKey("");
+                  setClearKey(false);
+                  setPassword("");
+                  revertPreview();
+                }}
+              >
+                {t("settings.discardChanges")}
+              </button>
+              <button type="button" className="primary" onClick={() => void save()} disabled={submitting}>
+                {t("settings.save")}
+              </button>
+            </div>
+          </footer>
+        )}
       </div>
       {confirmDialog}
     </div>

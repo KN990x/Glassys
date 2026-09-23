@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useT } from "../i18n";
+import { operatorError } from "../operatorError";
+import { Callout } from "./Primitives";
+import { IconFolder, IconSearch } from "./Icon";
+
+function cwdName(path: string): string {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
+  return parts[parts.length - 1] || path;
+}
 
 export function WorkspacePicker({
   value,
@@ -29,7 +37,7 @@ export function WorkspacePicker({
       setHits(r.workspaces);
     } catch (err) {
       setHits([]);
-      setError(err instanceof Error ? err.message : t("wizard.workspace.browseFailed"));
+      setError(operatorError(err instanceof Error ? err.message : t("wizard.workspace.browseFailed"), t));
     }
   }
 
@@ -39,44 +47,37 @@ export function WorkspacePicker({
         {t("wizard.workspace.path")}
         <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={t("wizard.workspace.pathPlaceholder")} />
       </label>
-      {pins.length > 0 && (
+      {(pins.length > 0 || recents.some((p) => !pins.includes(p))) && (
         <div className="picker-list">
-          <p className="muted">{t("threads.pins")}</p>
-          {pins.map((p) => (
-            <button key={`pin:${p}`} type="button" className="ghost picker-item" onClick={() => onChange(p)}>
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
-      {recents.filter((p) => !pins.includes(p)).length > 0 && (
-        <div className="picker-list">
-          <p className="muted">{t("wizard.workspace.recent")}</p>
-          {recents
-            .filter((p) => !pins.includes(p))
-            .map((p) => (
+          <p className="eyebrow">{pins.length > 0 ? t("threads.pins") : t("wizard.workspace.recent")}</p>
+          {[...pins, ...recents.filter((p) => !pins.includes(p))].map((p) => (
             <button key={p} type="button" className="ghost picker-item" onClick={() => onChange(p)}>
-              {p}
+              <IconFolder />
+              <strong>{cwdName(p)}</strong>
+              <span className="muted">{p}</span>
             </button>
           ))}
         </div>
       )}
-      <label>
-        {t("wizard.workspace.browseRoot")}
-        <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder={t("wizard.workspace.browsePlaceholder")} />
-      </label>
-      <button
-        type="button"
-        className="ghost"
-        onClick={() => void load(root.trim() || undefined)}
-      >
-        {t("wizard.workspace.browse")}
-      </button>
-      {error && <p className="error-text">{error}</p>}
+      {/* Field and action on one line: they are one gesture. */}
+      <div className="input-group">
+        <input
+          value={root}
+          aria-label={t("wizard.workspace.browseRoot")}
+          onChange={(e) => setRoot(e.target.value)}
+          placeholder={t("wizard.workspace.browsePlaceholder")}
+        />
+        <button type="button" className="ghost" onClick={() => void load(root.trim() || undefined)}>
+          <IconSearch />
+          {t("wizard.workspace.browse")}
+        </button>
+      </div>
+      {error && <Callout tone="danger">{error}</Callout>}
       {hits.length > 0 && (
         <div className="picker-list">
           {hits.map((h) => (
             <button key={h.path} type="button" className="ghost picker-item" onClick={() => onChange(h.path)}>
+              <IconFolder />
               <strong>{h.name}</strong>
               <span className="muted">{h.path}</span>
             </button>

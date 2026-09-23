@@ -2,6 +2,7 @@ import { api } from "../../api";
 import { useT } from "../../i18n";
 import { operatorError } from "../../operatorError";
 import type { ConfirmRequest } from "../../components/ConfirmDialog";
+import { Callout, SettingGroup, SettingRow, StatusBadge } from "../../components/Primitives";
 
 export type UpdateInfo = {
   version: string;
@@ -31,80 +32,97 @@ export function UpdatesTab({
   confirm: (req: ConfirmRequest) => Promise<boolean>;
 }) {
   const t = useT();
+  const upgrading = update?.upgrading?.phase && update.upgrading.phase !== "idle";
   return (
     <>
-      {update && (
-        <>
-          <p>
-            {t("settings.updateVersion")}: {update.version}
-            {update.git ? ` · ${update.git.branch} ${update.git.sha.slice(0, 7)}${update.git.dirty ? "*" : ""}` : ""}
-          </p>
-          <p className="muted">{t("settings.updateService")}: {update.service}</p>
-          {behind !== null && (
-            <p>
-              {behind} {t("settings.updateBehind")}
-            </p>
-          )}
-          {update.upgrading?.phase && update.upgrading.phase !== "idle" && (
-            <p className="warn" role="status">
-              {update.upgrading.phase === "error"
-                ? `${t("settings.updateFailed")} ${update.upgrading.error || ""}`
-                : t("settings.updating")}
-            </p>
-          )}
-        </>
+      <SettingGroup title={t("settings.updateVersionGroup")}>
+        <SettingRow label={t("settings.updateVersion")}>
+          <div className="row wrap">
+            <StatusBadge mono>{update?.version ?? "—"}</StatusBadge>
+            {update?.git && (
+              <StatusBadge mono tone={update.git.dirty ? "warn" : "neutral"}>
+                {update.git.branch}@{update.git.sha.slice(0, 7)}
+                {update.git.dirty ? "*" : ""}
+              </StatusBadge>
+            )}
+          </div>
+        </SettingRow>
+        <SettingRow label={t("settings.updateService")} hint={update?.service === "none" ? t("settings.updateNeedService") : undefined}>
+          <StatusBadge tone={update?.service === "none" ? "warn" : "ok"} dot>
+            {update?.service ?? "—"}
+          </StatusBadge>
+        </SettingRow>
+        <SettingRow label={t("settings.updateBehind")}>
+          <div className="row wrap">
+            {behind !== null && (
+              <StatusBadge tone={behind > 0 ? "accent" : "ok"}>
+                <span className="nums">{behind}</span>
+              </StatusBadge>
+            )}
+            <button
+              type="button"
+              className="ghost tiny"
+              onClick={() => {
+                void api
+                  .adminUpdateCheck()
+                  .then((r) => setBehind(r.behind))
+                  .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
+              }}
+            >
+              {t("settings.updateCheck")}
+            </button>
+          </div>
+        </SettingRow>
+      </SettingGroup>
+
+      {upgrading && (
+        <Callout tone={update?.upgrading?.phase === "error" ? "danger" : "accent"}>
+          {update?.upgrading?.phase === "error"
+            ? `${t("settings.updateFailed")} ${update.upgrading.error || ""}`
+            : t("settings.updating")}
+        </Callout>
       )}
-      <div className="row">
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => {
-            void api
-              .adminUpdateCheck()
-              .then((r) => setBehind(r.behind))
-              .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
-          }}
-        >
-          {t("settings.updateCheck")}
-        </button>
-        <button
-          type="button"
-          className="primary"
-          onClick={() => {
-            void (async () => {
-              if (update?.git?.dirty) {
-                setError(t("settings.updateDirty"));
-                return;
-              }
-              if (!(await confirm({ message: t("settings.updateConfirm"), confirmLabel: t("confirm.update") })))
-                return;
-              try {
-                await api.upgrade();
-                setUpdate(await api.adminUpdate());
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : "";
-                setError(msg.includes("user service") ? t("settings.updateNeedService") : operatorError(msg, t));
-              }
-            })();
-          }}
-        >
-          {t("settings.updateNow")}
-        </button>
-        <button
-          type="button"
-          className="danger"
-          onClick={() => {
-            setRestartNote(t("settings.restarting"));
-            void api.restart().catch((err) => {
-              setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-            });
-          }}
-        >
-          {t("settings.restart")}
-        </button>
-        {restartNote ? <span className="muted">{restartNote}</span> : null}
-      </div>
-      {update?.service === "none" && <p className="muted">{t("settings.updateNeedService")}</p>}
+
+      <SettingGroup title={t("settings.updateActions")}>
+        <SettingRow label={t("settings.updateNow")} hint={update?.git?.dirty ? t("settings.updateDirty") : undefined}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              void (async () => {
+                if (update?.git?.dirty) {
+                  setError(t("settings.updateDirty"));
+                  return;
+                }
+                if (!(await confirm({ message: t("settings.updateConfirm"), confirmLabel: t("confirm.update") }))) return;
+                try {
+                  await api.upgrade();
+                  setUpdate(await api.adminUpdate());
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : "";
+                  setError(msg.includes("user service") ? t("settings.updateNeedService") : operatorError(msg, t));
+                }
+              })();
+            }}
+          >
+            {t("settings.updateNow")}
+          </button>
+        </SettingRow>
+        <SettingRow label={t("settings.restart")} hint={restartNote || t("settings.restartHint")}>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setRestartNote(t("settings.restarting"));
+              void api.restart().catch((err) => {
+                setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
+              });
+            }}
+          >
+            {t("settings.restart")}
+          </button>
+        </SettingRow>
+      </SettingGroup>
     </>
   );
 }

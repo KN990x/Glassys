@@ -8,6 +8,7 @@ import {
   Brain,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleAlert,
   Clock,
@@ -91,6 +92,7 @@ export const IconPhone = icon(Smartphone);
 export const IconArrowDown = icon(ArrowDown);
 export const IconCheck = icon(Check);
 export const IconChevronDown = icon(ChevronDown);
+export const IconChevronLeft = icon(ChevronLeft);
 export const IconChevronRight = icon(ChevronRight);
 export const IconClock = icon(Clock);
 export const IconCommand = icon(Command);

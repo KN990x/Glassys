@@ -109,16 +109,19 @@ export function SettingGroup({
   hint,
   children,
 }: {
-  title: string;
+  /** Omitted when the tab's own heading already names the group. */
+  title?: string;
   hint?: string;
   children: ReactNode;
 }) {
   return (
     <section className="setting-group">
-      <div className="setting-group-head">
-        <h4>{title}</h4>
-        {hint ? <p className="muted">{hint}</p> : null}
-      </div>
+      {title || hint ? (
+        <div className="setting-group-head">
+          {title ? <h4>{title}</h4> : null}
+          {hint ? <p className="muted">{hint}</p> : null}
+        </div>
+      ) : null}
       <div className="setting-rows">{children}</div>
     </section>
   );

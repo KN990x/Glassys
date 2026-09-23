@@ -172,11 +172,13 @@ describe("Settings notify and schedules", () => {
     pushUnsubscribe.mockResolvedValue({ ok: true });
     await renderSettings();
     await openTab("Session");
-    const notify = [...host.querySelectorAll("label")].find((el) => el.textContent?.includes("Notify when a run finishes"));
-    const box = notify?.querySelector("input[type='checkbox']") as HTMLInputElement;
-    expect(box?.checked).toBe(true);
+    const notify = [...host.querySelectorAll(".setting-row")].find((el) =>
+      el.textContent?.includes("Notify when a run finishes"),
+    );
+    const toggle = notify?.querySelector('button[role="switch"]') as HTMLButtonElement;
+    expect(toggle?.getAttribute("aria-checked")).toBe("true");
     await act(async () => {
-      box.click();
+      toggle.click();
     });
     await act(async () => {
       await Promise.resolve();
