@@ -17,9 +17,7 @@ import { useT } from "../i18n";
 import { api, clearToken } from "../api";
 import { openSocket, type ConnState } from "../socket";
 import { reduceTranscript, replay, type Block } from "../transcript";
-import { MarkdownBody } from "../components/MarkdownBody";
-import { Thinking } from "../components/Thinking";
-import { ToolCard } from "../components/ToolCard";
+import { Transcript } from "../components/Transcript";
 import { ModelPicker } from "../components/ModelPicker";
 import { PermissionChip } from "../components/PermissionChip";
 import { Settings } from "./Settings";
@@ -29,7 +27,6 @@ import { blockMatchesQuery, cwdBasename, formatTokens, isImageMime, slashQuery }
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 import {
-  GlassysMark,
   IconArrowDown,
   IconAttach,
   IconClose,
@@ -1086,136 +1083,35 @@ export function Chat({
         }}
       >
         <div className="transcript-inner">
-        {!snapshotReady && (
-          <p className="empty" aria-live="polite">
-            {t(conn === "reconnecting" ? "status.reconnecting" : "status.connecting")}
-          </p>
-        )}
-        {blocks.length === 0 && snapshotReady && !search.trim() && (
-          <div className="empty">
-            <GlassysMark size={30} />
-            <h2>{t("chat.emptyTitle")}</h2>
-            <p className="muted">{t("chat.empty")}</p>
-            <p className="muted empty-host">
-              {[hostLabel, config.agent.cwd, currentAdapter?.displayName || config.agent.adapter]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-            {opsChips.length > 0 && (
-              <div className="empty-actions" role="group" aria-label={t("chat.opsChips")}>
-                {opsChips.map((tpl) => (
-                  <button key={tpl.id} type="button" className="ghost empty-action" onClick={() => insertTemplate(tpl.text)}>
-                    <strong>{t(`prompt.${tpl.id}`) === `prompt.${tpl.id}` ? tpl.title : t(`prompt.${tpl.id}`)}</strong>
-                    <span className="muted">{tpl.slash.startsWith("/") ? tpl.slash : `/${tpl.slash}`}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        {search.trim() && visibleBlocks.length === 0 && blocks.length > 0 && (
-          <p className="empty">{t("chat.searchEmpty")}</p>
-        )}
-        {visibleBlocks.map((b) => {
-          if (b.kind === "user") {
-            const pending = Boolean(b.messageId && queuedIds.has(b.messageId));
-            return (
-              <div
-                key={b.id}
-                className={`bubble user${b.retracted ? " retracted" : ""}${pending ? " pending" : ""}`}
-              >
-                {b.attachments && b.attachments.length > 0 && (
-                  <div className="thumbs">
-                    {b.attachments.map((a) =>
-                      isImageMime(a.mime) ? (
-                        <img key={a.id} src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
-                      ) : (
-                        <span key={a.id} className="file-chip">
-                          {a.name}
-                        </span>
-                      ),
-                    )}
-                  </div>
-                )}
-                {b.text}
-                {pending && <span className="muted bubble-flag">{t("chat.pending")}</span>}
-                {b.retracted && <span className="muted bubble-flag">{t("chat.retracted")}</span>}
-              </div>
-            );
-          }
-          if (b.kind === "thinking") {
-            return (
-              <Thinking
-                key={b.id}
-                text={b.text}
-                durationMs={b.durationMs}
-                defaultOpen={config.display.thinkingDefault === "expanded"}
-              />
-            );
-          }
-          if (b.kind === "text") {
-            return (
-              <div key={b.id} className="bubble assistant">
-                <MarkdownBody text={b.text} />
-              </div>
-            );
-          }
-          if (b.kind === "tool") {
-            return (
-              <ToolCard
-                key={b.id}
-                block={b}
-                shellLines={config.display.shellLinesVisible}
-                showDiff={config.display.diffPreview}
-              />
-            );
-          }
-          if (b.kind === "usage") {
-            const parts = [
-              b.inputTokens != null ? `↓${formatTokens(b.inputTokens, config.space.locale)}` : "",
-              b.outputTokens != null ? `↑${formatTokens(b.outputTokens, config.space.locale)}` : "",
-            ].filter(Boolean);
-            if (!parts.length) return null;
-            return (
-              <p key={b.id} className="muted usage">
-                {t("chat.usage")} {parts.join(" ")}
-              </p>
-            );
-          }
-          if (b.kind === "banner" && b.text === "cancelled") {
-            return (
-              <p key={b.id} className="banner info" role="status">
-                {t("status.cancelled")}
-              </p>
-            );
-          }
-          if (b.kind === "banner" && b.text === "stalled") {
-            return (
-              <p key={b.id} className="banner warn" role="status">
-                {t("chat.stalled")}
-              </p>
-            );
-          }
-          if (b.kind === "banner") {
-            return (
-              <p key={b.id} className={`banner ${b.tone}`} role={b.tone === "error" ? "alert" : "status"}>
-                {operatorError(b.text, t)}
-              </p>
-            );
-          }
-          return null;
-        })}
-        {busy && (
-          <div className="working" aria-live="polite">
-            <span className="pulse" aria-hidden />
-            <span className="working-text">
-              {t("status.running")}
-              {runStartedAt ? ` · ${t("chat.elapsed")} ` : ""}
-              {runStartedAt ? <RunElapsedValue startedAt={runStartedAt} /> : null}
-              {lastTool && lastTool.kind === "tool" ? ` · ${lastTool.title}` : ""}
-            </span>
-          </div>
-        )}
+          <Transcript
+            blocks={visibleBlocks}
+            allBlocks={blocks}
+            snapshotReady={snapshotReady}
+            connecting={conn !== "reconnecting"}
+            search={search}
+            queuedIds={queuedIds}
+            locale={config.space.locale}
+            thinkingDefault={config.display.thinkingDefault}
+            shellLines={config.display.shellLinesVisible}
+            showDiff={config.display.diffPreview}
+            opsChips={opsChips}
+            onTemplate={insertTemplate}
+            hostLabel={hostLabel}
+            cwd={config.agent.cwd}
+            adapterName={currentAdapter?.displayName || config.agent.adapter}
+            queue={queueItems}
+          />
+          {busy && (
+            <div className="working" aria-live="polite">
+              <span className="pulse" aria-hidden />
+              <span className="working-text">
+                {t("status.running")}
+                {runStartedAt ? ` · ${t("chat.elapsed")} ` : ""}
+                {runStartedAt ? <RunElapsedValue startedAt={runStartedAt} /> : null}
+                {lastTool && lastTool.kind === "tool" ? ` · ${lastTool.title}` : ""}
+              </span>
+            </div>
+          )}
         </div>
         {!atBottom && (
           <button

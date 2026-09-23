@@ -2,6 +2,7 @@ import { memo, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useT } from "../i18n";
+import { IconAlert, IconCheck, IconCopy } from "./Icon";
 
 const SAFE_HREF = /^(https?:|mailto:|#)/i;
 
@@ -18,7 +19,7 @@ function MarkdownBodyInner({ text }: { text: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           pre({ children }) {
-            return <CodeBlock>{children}</CodeBlock>;
+            return <CodeBlock language={codeLanguage(children)}>{children}</CodeBlock>;
           },
           a({ href, children }) {
             const safe = safeHref(href);
@@ -50,28 +51,48 @@ function MarkdownBodyInner({ text }: { text: string }) {
 
 export const MarkdownBody = memo(MarkdownBodyInner);
 
-function CodeBlock({ children }: { children?: ReactNode }) {
+/** `language-bash` on the inner <code> is how remark labels a fenced block. */
+export function codeLanguage(node: ReactNode): string {
+  const cls =
+    node && typeof node === "object" && "props" in node
+      ? ((node as { props?: { className?: string } }).props?.className ?? "")
+      : "";
+  const hit = /language-([a-z0-9+#-]+)/i.exec(cls);
+  return hit?.[1] ?? "";
+}
+
+function CodeBlock({ children, language }: { children?: ReactNode; language?: string }) {
   const t = useT();
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const text = extractText(children);
   return (
     <div className="code-wrap">
-      <button
-        className="ghost tiny"
-        type="button"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(text);
-            setCopyState("copied");
-            setTimeout(() => setCopyState("idle"), 1200);
-          } catch {
-            setCopyState("failed");
-            setTimeout(() => setCopyState("idle"), 1800);
-          }
-        }}
-      >
-        {copyState === "copied" ? t("chat.copied") : copyState === "failed" ? t("chat.copyFailed") : t("chat.copy")}
-      </button>
+      {/* A labelled bar, so the copy control is not a text button floating over
+          the first line of code with 48px of padding reserved for it. */}
+      <div className="code-head">
+        <span className="code-lang">{language || t("chat.code")}</span>
+        <button
+          className="icon-btn sm"
+          type="button"
+          aria-label={t("chat.copy")}
+          title={copyState === "copied" ? t("chat.copied") : copyState === "failed" ? t("chat.copyFailed") : t("chat.copy")}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(text);
+              setCopyState("copied");
+              setTimeout(() => setCopyState("idle"), 1200);
+            } catch {
+              setCopyState("failed");
+              setTimeout(() => setCopyState("idle"), 1800);
+            }
+          }}
+        >
+          {copyState === "copied" ? <IconCheck /> : copyState === "failed" ? <IconAlert /> : <IconCopy />}
+          <span className="visually-hidden" aria-live="polite">
+            {copyState === "copied" ? t("chat.copied") : copyState === "failed" ? t("chat.copyFailed") : t("chat.copy")}
+          </span>
+        </button>
+      </div>
       <pre>
         <code>{children}</code>
       </pre>

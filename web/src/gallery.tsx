@@ -4,7 +4,7 @@
  *
  * It exists so a whole-UI review is one page instead of a throwaway harness
  * rebuilt from memory each time, and so defects that only show up when two
- * components sit side by side — a status pill that lands 38px off, a rail that
+ * components sit side by side — a tool row that ends 38px off, a rail that
  * starts 8px below the topbar — are visible without measuring.
  */
 import { useState, type ReactNode } from "react";
@@ -15,9 +15,8 @@ import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
 import { AlertStack } from "./components/AlertStack";
 import { HostContext } from "./components/HostContext";
-import { ToolCard } from "./components/ToolCard";
-import { Thinking } from "./components/Thinking";
-import { MarkdownBody } from "./components/MarkdownBody";
+import { ToolCard, ToolGroup } from "./components/ToolCard";
+import { Transcript } from "./components/Transcript";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThreadList } from "./components/ThreadList";
@@ -28,7 +27,6 @@ import { Callout, Disclosure, Kbd, SettingGroup, SettingRow, Skeleton, StatusBad
 import { Settings } from "./pages/Settings";
 import { Wizard } from "./pages/Wizard";
 import {
-  GlassysMark,
   IconAttach,
   IconClose,
   IconMore,
@@ -57,6 +55,19 @@ const threads = [
   { id: "t3", title: "Failed timer audit", adapter: "claude", cwd: "/etc/systemd/system", updatedAt: new Date(Date.now() - 9e7).toISOString() },
 ];
 
+const opsChips = [
+  { id: "status", slash: "status", title: "Host status", text: "Show uptime, load, memory and disk." },
+  { id: "disk", slash: "disk", title: "Disk usage", text: "What is eating the disk?" },
+  { id: "failed-units", slash: "failed-units", title: "Failed units", text: "List failed systemd units." },
+  { id: "logs", slash: "logs", title: "Recent logs", text: "Show the last errors in the journal." },
+];
+
+const transcriptBlocks = [
+  { id: "u1", kind: "user", text: "Disk on web-01 is at 94%. Find what is eating it and clean up safely." },
+  { id: "th1", kind: "thinking", text: "Check df first, then du on the largest mount.", durationMs: 4200 },
+  { id: "a1", kind: "text", text: "`/var` is at **94%**. The journal is holding 6.2 GB.\n\n| Path | Size |\n| --- | --- |\n| /var/log/journal | 6.2 GB |" },
+];
+
 const threadProps = {
   threads: threads as never, currentId: "t1", locale: "en", busy: false, waiting: false,
   onSwitch: () => {}, onDelete: () => {}, onRename: async () => {},
@@ -64,7 +75,7 @@ const threadProps = {
   onOpenCwd: () => {}, onPin: () => {}, onUnpin: () => {},
 };
 
-/* One with a command, one without: this pair is what exposes pill alignment. */
+/* One with a command, one without: this pair is what exposes row alignment. */
 const tools: ToolBlock[] = [
   { id: "s1", kind: "tool", toolKind: "shell", title: "systemctl --failed", status: "done",
     command: "systemctl --failed --no-pager",
@@ -132,29 +143,26 @@ function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean;
         <main className="chat-main">
           <div className="transcript">
             <div className="transcript-inner">
-              {empty ? (
-                <div className="empty">
-                  <GlassysMark size={30} />
-                  <h2>Ready on this host</h2>
-                  <p className="muted">Ask for anything on this machine. Files, services, logs, git.</p>
-                  <p className="muted empty-host">ops@web-01 · /srv/www/deploy/current · Cursor</p>
-                  <div className="empty-actions">
-                    <button type="button" className="ghost empty-action"><strong>Host status</strong><span className="muted">/status</span></button>
-                    <button type="button" className="ghost empty-action"><strong>Disk usage</strong><span className="muted">/disk</span></button>
-                    <button type="button" className="ghost empty-action"><strong>Failed units</strong><span className="muted">/failed-units</span></button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="bubble user">Disk on web-01 is at 94%. Find what is eating it and clean up safely.</div>
-                  <Thinking text="Check df first, then du on the largest mount." durationMs={4200} defaultOpen={false} />
-                  <div className="bubble assistant">
-                    <MarkdownBody text={"`/var` is at **94%**. The journal is holding 6.2 GB.\n\n| Path | Size |\n| --- | --- |\n| /var/log/journal | 6.2 GB |"} />
-                  </div>
-                  <ToolCard block={tools[0]} shellLines={12} showDiff />
-                  <ToolCard block={tools[1]} shellLines={12} showDiff />
-                  <div className="working"><span className="pulse" aria-hidden /><span className="working-text">Working · Elapsed 1:12 · systemctl reload nginx</span></div>
-                </>
+              <Transcript
+                blocks={empty ? [] : (transcriptBlocks as never)}
+                allBlocks={empty ? [] : (transcriptBlocks as never)}
+                snapshotReady
+                connecting={false}
+                search=""
+                queuedIds={new Set()}
+                locale="en"
+                thinkingDefault="collapsed"
+                shellLines={12}
+                showDiff
+                opsChips={opsChips}
+                onTemplate={() => {}}
+                hostLabel="ops@web-01"
+                cwd="/srv/www/deploy/current"
+                adapterName="Cursor"
+                queue={[]}
+              />
+              {!empty && (
+                <div className="working"><span className="pulse" aria-hidden /><span className="working-text">Working · Elapsed 1:12 · systemctl reload nginx</span></div>
               )}
             </div>
           </div>
@@ -265,9 +273,14 @@ function Gallery() {
         <Frame width="100%" height={420}><ChatShell mini /></Frame>
       </Row>
 
-      <Row title="Tool cards" note="Every status pill must end at the same x, with or without a copy button.">
+      <Row title="Tool rows" note="Every row ends at the same x, with or without a copy button.">
         <div style={{ width: "min(760px, 100%)", display: "grid", gap: "12px" }}>
           {tools.map((b) => <ToolCard key={b.id} block={b} shellLines={12} showDiff />)}
+        </div>
+      </Row>
+      <Row title="Tool group" note="A long clean run folds; anything unfinished or failed opens itself.">
+        <div style={{ width: "min(760px, 100%)", display: "grid", gap: "12px" }}>
+          <ToolGroup blocks={tools as never} shellLines={12} showDiff />
         </div>
       </Row>
 
@@ -304,9 +317,6 @@ function Gallery() {
           <button type="button" className="icon-btn sm" aria-label="Small icon"><IconClose /></button>
           <input style={{ width: "160px" }} placeholder="Input" />
           <select style={{ width: "160px" }}><option>Select</option></select>
-          <span className="pill done">Done</span>
-          <span className="pill running">Running</span>
-          <span className="pill denied">Denied</span>
           <span className="status connected">Connected</span>
         </div>
       </Row>

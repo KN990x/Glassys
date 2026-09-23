@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useT } from "../i18n";
+import { Disclosure } from "./Primitives";
+import { IconBrain } from "./Icon";
 
 export function formatThinkingDuration(
   durationMs?: number,
@@ -9,6 +11,11 @@ export function formatThinkingDuration(
   return `${Math.max(1, Math.round(durationMs / 1000))}${labels.unit}`;
 }
 
+/**
+ * Reasoning is context, not content: it now reads as a quiet line with the
+ * shared disclosure, rather than a bordered card heavier than the tool rows
+ * underneath it.
+ */
 export function Thinking({ text, durationMs, defaultOpen }: { text: string; durationMs?: number; defaultOpen: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(defaultOpen);
@@ -18,11 +25,20 @@ export function Thinking({ text, durationMs, defaultOpen }: { text: string; dura
   );
 
   return (
-    <details className="thinking" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary>
-        {t("thinking.label")} · {seconds}
-      </summary>
+    <Disclosure
+      className="thinking"
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      summary={
+        <>
+          <IconBrain />
+          <span>
+            {t("thinking.label")} · <span className="nums">{seconds}</span>
+          </span>
+        </>
+      }
+    >
       <div className="thinking-body">{text}</div>
-    </details>
+    </Disclosure>
   );
 }
