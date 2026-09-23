@@ -83,7 +83,7 @@ const transcriptBlocks = [
 const threadProps = {
   threads: threads as never, currentId: "t1", locale: "en", busy: false, waiting: false,
   onSwitch: () => {}, onDelete: () => {}, onRename: async () => {},
-  git: host.git, currentCwd: "/srv/www", pins: ["/srv/www"], recents: ["/etc/systemd/system"],
+  git: host.git, currentCwd: "/srv/www", currentAdapter: "cursor", pins: ["/srv/www"], recents: ["/etc/systemd/system"],
   onOpenCwd: () => {}, onPin: () => {}, onUnpin: () => {},
 };
 
@@ -103,6 +103,12 @@ const tools: ToolBlock[] = [
   { id: "s6", kind: "tool", toolKind: "grep", title: "TLSv1.1", path: "/etc/nginx", status: "error",
     error: "grep: /etc/nginx/private: Permission denied" },
 ] as ToolBlock[];
+
+/* The transcript the shells and the README screenshots render. */
+const runBlocks = [
+  ...(transcriptBlocks as never[]),
+  ...(tools.slice(0, 4) as unknown as never[]),
+];
 
 const activityBlocks = [
   ...(tools as unknown as never[]),
@@ -131,9 +137,22 @@ function Frame({ width, height, children }: { width: number | string; height: nu
   );
 }
 
-function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean; mini?: boolean }) {
+function ChatShell({
+  mobile,
+  empty,
+  mini,
+  inspector,
+}: {
+  mobile?: boolean;
+  empty?: boolean;
+  mini?: boolean;
+  inspector?: boolean;
+}) {
   return (
-    <div className={`app-shell${mobile ? "" : mini ? " has-mini-rail" : " has-rail"}`} style={{ height: "100%" }}>
+    <div
+      className={`app-shell${mobile ? "" : mini ? " has-mini-rail" : " has-rail"}${inspector ? " has-inspector" : ""}`}
+      style={{ height: "100%" }}
+    >
       {!mobile && (
         <Sidebar spaceName="web-01" statusClass="connected" statusLabel="Connected" host={host}
           threads={threadProps} onNew={() => {}} onSettings={() => {}} onCopyFailed={() => {}}
@@ -151,7 +170,7 @@ function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean;
                       : <span className="host-context muted truncate">www · main (dirty)</span>}
             </div>
             <div className="top-actions">
-              {!mobile && <span className="muted usage-chip">↓18.2k ↑3.1k</span>}
+              {!mobile && <span className="muted usage-chip">↓18.2k ↑3,120</span>}
               <button type="button" className="icon-btn" aria-label="Search"><IconSearch /></button>
               <button type="button" className="icon-btn" aria-label="More"><IconMore /></button>
             </div>
@@ -161,8 +180,8 @@ function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean;
           <div className="transcript">
             <div className="transcript-inner">
               <Transcript
-                blocks={empty ? [] : (transcriptBlocks as never)}
-                allBlocks={empty ? [] : (transcriptBlocks as never)}
+                blocks={empty ? [] : (runBlocks as never)}
+                allBlocks={empty ? [] : (runBlocks as never)}
                 snapshotReady
                 connecting={false}
                 search=""
@@ -219,12 +238,13 @@ function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean;
                 <span className="pulse" aria-hidden />
                 <span className="status-shimmer">Working</span>
                 <span className="muted nums">1:12</span>
-                <span className="muted truncate status-step">systemctl reload nginx</span>
+                <span className="muted truncate status-step">journalctl --vacuum-size=500M</span>
               </div>
             ) : null
           }
         />
       </div>
+      {inspector && <ActivityPanel blocks={activityBlocks as never} locale="en" duration="1:12" onClose={() => {}} />}
       {mobile && <BottomNav active="chat" onSelect={() => {}} />}
     </div>
   );
@@ -410,6 +430,21 @@ function toggleTheme() {
 document.documentElement.dataset.theme = new URLSearchParams(location.search).get("t") === "light" ? "light" : "dark";
 document.documentElement.style.colorScheme = document.documentElement.dataset.theme;
 
+/**
+ * `?shot=desktop` and `?shot=phone` render a single shell edge to edge. The
+ * README screenshots in docs/assets are captured from these, at 2x:
+ *   Chrome --headless --window-size=1320,880 --force-device-scale-factor=2
+ */
+const shot = new URLSearchParams(location.search).get("shot");
+
 createRoot(document.getElementById("root")!).render(
-  <I18nProvider locale="en"><div className="app"><Gallery /></div></I18nProvider>,
+  shot === "desktop" || shot === "phone" ? (
+    <I18nProvider locale="en">
+      <div className="app">
+        {shot === "desktop" ? <ChatShell inspector /> : <ChatShell mobile />}
+      </div>
+    </I18nProvider>
+  ) : (
+    <I18nProvider locale="en"><div className="app"><Gallery /></div></I18nProvider>
+  ),
 );
