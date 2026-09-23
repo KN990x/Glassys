@@ -71,13 +71,20 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 
 ## Interface
 
-The PWA is one surface at two sizes. Wide screens get a persistent rail with the
-thread list, the workspaces you pinned, and the host facts: user, working
-directory, git branch, adapter. Phones get the same thread list as a sheet plus
+The PWA is one surface at two sizes. Wide screens get a persistent rail: one row
+per workspace with its threads nested under it, and the host card at the bottom.
+It collapses to a 56px strip with `⌘B`. Phones get the same tree as a sheet plus
 a bottom tab bar, and the composer clears the home indicator.
 
-- **Transcript** — thinking blocks, tool cards with the command, output, and a
-  coloured diff, and text painted from the first token.
+- **Transcript** — thinking, then the run itself: consecutive tool calls fold
+  into one band ("6 steps · 3 files +4 −2"), shell calls render as a terminal
+  block, diffs get a sign channel, and text paints from the first token.
+- **Activity** — `⌘I`, or the phone's third tab: every command this thread ran
+  with how it ended, and every file it read or rewrote, derived from the
+  transcript. Clicking a row jumps to that call.
+- **Composer** — one card. Attach, saved prompts, the model chip and the
+  permission chip sit inside its bottom edge; send becomes stop while a run is
+  in flight, and `Esc` cancels.
 - **Command palette** — `⌘K` / `Ctrl+K` for threads, export, restart, upgrade,
   workspaces, and your saved prompts. Typing `/` in the composer filters the
   same prompts inline.
@@ -86,7 +93,9 @@ a bottom tab bar, and the composer clears the home indicator.
 - **Scheduled prompts** — cron or a one-shot time, queued when the gateway is
   idle.
 - **Settings** — appearance, agent, session, templates, schedules, updates,
-  phone access, and token usage, in tabs.
+  phone access, and token usage. Label and description on the left, one control
+  on the right; the save bar appears only when something is unsaved, and theme
+  and language preview as you pick them.
 - **Themes and language** — dark, light, or follow the system; English and
   Spanish.
 
@@ -216,14 +225,22 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 
 ## Interfaz
 
-La PWA es una sola superficie a dos tamaños. En pantalla ancha hay un rail fijo
-con la lista de hilos, los workspaces que hayas fijado y los datos del host:
-usuario, directorio de trabajo, rama de git y adaptador. En el teléfono la misma
-lista aparece como hoja, con una barra inferior, y el composer respeta el
-indicador de inicio.
+La PWA es una sola superficie a dos tamaños. En pantalla ancha hay un rail fijo:
+una fila por workspace con sus hilos anidados debajo, y la tarjeta del host al
+pie. Se pliega a una tira de 56px con `⌘B`. En el teléfono ese mismo árbol
+aparece como hoja, con una barra inferior, y el composer respeta el indicador de
+inicio.
 
-- **Transcript** — bloques de razonamiento, tarjetas de herramienta con el
-  comando, la salida y el diff en color, y texto pintado desde el primer token.
+- **Transcript** — el razonamiento y después la ejecución: las llamadas
+  consecutivas se agrupan en una banda («6 pasos · 3 archivos +4 −2»), las de
+  shell se dibujan como un bloque de terminal, los diffs llevan canal de signo,
+  y el texto se pinta desde el primer token.
+- **Actividad** — `⌘I`, o la tercera pestaña en el teléfono: cada comando que ha
+  ejecutado el hilo y cómo terminó, y cada archivo leído o reescrito, derivado
+  del transcript. Al pulsar una fila, el transcript salta a esa llamada.
+- **Composer** — una sola tarjeta. Adjuntar, prompts guardados, el chip de
+  modelo y el de permisos van dentro de su borde inferior; enviar se convierte
+  en detener mientras hay una ejecución, y `Esc` cancela.
 - **Paleta de comandos** — `⌘K` / `Ctrl+K` para hilos, exportar, reiniciar,
   actualizar, workspaces y tus prompts guardados. Escribir `/` en el composer
   filtra esos mismos prompts en línea.
@@ -233,7 +250,10 @@ indicador de inicio.
 - **Prompts programados** — cron o una hora única, encolados cuando la pasarela
   está libre.
 - **Ajustes** — apariencia, agente, sesión, plantillas, programaciones,
-  actualizaciones, acceso desde el teléfono y uso de tokens, en pestañas.
+  actualizaciones, acceso desde el teléfono y uso de tokens. Etiqueta y
+  descripción a la izquierda, un control a la derecha; la barra de guardado solo
+  aparece cuando hay algo sin guardar, y el tema y el idioma se previsualizan al
+  elegirlos.
 - **Temas e idioma** — oscuro, claro o seguir al sistema; inglés y español.
 
 ## Requisitos
