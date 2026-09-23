@@ -445,6 +445,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .icon-btn:hover:not(:disabled) { background: var(--ghost-hover); color: var(--text); }
+.icon-btn.current { background: var(--selected-bg); color: var(--text); }
 .icon-btn.sm { width: var(--control-h-sm); height: var(--control-h-sm); min-height: var(--control-h-sm); }
 
 @media (pointer: coarse) {
@@ -878,6 +879,12 @@ details label { margin-top: var(--s-2); }
 .app-shell.has-mini-rail {
   grid-template-columns: var(--rail-w-mini) minmax(0, 1fr);
 }
+.app-shell.has-rail.has-inspector {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--inspector-w);
+}
+.app-shell.has-mini-rail.has-inspector {
+  grid-template-columns: var(--rail-w-mini) minmax(0, 1fr) var(--inspector-w);
+}
 .app-shell > * { min-width: 0; min-height: 0; }
 
 .sidebar {
@@ -1131,6 +1138,85 @@ details label { margin-top: var(--s-2); }
   .row-actions { position: static; transform: none; background: none; padding-left: 0; }
   .thread-row, .ws-row { display: flex; align-items: center; }
   .thread-row .picker-item, .ws-row .ws-open { flex: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+   Activity inspector: what this thread did to the host.
+   --------------------------------------------------------------------------- */
+.inspector {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: var(--s-3);
+  min-height: 0;
+  min-width: 0;
+  padding: 0 var(--s-3) calc(var(--s-3) + env(safe-area-inset-bottom));
+  padding-top: env(safe-area-inset-top);
+  background: var(--surface-1);
+  border-left: 1px solid var(--stroke);
+}
+.inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: var(--topbar-h);
+}
+.inspector-head h2 { margin: 0; font-size: var(--fs-base); font-weight: 600; }
+.inspector-meta { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.inspector-meta:empty { display: none; }
+.inspector .segmented { display: flex; }
+.inspector .segment { flex: 1; }
+.inspector-body { overflow: auto; overscroll-behavior: contain; min-height: 0; }
+.activity-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
+.activity-empty { font-size: var(--fs-sm); padding: var(--s-2); }
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: var(--row-h);
+  padding: var(--s-1) var(--s-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: background var(--dur) var(--ease);
+}
+.activity-row:hover { background: var(--hover-bg); }
+.activity-row code { font-family: var(--mono); font-size: var(--fs-xs); flex: 1; min-width: 0; }
+.activity-row > .truncate { flex: 1; }
+.activity-glyph { display: grid; place-items: center; flex: none; color: var(--faint); }
+.activity-glyph svg { width: var(--icon-sm); height: var(--icon-sm); }
+.activity-touches { font-size: var(--fs-xs); color: var(--faint); flex: none; }
+.activity-file { display: grid; gap: var(--s-05); }
+.activity-file .disclosure { padding-left: var(--s-6); }
+.activity-file .disclosure-toggle { font-size: var(--fs-xs); }
+
+/* Below the inspector breakpoint the panel is a sheet over the transcript. */
+.inspector-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  display: grid;
+  grid-template-columns: 1fr min(var(--w-sheet), 88%);
+}
+.inspector-sheet .inspector {
+  position: relative;
+  z-index: 1;
+  box-shadow: var(--e-2);
+  animation: slide-in-right var(--dur) var(--ease);
+}
+@keyframes slide-in-right { from { transform: translateX(8px); opacity: 0; } }
+
+/* The transcript answers back when a row is clicked. */
+.flash { animation: flash 1.2s var(--ease); }
+@keyframes flash {
+  0% { box-shadow: 0 0 0 2px var(--accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
 }
 
 /* ---------------------------------------------------------------------------

@@ -320,7 +320,6 @@
   "protocol.expected": "expected",
   "protocol.got": "got",
   "nav.chat": "Chat",
-  "nav.ops": "Commands",
   "nav.primary": "Main navigation",
   "threads.untitled": "New thread",
   "host.machine": "Machine",
@@ -357,5 +356,12 @@
   "tool.files": "files",
   "chat.hintSend": "to send",
   "chat.hintNewline": "for a newline",
-  "chat.hintSlash": "for saved prompts"
+  "chat.hintSlash": "for saved prompts",
+  "nav.activity": "Activity",
+  "chat.activityClose": "Close activity",
+  "activity.commands": "Commands",
+  "activity.files": "Files",
+  "activity.emptyCommands": "No commands have run in this thread yet.",
+  "activity.emptyFiles": "No files have been read or changed yet.",
+  "activity.diff": "Show the change"
 }

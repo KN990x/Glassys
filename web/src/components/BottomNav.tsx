@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { useT } from "../i18n";
-import { IconHistory, IconSettings, IconThreads, IconZap } from "./Icon";
+import { IconActivity, IconHistory, IconSettings, IconThreads } from "./Icon";
 
-export type NavTarget = "chat" | "threads" | "ops" | "settings";
+export type NavTarget = "chat" | "threads" | "activity" | "settings";
 
 /** Mobile home row. Thumb-reachable, and it respects the home-indicator inset. */
 export function BottomNav({
@@ -16,7 +16,7 @@ export function BottomNav({
   const items: Array<{ id: NavTarget; label: string; glyph: ReactNode }> = [
     { id: "chat", label: t("nav.chat"), glyph: <IconThreads /> },
     { id: "threads", label: t("nav.threads"), glyph: <IconHistory /> },
-    { id: "ops", label: t("nav.ops"), glyph: <IconZap /> },
+    { id: "activity", label: t("nav.activity"), glyph: <IconActivity /> },
     { id: "settings", label: t("nav.settings"), glyph: <IconSettings /> },
   ];
   return (

@@ -18,6 +18,7 @@ import { HostContext } from "./components/HostContext";
 import { ToolCard, ToolGroup } from "./components/ToolCard";
 import { Transcript } from "./components/Transcript";
 import { Composer } from "./components/Composer";
+import { ActivityPanel } from "./components/ActivityPanel";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThreadList } from "./components/ThreadList";
@@ -102,6 +103,11 @@ const tools: ToolBlock[] = [
   { id: "s6", kind: "tool", toolKind: "grep", title: "TLSv1.1", path: "/etc/nginx", status: "error",
     error: "grep: /etc/nginx/private: Permission denied" },
 ] as ToolBlock[];
+
+const activityBlocks = [
+  ...(tools as unknown as never[]),
+  { id: "u1", kind: "usage", inputTokens: 18240, outputTokens: 3120 },
+];
 
 function Row({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
@@ -353,6 +359,12 @@ function Gallery() {
           <input style={{ width: "160px" }} placeholder="Input" />
           <select style={{ width: "160px" }}><option>Select</option></select>
           <span className="status connected">Connected</span>
+        </div>
+      </Row>
+
+      <Row title="Activity" note="What the thread did to the host: commands and files, read off the transcript.">
+        <div style={{ width: "320px", height: "420px", background: "var(--surface-1)", borderRadius: "14px", overflow: "hidden" }}>
+          <ActivityPanel blocks={activityBlocks as never} locale="en" duration="1:12" onClose={() => {}} />
         </div>
       </Row>
 
