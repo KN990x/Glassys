@@ -3,6 +3,7 @@ import { api, setToken } from "../api";
 import { useT, type Locale } from "../i18n";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import { GlassysMark } from "../components/Icon";
+import { Callout } from "../components/Primitives";
 import { operatorError } from "../operatorError";
 
 export function Setup({
@@ -48,19 +49,18 @@ export function Setup({
 
   return (
     <main className="gate">
+      <div className="gate-corner">
+        <LocaleSwitch locale={locale} onChange={onLocale} />
+      </div>
       <div className="panel">
-        <div className="panel-tools panel-tools-corner">
-          <LocaleSwitch locale={locale} onChange={onLocale} />
+        <div className="brand tight">
+          <GlassysMark size={22} />
+          <strong>{t("app.name")}</strong>
         </div>
-        <div className="brand">
-          <GlassysMark size={36} />
-          <div>
-            <h1>{t("app.name")}</h1>
-            <p className="muted">{t("app.tagline")}</p>
-          </div>
+        <div className="panel-heading">
+          <h2>{t("setup.title")}</h2>
+          <p className="muted">{t("setup.body")}</p>
         </div>
-        <h2>{t("setup.title")}</h2>
-        <p className="muted">{t("setup.body")}</p>
         <form onSubmit={submit} className="stack">
           <label>
             {t("setup.password")}
@@ -70,8 +70,9 @@ export function Setup({
             {t("setup.confirm")}
             <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </label>
-          {error && <p className="error-text">{error}</p>}
+          {error && <Callout tone="danger">{error}</Callout>}
           <button className="primary" type="submit" disabled={submitting}>
+            {submitting && <span className="spinner sm" aria-hidden="true" />}
             {t("setup.submit")}
           </button>
         </form>

@@ -19,6 +19,9 @@ import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
 import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 import { operatorError } from "../operatorError";
+import { Callout, StatusBadge } from "../components/Primitives";
+import { Switch } from "../components/Switch";
+import { GlassysMark, IconCheck } from "../components/Icon";
 
 type StepId = "adapter" | "workspace" | "phone" | "credential" | "model" | "rules" | "execution" | "acp";
 
@@ -344,62 +347,65 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
 
   return (
     <main className="gate wide">
+      <div className="gate-corner">
+        <label className="locale-switch">
+          <span className="visually-hidden">{t("settings.locale")}</span>
+          <select
+            value={locale}
+            aria-label={t("settings.locale")}
+            onChange={(e) => {
+              const next = e.target.value;
+              setLocale(next);
+              void api.saveConfig({ space: { locale: next, theme } }).then(onConfig).catch(() => undefined);
+            }}
+          >
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
+        </label>
+        <label className="locale-switch">
+          <span className="visually-hidden">{t("settings.theme")}</span>
+          <select
+            value={theme}
+            aria-label={t("settings.theme")}
+            onChange={(e) => {
+              const next = e.target.value as Theme;
+              setTheme(next);
+              void api.saveConfig({ space: { locale, theme: next } }).then(onConfig).catch(() => undefined);
+            }}
+          >
+            <option value="dark">{t("settings.theme.dark")}</option>
+            <option value="light">{t("settings.theme.light")}</option>
+            <option value="system">{t("settings.theme.system")}</option>
+          </select>
+        </label>
+      </div>
       <div className="panel">
         {/* Language and theme used to be asked inside the adapter step, which
             made step one ask three unrelated questions. */}
-        <div className="panel-head">
-          <div className="panel-heading">
-            <p className="eyebrow">{t("wizard.title")}</p>
-            <h2>{t(`wizard.step.${id}`)}</h2>
-          </div>
-          <div className="panel-tools">
-            <label>
-              <span className="visually-hidden">{t("settings.locale")}</span>
-              <select
-                value={locale}
-                aria-label={t("settings.locale")}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setLocale(next);
-                  void api.saveConfig({ space: { locale: next, theme } }).then(onConfig).catch(() => undefined);
-                }}
-              >
-                <option value="en">English</option>
-                <option value="es">Español</option>
-              </select>
-            </label>
-            <label>
-              <span className="visually-hidden">{t("settings.theme")}</span>
-              <select
-                value={theme}
-                aria-label={t("settings.theme")}
-                onChange={(e) => {
-                  const next = e.target.value as Theme;
-                  setTheme(next);
-                  void api.saveConfig({ space: { locale, theme: next } }).then(onConfig).catch(() => undefined);
-                }}
-              >
-                <option value="dark">{t("settings.theme.dark")}</option>
-                <option value="light">{t("settings.theme.light")}</option>
-                <option value="system">{t("settings.theme.system")}</option>
-              </select>
-            </label>
-          </div>
+        <div className="brand tight">
+          <GlassysMark size={22} />
+          <strong>{t("app.name")}</strong>
         </div>
-        <div className="steps-row">
-          <ol className="steps">
-            {steps.map((s, i) => (
-              <li
-                key={s}
-                className={i === step ? "active" : i < step ? "done" : ""}
-                aria-current={i === step ? "step" : undefined}
-                aria-label={t(`wizard.step.${s}`)}
-              />
-            ))}
-          </ol>
-          <span className="muted nums steps-count" aria-label={t("wizard.title")}>
-            {step + 1}/{steps.length}
-          </span>
+        {/* Named steps: five unlabelled hairlines and a 1/5 said how far along
+            the operator was, but never what was still coming. */}
+        <ol className="steps">
+          {steps.map((s, i) => (
+            <li
+              key={s}
+              className={i === step ? "active" : i < step ? "done" : ""}
+              aria-current={i === step ? "step" : undefined}
+            >
+              <span className="step-bar" aria-hidden="true" />
+              <span className="step-name">{t(`wizard.step.${s}`)}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="panel-heading">
+          <p className="eyebrow">
+            {t("wizard.title")} · <span className="nums">{step + 1}/{steps.length}</span>
+          </p>
+          <h2>{t(`wizard.step.${id}`)}</h2>
         </div>
 
         {id === "adapter" && (
@@ -407,40 +413,54 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
             <p>{t("wizard.adapter.body")}</p>
             {!adaptersReady && <p className="muted">{t("wizard.adapters.loading")}</p>}
             {adaptersError && (
-              <div className="stack">
-                <p className="error-text">{adaptersError}</p>
-                <button type="button" className="ghost" onClick={() => loadAdapters()}>
-                  {t("wizard.adapters.retry")}
-                </button>
-              </div>
+              <Callout
+                tone="danger"
+                action={
+                  <button type="button" className="ghost tiny" onClick={() => loadAdapters()}>
+                    {t("wizard.adapters.retry")}
+                  </button>
+                }
+              >
+                {adaptersError}
+              </Callout>
             )}
             {adapters.map((a) => {
               const selectable = adapterSelectable(a);
               return (
-              <label
-                key={a.id}
-                className={`choice adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
-              >
-                <input
-                  type="radio"
-                  name="adapter"
-                  checked={adapterId === a.id}
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
+                  aria-pressed={adapterId === a.id}
                   disabled={!selectable}
-                  onChange={() => setAdapterId(a.id)}
-                />
-                <span className="adapter-card-body">
-                  <strong>{a.displayName}</strong>
-                  {a.description ? <span className="muted">{a.description}</span> : null}
-                  {!selectable ? (
-                    <span className="warn">
-                      {t("wizard.adapter.unavailable")}
-                      {a.available && !a.available.ok && a.available.error ? ` ${a.available.error}` : ""}
-                    </span>
-                  ) : a.id === "acp" ? (
-                    <span className="muted">{t("wizard.acp.needsCommand")}</span>
-                  ) : null}
-                </span>
-              </label>
+                  onClick={() => setAdapterId(a.id)}
+                >
+                  <span className="adapter-mono" aria-hidden="true">
+                    {a.displayName.slice(0, 1)}
+                  </span>
+                  <span className="adapter-card-body">
+                    <strong>{a.displayName}</strong>
+                    {a.description ? <span className="muted">{a.description}</span> : null}
+                    {!selectable && a.available && !a.available.ok && a.available.error ? (
+                      <span className="muted">{a.available.error}</span>
+                    ) : a.id === "acp" && selectable ? (
+                      <span className="muted">{t("wizard.acp.needsCommand")}</span>
+                    ) : null}
+                  </span>
+                  <span className="adapter-card-state">
+                    {selectable ? (
+                      adapterId === a.id ? (
+                        <span className="adapter-check">
+                          <IconCheck />
+                        </span>
+                      ) : null
+                    ) : (
+                      <StatusBadge tone="danger" dot>
+                        {t("wizard.adapter.unavailable")}
+                      </StatusBadge>
+                    )}
+                  </span>
+                </button>
               );
             })}
           </div>
@@ -458,19 +478,22 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         {id === "credential" && (
           <div className="stack">
             <p>{t("wizard.cred.body")}</p>
-            {caps?.auth.kind === "sdk-login" &&
-              (auth?.loggedIn ? (
-                <p className="ok">
-                  {t("wizard.cred.signedIn")}
-                  {auth.email ? ` (${auth.email})` : ""}
-                </p>
-              ) : (
-                <p className="muted">{t("wizard.cred.signedOut")}</p>
-              ))}
-            {(config.secrets.adapters?.[adapterId]?.apiKey.configured ||
-              (adapterId === "cursor" && config.secrets.cursorApiKey.configured)) && (
-              <p className="ok">{t("wizard.cred.keyConfigured")}</p>
-            )}
+            <div className="row wrap">
+              {caps?.auth.kind === "sdk-login" &&
+                (auth?.loggedIn ? (
+                  <StatusBadge tone="ok" dot>
+                    {auth.email || t("wizard.cred.signedIn")}
+                  </StatusBadge>
+                ) : (
+                  <StatusBadge dot>{t("wizard.cred.signedOut")}</StatusBadge>
+                ))}
+              {(config.secrets.adapters?.[adapterId]?.apiKey.configured ||
+                (adapterId === "cursor" && config.secrets.cursorApiKey.configured)) && (
+                <StatusBadge tone="ok" dot>
+                  {t("wizard.cred.keyConfigured")}
+                </StatusBadge>
+              )}
+            </div>
             {caps?.auth.kind === "sdk-login" && (
               <SdkLoginControls
                 adapterId={adapterId}
@@ -493,7 +516,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
             {caps?.auth.kind === "sdk-login" &&
               !auth?.loggedIn &&
               !adapterKeyConfigured(config.secrets, adapterId) &&
-              !apiKey.trim() && <p className="warn">{t("wizard.cred.unsignedWarn")}</p>}
+              !apiKey.trim() && <Callout tone="warn">{t("wizard.cred.unsignedWarn")}</Callout>}
             <details>
               <summary>{t("wizard.cred.optional")}</summary>
               <label>
@@ -572,17 +595,15 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
           <div className="stack">
             <p>{t("wizard.rules.body")}</p>
             {(["project", "user", "plugins"] as SettingSource[]).map((s) => (
-              <label key={s} className="choice">
-                <input
-                  type="checkbox"
-                  checked={optionStringArray(options, "settingSources", ["project", "user"]).includes(s)}
-                  onChange={(e) => {
-                    const cur = optionStringArray(options, "settingSources", ["project", "user"]);
-                    setOptions(setOption(options, "settingSources", e.target.checked ? [...cur, s] : cur.filter((x) => x !== s)));
-                  }}
-                />
-                {t(`wizard.rules.${s}`)}
-              </label>
+              <Switch
+                key={s}
+                label={t(`wizard.rules.${s}`)}
+                checked={optionStringArray(options, "settingSources", ["project", "user"]).includes(s)}
+                onChange={(next) => {
+                  const cur = optionStringArray(options, "settingSources", ["project", "user"]);
+                  setOptions(setOption(options, "settingSources", next ? [...cur, s] : cur.filter((x) => x !== s)));
+                }}
+              />
             ))}
           </div>
         )}
@@ -591,24 +612,20 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
           <div className="stack">
             <p>{t("wizard.exec.body")}</p>
             {caps?.sandbox && (
-              <label className="choice">
-                <input
-                  type="checkbox"
-                  checked={optionBool(options, "sandbox", false)}
-                  onChange={(e) => setOptions(setOption(options, "sandbox", e.target.checked))}
-                />
-                {t("wizard.exec.sandbox")}
-              </label>
+              <Switch
+                checked={optionBool(options, "sandbox", false)}
+                label={t("wizard.exec.sandbox")}
+                hint={t("settings.sandboxHint")}
+                onChange={(next) => setOptions(setOption(options, "sandbox", next))}
+              />
             )}
             {caps?.autoRun && (
-              <label className="choice">
-                <input
-                  type="checkbox"
-                  checked={optionBool(options, "autoRun", true)}
-                  onChange={(e) => setOptions(setAutoRun(options, e.target.checked, caps?.toolConfirmation))}
-                />
-                {t("wizard.exec.autoRun")}
-              </label>
+              <Switch
+                checked={optionBool(options, "autoRun", true)}
+                label={t("wizard.exec.autoRun")}
+                hint={t("settings.autoRunHint")}
+                onChange={(next) => setOptions(setAutoRun(options, next, caps?.toolConfirmation))}
+              />
             )}
             {caps?.toolConfirmation === "permission-mode" && (
               <label>
@@ -623,21 +640,20 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 </select>
               </label>
             )}
-            {caps?.toolConfirmation === "auto-review-deny" && <p className="warn">{t("wizard.exec.danger")}</p>}
-            {caps?.toolConfirmation === "none" && <p className="warn">{t("wizard.exec.unattended")}</p>}
-            {caps?.toolConfirmation === "permission-mode" && <p className="warn">{t("wizard.exec.permission.hint")}</p>}
+            {caps?.toolConfirmation === "auto-review-deny" && <Callout tone="warn">{t("wizard.exec.danger")}</Callout>}
+            {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
+            {caps?.toolConfirmation === "permission-mode" && <Callout tone="warn">{t("wizard.exec.permission.hint")}</Callout>}
           </div>
         )}
 
-        {error && <p className="error-text">{error}</p>}
+        {error && <Callout tone="danger">{error}</Callout>}
         <div className="row wizard-nav">
           {/* Reserved: Back appearing and disappearing shifted Continue sideways. */}
           <button
             type="button"
-            className="ghost"
+            className={`ghost${step === 0 ? " reserved" : ""}`}
             onClick={() => setStep((s) => s - 1)}
             disabled={step === 0}
-            style={step === 0 ? { visibility: "hidden" } : undefined}
           >
             {t("wizard.back")}
           </button>
