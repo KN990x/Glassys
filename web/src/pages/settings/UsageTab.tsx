@@ -26,13 +26,15 @@ export function UsageTab({
       rows.push({ key: `adapter:${id}`, label: id, input: total.inputTokens, output: total.outputTokens });
     }
   }
+  /* The columns were headed "↓" and "↑", which needed a legend nobody had. */
   return (
     <table className="usage-table">
       <thead>
         <tr>
           <th scope="col">{t("settings.usage")}</th>
-          <th scope="col">↓</th>
-          <th scope="col">↑</th>
+          <th scope="col">{t("settings.usageInput")}</th>
+          <th scope="col">{t("settings.usageOutput")}</th>
+          <th scope="col">{t("settings.usageTotal")}</th>
         </tr>
       </thead>
       <tbody>
@@ -41,6 +43,7 @@ export function UsageTab({
             <th scope="row">{row.label}</th>
             <td className="nums">{formatTokens(row.input, locale)}</td>
             <td className="nums">{formatTokens(row.output, locale)}</td>
+            <td className="nums">{formatTokens(row.input + row.output, locale)}</td>
           </tr>
         ))}
       </tbody>

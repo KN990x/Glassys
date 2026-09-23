@@ -1,5 +1,7 @@
 import type { AdapterCapabilities, RedactedConfig } from "@glassys/protocol";
 import { useT } from "../../i18n";
+import { Callout, SettingGroup, SettingRow } from "../../components/Primitives";
+import { Switch } from "../../components/Switch";
 
 export function SessionTab({
   draft,
@@ -23,53 +25,61 @@ export function SessionTab({
   const t = useT();
   return (
     <>
-      {caps?.resume && (
-      <label className="choice">
-        <input
-          type="checkbox"
-          checked={draft.session.resumeOnStart}
-          onChange={(e) => setDraft({ ...draft, session: { ...draft.session, resumeOnStart: e.target.checked } })}
-        />
-        {t("settings.resume")}
-      </label>
-      )}
-      <label>
-        {t("settings.stall")}
-        <select
-          value={draft.session.stallSeconds}
-          onChange={(e) =>
-            setDraft({
-              ...draft,
-              session: { ...draft.session, stallSeconds: Number.parseInt(e.target.value, 10) || 0 },
-            })
-          }
-        >
-          <option value={0}>{t("settings.stall.off")}</option>
-          <option value={60}>{t("settings.stall.60")}</option>
-          <option value={180}>{t("settings.stall.180")}</option>
-          <option value={300}>{t("settings.stall.300")}</option>
-        </select>
-      </label>
-      <label className="choice">
-        <input
-          type="checkbox"
-          checked={draft.session.notifyOnComplete}
-          onChange={(e) => void enableNotify(e.target.checked)}
-        />
-        {t("settings.notify")}
-      </label>
-      <p className="muted">{t("settings.notifyHint")}</p>
-      {notifyNote && <p className="warn">{notifyNote}</p>}
-      <label>
-        {t("settings.password")}
-        <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </label>
-      <p className="muted">{t("settings.passwordHint")}</p>
-      <div className="row wrap">
-        <button type="button" className="ghost" onClick={onLogout}>
-          {t("settings.logout")}
-        </button>
-      </div>
+      <SettingGroup title={t("settings.runs")}>
+        {caps?.resume && (
+          <SettingRow label={t("settings.resume")}>
+            <Switch
+              hideLabel
+              label={t("settings.resume")}
+              checked={draft.session.resumeOnStart}
+              onChange={(next) => setDraft({ ...draft, session: { ...draft.session, resumeOnStart: next } })}
+            />
+          </SettingRow>
+        )}
+        <SettingRow label={t("settings.stall")} htmlFor="set-stall">
+          <select
+            id="set-stall"
+            value={draft.session.stallSeconds}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                session: { ...draft.session, stallSeconds: Number.parseInt(e.target.value, 10) || 0 },
+              })
+            }
+          >
+            <option value={0}>{t("settings.stall.off")}</option>
+            <option value={60}>{t("settings.stall.60")}</option>
+            <option value={180}>{t("settings.stall.180")}</option>
+            <option value={300}>{t("settings.stall.300")}</option>
+          </select>
+        </SettingRow>
+        <SettingRow label={t("settings.notify")} hint={t("settings.notifyHint")}>
+          <Switch
+            hideLabel
+            label={t("settings.notify")}
+            checked={draft.session.notifyOnComplete}
+            onChange={(next) => void enableNotify(next)}
+          />
+        </SettingRow>
+      </SettingGroup>
+      {notifyNote && <Callout tone="warn">{notifyNote}</Callout>}
+
+      <SettingGroup title={t("settings.security")}>
+        <SettingRow label={t("settings.password")} hint={t("settings.passwordHint")} htmlFor="set-password">
+          <input
+            id="set-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </SettingRow>
+        <SettingRow label={t("settings.logout")} hint={t("settings.logoutHint")}>
+          <button type="button" className="ghost" onClick={onLogout}>
+            {t("settings.logout")}
+          </button>
+        </SettingRow>
+      </SettingGroup>
     </>
   );
 }

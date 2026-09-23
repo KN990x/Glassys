@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { QrCode } from "./QrCode";
+import { Callout } from "./Primitives";
+import { IconCheck, IconCopy } from "./Icon";
 
+/**
+ * How to reach this gateway from a phone. The URL used to render unstyled: the
+ * class sat on the <code> itself while the rule targeted a <code> inside it.
+ */
 export function ReachabilityCard() {
   const t = useT();
   const pageOrigin = typeof window !== "undefined" ? window.location.origin : "";
@@ -32,14 +38,17 @@ export function ReachabilityCard() {
   }
 
   return (
-    <div className="stack">
-      <p>{t("reach.body")}</p>
-      {loopback && <p className="warn">{t("reach.loopback")}</p>}
-      <code className="login-url">{url}</code>
-      <div className="row wrap">
+    <div className="reach">
+      <div className="reach-body">
+        <p className="muted">{t("reach.body")}</p>
+        <div className="login-url">
+          <code>{url}</code>
+        </div>
         <button type="button" className="ghost" onClick={() => void copy()}>
+          {copied ? <IconCheck /> : <IconCopy />}
           {copied ? t("chat.copied") : t("reach.copy")}
         </button>
+        {loopback && <Callout tone="warn">{t("reach.loopback")}</Callout>}
       </div>
       {url && <QrCode value={url} label={t("reach.qr")} />}
     </div>
