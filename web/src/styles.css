@@ -80,6 +80,9 @@
 
   /* Floating chrome. A shadow is nearly invisible on a dark page, so an
      overlay also gets a one-pixel top highlight to lift its edge. */
+  /* The raised segment has to be lighter than its track on dark and whiter
+     than it on light, so it cannot be one surface step in both themes. */
+  --segment-bg: var(--surface-3);
   --glass-bg: color-mix(in srgb, var(--surface-1) 82%, transparent);
   --hairline: inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent);
   --scrollbar: color-mix(in srgb, var(--text) 18%, transparent);
@@ -238,6 +241,7 @@ html[data-theme="light"] {
   --diff-del-bg: color-mix(in srgb, var(--diff-del) 10%, transparent);
   --scrim: color-mix(in srgb, #18181b 40%, transparent);
 
+  --segment-bg: var(--surface-1);
   --glass-bg: color-mix(in srgb, var(--surface-1) 80%, transparent);
   --hairline: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent);
   --scrollbar: color-mix(in srgb, var(--text) 22%, transparent);
@@ -550,7 +554,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .segment:hover:not(.current) { color: var(--text); }
-.segment.current { background: var(--surface-1); color: var(--text); box-shadow: var(--e-1); }
+.segment.current { background: var(--segment-bg); color: var(--text); box-shadow: var(--e-1); }
 .segmented.sm .segment { min-height: var(--s-6); padding: 0 var(--s-2); font-size: var(--fs-xs); }
 
 .pop-anchor { position: relative; min-width: 0; }
@@ -1293,9 +1297,6 @@ button.host-copy:hover { color: var(--text); }
 .empty-action strong { font-weight: 500; color: var(--text); }
 .empty-action-text span { font-size: var(--fs-xs); font-family: var(--mono); }
 
-.working { display: flex; align-items: center; gap: var(--s-2); color: var(--muted); font-size: var(--fs-sm); }
-.working .pulse { justify-self: auto; flex: none; background: var(--accent); }
-.working-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .bubble.user {
   justify-self: end;
@@ -1623,15 +1624,15 @@ mark {
 .diff-line.del .diff-sign, .diff-line.del .diff-code { color: var(--diff-del); }
 
 /* ---------------------------------------------------------------------------
-   Composer
+   Composer. One card, with the run's controls inside its bottom edge instead
+   of in two extra bands of chrome around it.
    --------------------------------------------------------------------------- */
 .composer {
   display: flex;
   justify-content: center;
-  padding: var(--s-3) calc(var(--page-gutter) + env(safe-area-inset-right))
+  padding: var(--s-2) calc(var(--page-gutter) + env(safe-area-inset-right))
            calc(var(--s-3) + env(safe-area-inset-bottom)) calc(var(--page-gutter) + env(safe-area-inset-left));
-  border-top: 1px solid var(--stroke);
-  background: var(--bg-elev);
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
 }
 .composer-inner {
   width: min(var(--content-max), 100%);
@@ -1639,33 +1640,35 @@ mark {
   gap: var(--s-2);
   min-width: 0;
 }
-.composer-meta {
+
+/* The run strip sits on the card's top edge, the way a tab does. */
+.composer-status {
   display: flex;
-  flex-wrap: nowrap;
   align-items: center;
   gap: var(--s-2);
-  padding: 0 var(--s-1);
+  justify-self: start;
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
   font-size: var(--fs-xs);
   color: var(--muted);
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.composer-meta::-webkit-scrollbar { display: none; }
-.composer-meta > * { flex: none; }
-.composer-meta .model-picker { min-width: 0; }
-.composer-meta .warn,
-.composer-meta .composer-hint {
-  font-size: var(--fs-xs);
-  min-width: 0;
-  max-width: var(--w-hint-max);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.composer-status .pulse { background: var(--accent); flex: none; justify-self: auto; }
+.status-shimmer {
+  flex: none;
+  background: linear-gradient(90deg, var(--muted) 20%, var(--text) 50%, var(--muted) 80%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2s linear infinite;
 }
-.composer-hint { margin: 0; font-size: var(--fs-xs); color: var(--faint); }
-/* The shortcut only exists where there is a keyboard. */
-.composer-shortcut { display: none; }
-@media (hover: hover) and (pointer: fine) { .composer-shortcut { display: block; } }
+.status-step { font-family: var(--mono); min-width: 0; }
+.status-esc { flex: none; display: none; }
+@media (hover: hover) and (pointer: fine) { .status-esc { display: inline-flex; align-items: center; gap: var(--s-1); } }
 
 .queue-band {
   display: grid;
@@ -1678,8 +1681,7 @@ mark {
 .queue-band .eyebrow { margin: 0; }
 
 .composer-box {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
   gap: var(--s-1);
   padding: var(--composer-pad);
   overflow: visible;
@@ -1690,43 +1692,92 @@ mark {
   min-width: 0;
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.composer-box:focus-within { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A bordered box that turns accent already reads as focused; the 2px outline
+   on top of it was a second ring. */
+.composer-box:focus-within {
+  border-color: var(--stroke-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.composer.dragging .composer-box {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-bg);
+}
 .composer-box textarea {
-  flex: 1;
   resize: none;
-  height: var(--composer-btn);
   min-height: var(--composer-btn);
   max-height: var(--composer-max);
   min-width: 0;
-  width: auto;
+  width: 100%;
   line-height: 1.375;
-  font-size: var(--fs-md);
+  font-size: var(--fs-chat);
   background: transparent;
   border: 0;
-  padding: calc((var(--composer-btn) - 1.375em) / 2) var(--s-2);
+  padding: var(--s-2) var(--s-2) 0;
   border-radius: 0;
   overflow-y: hidden;
 }
 .composer-box textarea:focus, .composer-box textarea:focus-visible { outline: none; box-shadow: none; }
-.composer-box .composer-send,
-.composer-box .composer-attach {
-  width: var(--composer-btn);
-  min-width: var(--composer-btn);
-  height: var(--composer-btn);
-  min-height: var(--composer-btn);
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-md);
+
+/* The toolbar: attach, commands, model, permissions, then send. */
+/* Not a scroll container: the model and permission popovers open from inside
+   this bar, and an overflow scroller clipped them. The chips shrink instead. */
+.composer-meta {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 0 var(--s-1) var(--s-05) var(--s-1);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  min-width: 0;
+}
+.composer-meta > * { flex: none; }
+.composer-meta > .model-chip, .composer-meta > .pop-anchor { flex: 0 1 auto; min-width: 0; }
+.composer-spacer { flex: 1 1 auto; min-width: var(--s-2); }
+.composer-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  max-width: var(--w-hint-max);
+  min-width: 0;
+}
+.composer-warn svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+.composer-hint { margin: 0; font-size: var(--fs-xs); color: var(--faint); }
+.composer-meta .composer-hint {
+  max-width: var(--w-hint-max);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The shortcut line only exists where there is a keyboard. */
+.composer-shortcut { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .composer-shortcut { display: flex; align-items: center; gap: var(--s-1); padding: 0 var(--s-1); }
+}
+
+/* Send and stop are the same control in two states, not two controls. */
+.composer-send {
   display: grid;
   place-items: center;
   flex: none;
-  align-self: flex-end;
+  width: var(--control-h);
+  height: var(--control-h);
+  min-width: var(--control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--btn);
+  color: var(--btn-fg);
+  cursor: pointer;
   appearance: none;
+  transition: background var(--dur) var(--ease), transform var(--dur-fast) var(--ease), opacity var(--dur) var(--ease);
 }
-.composer-box .composer-send svg,
-.composer-box .composer-attach svg { width: var(--icon-lg); height: var(--icon-lg); }
-.composer-box .composer-send:focus-visible,
-.composer-box .composer-attach:focus-visible { outline-offset: -2px; z-index: 1; }
+.composer-send:hover:not(:disabled) { background: var(--btn-hover); }
+.composer-send:active:not(:disabled) { transform: scale(0.96); }
+.composer-send:disabled { background: var(--surface-3); color: var(--faint); opacity: 1; }
+.composer-send.stop { background: var(--danger); color: #fff; }
+.composer-send svg { width: var(--icon-md); height: var(--icon-md); }
 
 .thumbs { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .thumbs img, .thumb-remove img {
@@ -1740,8 +1791,8 @@ mark {
 .thumb-remove { position: relative; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .thumb-badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
+  top: calc(var(--s-1) * -1);
+  right: calc(var(--s-1) * -1);
   display: grid;
   place-items: center;
   width: var(--badge);
@@ -1782,6 +1833,22 @@ mark {
 /* ---------------------------------------------------------------------------
    Pickers, chips, popovers
    --------------------------------------------------------------------------- */
+/* Model and permissions are the same chip: same height, border and weight. */
+.chip-btn {
+  max-width: 100%;
+  min-width: 0;
+  gap: var(--s-1);
+  font-weight: 500;
+  color: var(--text);
+}
+.chip-btn svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
+.chip-btn.risk-warn svg { color: var(--warn); }
+.chip-btn.risk-danger svg { color: var(--danger); }
+.model-chip { display: flex; min-width: 0; }
+.pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
+.picker-check { position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--accent); }
+.picker-check svg { width: var(--icon-sm); height: var(--icon-sm); }
+
 .model-picker { display: grid; gap: var(--s-3); }
 .model-picker.compact {
   display: flex;
@@ -1861,23 +1928,6 @@ mark {
   width: 2px;
   border-radius: var(--r-full);
   background: var(--accent);
-}
-
-.chip-wrap { position: relative; }
-.chip-pop {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + var(--s-2));
-  z-index: var(--z-pop);
-  min-width: min(var(--w-pop), calc(100vw - var(--s-7)));
-  max-width: calc(100vw - var(--s-6));
-  background: var(--bg-elev);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-lg);
-  padding: var(--s-3);
-  display: grid;
-  gap: var(--s-3);
-  box-shadow: var(--e-2);
 }
 
 /* ---------------------------------------------------------------------------

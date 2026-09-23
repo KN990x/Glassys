@@ -45,7 +45,7 @@ describe("PermissionChip", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows sandbox off on the chip when sandbox is disabled", async () => {
+  it("puts the risk in the glyph and the detail in the tooltip", async () => {
     host = document.createElement("div");
     document.body.append(host);
     await act(async () => {
@@ -56,7 +56,11 @@ describe("PermissionChip", () => {
         </I18nProvider>,
       );
     });
-    expect(host.querySelector("button")?.textContent).toContain("Sandbox off");
+    const chip = host.querySelector("button") as HTMLButtonElement;
+    expect(chip.textContent).toContain("Auto-run");
+    expect(chip.getAttribute("title")).toContain("Sandbox off");
+    /* Auto-run with no sandbox is the most exposed state this host can be in. */
+    expect(chip.className).toContain("risk-danger");
   });
 
   it("does not patch options when the operator cancels the archive confirm", async () => {
@@ -73,9 +77,9 @@ describe("PermissionChip", () => {
     await act(async () => {
       host.querySelector("button")?.click();
     });
-    const checkbox = host.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const sandbox = host.querySelector('button[role="switch"]') as HTMLButtonElement;
     await act(async () => {
-      checkbox.click();
+      sandbox.click();
     });
     expect(host.querySelector(".confirm-panel")).toBeTruthy();
     await act(async () => {
@@ -100,7 +104,7 @@ describe("PermissionChip", () => {
       host.querySelector("button")?.click();
     });
     await act(async () => {
-      (host.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+      (host.querySelector('button[role="switch"]') as HTMLButtonElement).click();
     });
     await act(async () => {
       [...host.querySelectorAll("button")].find((b) => b.textContent === "Archive and continue")?.click();
@@ -124,19 +128,19 @@ describe("PermissionChip", () => {
       host.querySelector("button")?.click();
     });
     expect(host.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
-    expect(host.querySelector(".chip-pop")).toBeTruthy();
+    expect(host.querySelector(".pop")).toBeTruthy();
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
-    expect(host.querySelector(".chip-pop")).toBeNull();
+    expect(host.querySelector(".pop")).toBeNull();
     expect(host.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
     await act(async () => {
       host.querySelector("button")?.click();
     });
-    expect(host.querySelector(".chip-pop")).toBeTruthy();
+    expect(host.querySelector(".pop")).toBeTruthy();
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
-    expect(host.querySelector(".chip-pop")).toBeNull();
+    expect(host.querySelector(".pop")).toBeNull();
   });
 });

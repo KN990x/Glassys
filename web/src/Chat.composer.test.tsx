@@ -175,13 +175,18 @@ describe("Chat composer and layout", () => {
         }),
     );
     const config = await renderChat();
-    const select = host.querySelector("select");
-    expect(select).toBeTruthy();
+    const chip = host.querySelector(".model-chip button") as HTMLButtonElement;
+    expect(chip.textContent).toContain("Grok 4.6");
     await act(async () => {
-      select!.value = "composer-2.5";
-      select!.dispatchEvent(new Event("change", { bubbles: true }));
+      chip.click();
     });
-    expect((host.querySelector("select") as HTMLSelectElement).value).toBe("composer-2.5");
+    await act(async () => {
+      [...host.querySelectorAll(".pop .picker-item")]
+        .find((b) => b.textContent?.includes("Composer"))
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    /* The chip keeps the new model while the save is still in flight. */
+    expect((host.querySelector(".model-chip button") as HTMLButtonElement).textContent).toContain("Composer");
     await act(async () => {
       finish({ ...config, agent: { ...config.agent, model: "composer-2.5" } });
       await Promise.resolve();
@@ -232,7 +237,7 @@ describe("Chat composer and layout", () => {
     expect(send().disabled).toBe(false);
   });
 
-  it("stacks composer fallback below the picker instead of beside it", async () => {
+  it("keeps the fallback notice short, beside the model chip", async () => {
     const { api } = await import("./api");
     vi.mocked(api.models).mockResolvedValueOnce({
       models: [{ id: "grok-4.6", displayName: "Grok 4.6" }],
@@ -247,7 +252,7 @@ describe("Chat composer and layout", () => {
     expect(warn?.textContent).toBe("Using fallback catalog");
     expect(warn?.textContent).not.toMatch(/CURSOR_API_KEY/);
     expect(meta?.querySelector(".composer-hint")).toBeNull();
-    expect(warn?.previousElementSibling?.classList.contains("model-picker")).toBe(true);
+    expect(warn?.previousElementSibling?.classList.contains("model-chip")).toBe(true);
     expect(meta?.querySelector("p.warn")?.parentElement).toBe(meta);
   });
 
