@@ -354,5 +354,8 @@
   "chat.searchClose": "Close search",
   "chat.code": "code",
   "tool.steps": "steps",
-  "tool.files": "files"
+  "tool.files": "files",
+  "chat.hintSend": "to send",
+  "chat.hintNewline": "for a newline",
+  "chat.hintSlash": "for saved prompts"
 }

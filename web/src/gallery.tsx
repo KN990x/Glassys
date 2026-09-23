@@ -17,6 +17,7 @@ import { AlertStack } from "./components/AlertStack";
 import { HostContext } from "./components/HostContext";
 import { ToolCard, ToolGroup } from "./components/ToolCard";
 import { Transcript } from "./components/Transcript";
+import { Composer } from "./components/Composer";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThreadList } from "./components/ThreadList";
@@ -27,11 +28,9 @@ import { Callout, Disclosure, Kbd, SettingGroup, SettingRow, Skeleton, StatusBad
 import { Settings } from "./pages/Settings";
 import { Wizard } from "./pages/Wizard";
 import {
-  IconAttach,
   IconClose,
   IconMore,
   IconSearch,
-  IconSend,
 } from "./components/Icon";
 import type { ToolBlock } from "./transcript";
 
@@ -53,6 +52,18 @@ const threads = [
   { id: "t1", title: "Disk pressure on web-01", adapter: "cursor", cwd: "/srv/www", updatedAt: new Date(Date.now() - 4e5).toISOString(), usage: { inputTokens: 18240, outputTokens: 3120 } },
   { id: "t2", title: "Rotate nginx certificates", adapter: "cursor", cwd: "/srv/www", updatedAt: new Date(Date.now() - 9e6).toISOString() },
   { id: "t3", title: "Failed timer audit", adapter: "claude", cwd: "/etc/systemd/system", updatedAt: new Date(Date.now() - 9e7).toISOString() },
+];
+
+const galleryModels = [
+  {
+    id: "grok-4.6",
+    displayName: "Grok 4.6",
+    variants: [
+      { displayName: "High", params: [{ id: "effort", value: "high" }] },
+      { displayName: "Extra high", params: [{ id: "effort", value: "xhigh" }] },
+    ],
+  },
+  { id: "composer-2.5", displayName: "Composer 2.5" },
 ];
 
 const opsChips = [
@@ -161,28 +172,52 @@ function ChatShell({ mobile, empty, mini }: { mobile?: boolean; empty?: boolean;
                 adapterName="Cursor"
                 queue={[]}
               />
-              {!empty && (
-                <div className="working"><span className="pulse" aria-hidden /><span className="working-text">Working · Elapsed 1:12 · systemctl reload nginx</span></div>
-              )}
             </div>
           </div>
         </main>
-        <form className="composer" onSubmit={(e) => e.preventDefault()}>
-          <div className="composer-inner">
-            <div className="composer-meta">
-              <div className="model-picker compact">
-                <label>Model<select defaultValue="a"><option value="a">Grok 4.6 · Extra high</option></select></label>
+        <Composer
+          config={config as never}
+          onConfig={() => {}}
+          caps={{ models: true, sandbox: true, autoRun: true, cancel: true, toolConfirmation: "auto-review-deny" } as never}
+          adapterName="Cursor"
+          models={galleryModels as never}
+          modelId="grok-4.6"
+          modelParams={[{ id: "effort", value: "xhigh" }]}
+          onModel={() => {}}
+          fallbackCatalog={false}
+          catalogError=""
+          text=""
+          onText={() => {}}
+          drafts={[]}
+          onRemoveDraft={() => {}}
+          onAttach={() => {}}
+          fileRef={{ current: null }}
+          composerRef={{ current: null }}
+          onSubmit={(e) => e.preventDefault()}
+          onResize={() => {}}
+          canSend={false}
+          busy={!empty}
+          waiting={false}
+          onCancel={() => {}}
+          queue={[]}
+          onQueueCancel={() => {}}
+          templates={opsChips as never}
+          onTemplate={() => {}}
+          slashOpen={false}
+          setSlashOpen={() => {}}
+          paletteOpen={false}
+          onPalette={() => {}}
+          status={
+            !empty ? (
+              <div className="composer-status">
+                <span className="pulse" aria-hidden />
+                <span className="status-shimmer">Working</span>
+                <span className="muted nums">1:12</span>
+                <span className="muted truncate status-step">systemctl reload nginx</span>
               </div>
-              <button type="button" className="ghost tiny">Auto-run on · Sandbox off</button>
-            </div>
-            <div className="composer-box">
-              <button type="button" className="ghost composer-attach" aria-label="Attach"><IconAttach /></button>
-              <textarea rows={1} placeholder="Ask about this host…" />
-              <button type="submit" className="primary composer-send" aria-label="Send"><IconSend /></button>
-            </div>
-            <p className="muted composer-hint composer-shortcut">⌘K for commands · / for saved prompts</p>
-          </div>
-        </form>
+            ) : null
+          }
+        />
       </div>
       {mobile && <BottomNav active="chat" onSelect={() => {}} />}
     </div>

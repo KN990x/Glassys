@@ -354,5 +354,8 @@
   "chat.searchClose": "Cerrar la búsqueda",
   "chat.code": "código",
   "tool.steps": "pasos",
-  "tool.files": "archivos"
+  "tool.files": "archivos",
+  "chat.hintSend": "para enviar",
+  "chat.hintNewline": "para salto de línea",
+  "chat.hintSlash": "para prompts guardados"
 }

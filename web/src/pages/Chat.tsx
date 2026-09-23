@@ -18,24 +18,21 @@ import { api, clearToken } from "../api";
 import { openSocket, type ConnState } from "../socket";
 import { reduceTranscript, replay, type Block } from "../transcript";
 import { Transcript } from "../components/Transcript";
-import { ModelPicker } from "../components/ModelPicker";
-import { PermissionChip } from "../components/PermissionChip";
+import { Composer } from "../components/Composer";
+import { Kbd } from "../components/Primitives";
 import { Settings } from "./Settings";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
-import { blockMatchesQuery, cwdBasename, formatTokens, isImageMime, slashQuery } from "../format";
+import { blockMatchesQuery, cwdBasename, formatTokens, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 import {
   IconArrowDown,
-  IconAttach,
   IconClose,
   IconExport,
   IconMore,
   IconRename,
   IconSearch,
-  IconSend,
-  IconStop,
   IconTrash,
 } from "../components/Icon";
 import { PopAnchor, Popover } from "../components/Popover";
@@ -422,12 +419,17 @@ export function Chat({
         setSearch("");
         return;
       }
+      /* Escape is the shortcut the run strip advertises. */
+      if (busy && !settings && !threadOpen && caps?.cancel !== false) {
+        cancelRun();
+        return;
+      }
       if (settings) return;
       if (threadOpen) closeThreads();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settings, threadOpen, closeThreads, paletteOpen, slashOpen, searchOpen, railCollapsed, collapseRail]);
+  }, [settings, threadOpen, closeThreads, paletteOpen, slashOpen, searchOpen, railCollapsed, collapseRail, busy, caps]);
 
   useEffect(() => {
     function onPop() {
@@ -667,7 +669,7 @@ export function Chat({
 
   const paletteItems: PaletteItem[] = [
     { id: "new", group: "product", label: t("palette.newThread"), run: () => void onNewThread() },
-    { id: "cancel", group: "product", label: t("palette.cancel"), run: () => { sendRef.current({ type: "run.cancel" }); } },
+    { id: "cancel", group: "product", label: t("palette.cancel"), run: cancelRun },
     { id: "export", group: "product", label: t("palette.export"), run: () => void onExport() },
     {
       id: "settings",
@@ -747,6 +749,10 @@ export function Chat({
     setText("");
     setDrafts([]);
     if (composer.current) resizeComposer(composer.current);
+  }
+
+  function cancelRun() {
+    if (!sendRef.current({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));
   }
 
   async function changeTheme(next: Theme) {
@@ -1101,17 +1107,6 @@ export function Chat({
             adapterName={currentAdapter?.displayName || config.agent.adapter}
             queue={queueItems}
           />
-          {busy && (
-            <div className="working" aria-live="polite">
-              <span className="pulse" aria-hidden />
-              <span className="working-text">
-                {t("status.running")}
-                {runStartedAt ? ` · ${t("chat.elapsed")} ` : ""}
-                {runStartedAt ? <RunElapsedValue startedAt={runStartedAt} /> : null}
-                {lastTool && lastTool.kind === "tool" ? ` · ${lastTool.title}` : ""}
-              </span>
-            </div>
-          )}
         </div>
         {!atBottom && (
           <button
@@ -1130,188 +1125,69 @@ export function Chat({
         )}
         </div>
       </main>
-      <form
-        className="composer"
-        onSubmit={submit}
-        onPaste={(e) => {
-          const files = [...(e.clipboardData?.files ?? [])];
-          const fromFiles = files.filter((f) => attachableFile(f));
-          if (fromFiles.length) {
-            e.preventDefault();
-            void onAttach(fromFiles);
-            return;
-          }
-          const pasted = e.clipboardData?.getData("text/plain") || "";
-          if (pasted.length > 2048) {
-            e.preventDefault();
-            void onAttach([new File([pasted], "paste.txt", { type: "text/plain" })]);
-          }
-        }}
-        onDragOver={(e) => {
-          if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
-        }}
-        onDrop={(e) => {
-          const files = [...e.dataTransfer.files].filter((f) => attachableFile(f));
-          if (!files.length) return;
-          e.preventDefault();
-          void onAttach(files);
-        }}
-      >
-        <div className="composer-inner">
-          {queueItems.length > 0 && (
-            /* The queue was a bare list wedged among the composer hints; it now
-               has its own band with a count, above the input. */
-            <div className="queue-band">
-              <p className="eyebrow">
-                {t("chat.queueList")} · <span className="nums">{queueItems.length}</span>
-              </p>
-              <ul className="queue-list" aria-label={t("chat.queueList")}>
-                {queueItems.map((item) => (
-                  <li key={item.id}>
-                    <span className="truncate">
-                      {item.source === "schedule" ? `${t("chat.queueSchedule")}: ` : ""}
-                      {item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}
-                    </span>
-                    <button
-                      type="button"
-                      className="icon-btn sm"
-                      aria-label={t("chat.queueRemove")}
-                      title={t("chat.queueRemove")}
-                      onClick={() => {
-                        if (!sendRef.current({ type: "queue.cancel", id: item.id })) setSendError(t("chat.sendFailed"));
-                      }}
-                    >
-                      <IconClose />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {/* One row that scrolls sideways rather than a stack that changes the
-              composer height every time a hint appears. */}
-          <div className="composer-meta">
-            {caps?.models !== false && (
-              <ModelPicker
-                compact
-                models={models}
-                modelId={pickerModel}
-                params={pickerParams}
-                preferred={caps?.defaultModel}
-                onChange={(id, params) => void changeModel(id, params)}
-              />
-            )}
-            {modelSource === "fallback" && caps?.liveCatalog !== false && caps && (
-              <p className="warn" title={catalogError || t("wizard.model.fallbackShort")}>
-                {t("wizard.model.fallbackShort")}
-              </p>
-            )}
-            <PermissionChip config={config} caps={caps} onConfig={onConfig} />
-            {caps?.attachments === false && (
-              <p className="muted composer-hint" title={t("chat.attachPathOnly")}>
-                {t("chat.attachPathOnly")}
-              </p>
-            )}
-            {waiting && <p className="muted composer-hint">{t("chat.queuedHint")}</p>}
-          </div>
-          {drafts.length > 0 && (
-            <div className="thumbs draft-thumbs">
-              {drafts.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  className="thumb-remove"
-                  aria-label={`${t("chat.removeAttach")} ${a.name}`}
-                  title={`${t("chat.removeAttach")} ${a.name}`}
-                  onClick={() => setDrafts((cur) => cur.filter((d) => d.id !== a.id))}
-                >
-                  {isImageMime(a.mime) ? (
-                    <img src={`/api/uploads/${encodeURIComponent(a.id)}`} alt={a.name} />
-                  ) : (
-                    <span className="file-chip">{a.name}</span>
-                  )}
-                  {/* Without this badge nothing said the thumbnail was removable. */}
-                  <span className="thumb-badge" aria-hidden="true">
-                    <IconClose />
+      <Composer
+          config={config}
+          onConfig={onConfig}
+          caps={caps}
+          adapterName={currentAdapter?.displayName || config.agent.adapter}
+          models={models}
+          modelId={pickerModel}
+          modelParams={pickerParams}
+          onModel={(id, params) => void changeModel(id, params)}
+          fallbackCatalog={modelSource === "fallback"}
+          catalogError={catalogError}
+          text={text}
+          onText={setText}
+          drafts={drafts}
+          onRemoveDraft={(id) => setDrafts((cur) => cur.filter((d) => d.id !== id))}
+          onAttach={(files) => void onAttach(files)}
+          fileRef={fileRef}
+          composerRef={composer}
+          onSubmit={submit}
+          onResize={(el) => resizeComposer(el)}
+          canSend={canSend}
+          busy={busy}
+          waiting={waiting}
+          onCancel={cancelRun}
+          queue={queueItems}
+          onQueueCancel={(id) => {
+            if (!sendRef.current({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
+          }}
+          templates={config.prompts?.templates ?? []}
+          onTemplate={insertTemplate}
+          slashOpen={slashOpen}
+          setSlashOpen={(next) => {
+            setSlashOpen(next);
+            if (next) setPaletteQuery(slashQuery(text) ?? "");
+          }}
+          paletteOpen={paletteOpen}
+          onPalette={() => {
+            setSlashOpen(false);
+            setPaletteQuery("");
+            setPaletteOpen(true);
+          }}
+          status={
+            busy ? (
+              <div className="composer-status" aria-live="polite">
+                <span className="pulse" aria-hidden />
+                <span className="status-shimmer">{t("status.running")}</span>
+                {runStartedAt ? (
+                  <span className="muted">
+                    <RunElapsedValue startedAt={runStartedAt} />
                   </span>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="composer-box">
-            <button
-              type="button"
-              className="ghost composer-attach"
-              aria-label={t("chat.attach")}
-              onClick={() => fileRef.current?.click()}
-            >
-              <IconAttach />
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,.log,.txt,.md,.json,.jsonl,.service,.conf,.journal,text/plain"
-              multiple
-              hidden
-              onChange={(e) => void onAttach(e.target.files)}
-            />
-            <textarea
-              ref={composer}
-              rows={1}
-              value={text}
-              placeholder={t("chat.placeholder")}
-              aria-label={t("chat.placeholder")}
-              enterKeyHint="send"
-              onChange={(e) => {
-                const next = e.target.value;
-                setText(next);
-                const q = slashQuery(next);
-                setSlashOpen(q !== null);
-                if (q !== null) setPaletteQuery(q);
-                resizeComposer(e.currentTarget);
-              }}
-              onKeyDown={(e) => {
-                if (slashOpen || paletteOpen) {
-                  if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
-                    e.preventDefault();
-                  }
-                  return;
-                }
-                if (shouldSubmitOnEnter(e)) {
-                  e.preventDefault();
-                  submit(e);
-                }
-              }}
-            />
-            {slashOpen && (
-              <CommandPalette
-                open
-                inline
-                hideSearch
-                query={slashQuery(text) ?? ""}
-                items={templatePaletteItems(config.prompts?.templates ?? [], t, insertTemplate)}
-                onClose={() => setSlashOpen(false)}
-              />
-            )}
-            {busy && caps?.cancel !== false && (
-              <button
-                type="button"
-                className="danger composer-send"
-                aria-label={t("chat.cancel")}
-                onClick={() => {
-                  if (!sendRef.current({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));
-                }}
-              >
-                <IconStop fill="currentColor" />
-              </button>
-            )}
-            <button className="primary composer-send" type="submit" disabled={!canSend} aria-label={t("chat.send")}>
-              <IconSend />
-            </button>
-          </div>
-          <p className="muted composer-hint composer-shortcut">{t("palette.hint")}</p>
-        </div>
-      </form>
+                ) : null}
+                {lastTool && lastTool.kind === "tool" ? (
+                  <span className="muted truncate status-step">{lastTool.title}</span>
+                ) : null}
+                {caps?.cancel !== false ? (
+                  <span className="muted status-esc">
+                    <Kbd>Esc</Kbd> {t("chat.cancel")}
+                  </span>
+                ) : null}
+              </div>
+            ) : null
+          }
+        />
       </div>
       {!isDesktop && (
         <BottomNav
@@ -1366,16 +1242,3 @@ export function Chat({
 }
 
 
-function attachableFile(file: File): boolean {
-  if (isImageMime(file.type)) return true;
-  if (
-    file.type === "text/plain" ||
-    file.type === "text/markdown" ||
-    file.type === "text/x-log" ||
-    file.type === "application/json" ||
-    file.type === "application/x-ndjson"
-  ) {
-    return true;
-  }
-  return /\.(log|txt|md|json|jsonl|service|conf|journal)$/i.test(file.name);
-}
