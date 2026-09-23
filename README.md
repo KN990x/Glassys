@@ -35,11 +35,11 @@
 </p>
 
 <p align="center">
-  <img src="./docs/assets/chat.png" alt="Glassys on the desktop: thread rail, thinking, tool cards, and a diff" width="100%">
+  <img src="./docs/assets/chat.png" alt="Glassys on the desktop: workspace rail, a run folded into grouped steps with a diff, the composer, and the Activity panel" width="100%">
 </p>
 
 <p align="center">
-  <img src="./docs/assets/mobile.png" alt="Glassys on a phone: the same thread with a bottom tab bar" width="270">
+  <img src="./docs/assets/mobile.png" alt="Glassys on a phone: the same run, the composer bar, and the bottom tab bar" width="270">
 </p>
 
 <a id="english"></a>

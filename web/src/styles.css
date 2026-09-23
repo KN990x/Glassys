@@ -1454,16 +1454,22 @@ button.host-copy:hover { color: var(--text); }
   font-size: var(--fs-chat);
 }
 /* The turn's own actions, revealed on hover rather than parked in the layout. */
+/* Out of the flow: an invisible button in the flow left a 40px hole under
+   every answer. It overlays the answer's top-right corner on hover instead. */
 .turn-foot {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--s-1);
+  position: absolute;
+  top: calc(var(--s-1) * -1);
+  right: 0;
+  border-radius: var(--r-md);
+  background: var(--bg);
+  box-shadow: var(--e-1);
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--dur) var(--ease);
 }
 .bubble.assistant:hover .turn-foot,
-.turn-foot:focus-within { opacity: 1; }
-@media (hover: none) { .turn-foot { opacity: 1; } }
+.turn-foot:focus-within { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .turn-foot { display: none; } }
 mark {
   background: color-mix(in srgb, var(--warn) 34%, transparent);
   color: inherit;
@@ -1625,7 +1631,7 @@ mark {
 }
 .tool-state svg { width: var(--icon-sm); height: var(--icon-sm); }
 .tool-state.running { color: var(--accent); }
-.tool-state.running svg, .spin { animation: spin 1s linear infinite; }
+.tool-state.running svg { animation: spin 1s linear infinite; }
 .tool-state.error, .tool-state.denied {
   color: var(--danger);
   padding: 0 var(--s-2);
@@ -1642,13 +1648,15 @@ mark {
   overflow: hidden;
 }
 .tool-group.failed { border-color: color-mix(in srgb, var(--danger) 40%, var(--stroke)); }
+.tool-group-row { padding-right: var(--s-2); }
 .tool-group-head {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   min-height: var(--row-h);
-  padding: var(--s-2) var(--s-3);
+  padding: var(--s-2) 0 var(--s-2) var(--s-3);
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -1660,11 +1668,12 @@ mark {
 .tool-group-head:hover { background: var(--hover-bg); }
 .tool-group-head .tool-chevron { transition: transform var(--dur) var(--ease); }
 .tool-group.open .tool-group-head .tool-chevron { transform: rotate(90deg); }
-.tool-group-title { display: flex; align-items: center; gap: var(--s-2); flex: 1; min-width: 0; }
-.tool-group-title svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--accent); }
-.tool-group-body { display: grid; gap: var(--s-1); padding: 0 var(--s-1) var(--s-1); }
-.tool-group-body .tool { border-color: transparent; background: transparent; }
-.tool-group-body .tool:hover { border-color: var(--stroke); }
+.tool-group-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Rows inside a group are flush with its edges, so every tail shares one x. */
+.tool-group-body { display: grid; gap: 0; padding-bottom: var(--s-1); }
+.tool-group-body .tool { border: 0; border-radius: 0; background: transparent; }
+/* A failed group only says so once it is folded; open, its rows speak. */
+.tool-group.open > .tool-group-row .tool-state.error { display: none; }
 
 .shell-out, .preview {
   margin: 0;
@@ -1980,6 +1989,14 @@ mark {
 .chip-btn.risk-warn svg { color: var(--warn); }
 .chip-btn.risk-danger svg { color: var(--danger); }
 .model-chip { display: flex; min-width: 0; }
+/* A phone has room for the model's name and the shield, not for the effort
+   and the word beside the shield; both stay in the tooltip and the menu. */
+@media (max-width: 640px) {
+  .chip-variant { display: none; }
+  .chip-btn.risk-ok .chip-label,
+  .chip-btn.risk-warn .chip-label,
+  .chip-btn.risk-danger .chip-label { display: none; }
+}
 .pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
 .picker-check { position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--accent); }
 .picker-check svg { width: var(--icon-sm); height: var(--icon-sm); }

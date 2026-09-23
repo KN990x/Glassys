@@ -69,11 +69,12 @@ export function PermissionChip({
         className={`ghost tiny chip-btn risk-${tone}`}
         aria-expanded={open}
         aria-controls="permission-chip-pop"
+        aria-label={sandboxPart ? `${label} · ${sandboxPart}` : label}
         title={sandboxPart ? `${label} · ${sandboxPart}` : label}
         onClick={() => setOpen((v) => !v)}
       >
         {glyph}
-        <span className="truncate">{label}</span>
+        <span className="truncate chip-label">{label}</span>
       </button>
       <Popover
         open={open}

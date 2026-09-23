@@ -20,8 +20,8 @@ import {
   IconArrowUp,
   IconAttach,
   IconClose,
-  IconCommand,
   IconStop,
+  IconZap,
 } from "./Icon";
 
 export type ComposerProps = {
@@ -272,7 +272,7 @@ export function Composer(props: ComposerProps) {
               title={t("palette.title")}
               onClick={onPalette}
             >
-              <IconCommand />
+              <IconZap />
             </button>
             {caps?.models !== false && (
               <ModelMenu

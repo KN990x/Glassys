@@ -77,10 +77,13 @@ export function ModelMenu({
         className="ghost tiny chip-btn"
         aria-expanded={open}
         aria-label={t("chat.model")}
-        title={adapterName ? `${adapterName} · ${t("chat.model")}` : t("chat.model")}
+        title={[adapterName, modelChipLabel(selected, params, modelId)].filter(Boolean).join(" · ")}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="truncate">{modelChipLabel(selected, params, modelId)}</span>
+        <span className="truncate">
+          {selected?.displayName || selected?.id || modelId}
+          {variant ? <span className="chip-variant"> · {variant.displayName}</span> : null}
+        </span>
         <IconChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} label={t("chat.model")} side="top" align="start" wide>

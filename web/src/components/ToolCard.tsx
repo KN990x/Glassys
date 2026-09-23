@@ -98,26 +98,36 @@ export function ToolGroup({
 
   return (
     <section className={`tool-group${open ? " open" : ""}${failed ? " failed" : ""}`}>
-      <button
-        type="button"
-        className="tool-group-head"
-        aria-expanded={open}
-        onClick={() => setUserOpen((v) => !(v ?? open))}
-      >
-        <span className="tool-chevron" aria-hidden="true">
-          <IconChevronRight />
-        </span>
-        <span className="tool-group-title">
-          {running ? <IconSpinner className="spin" /> : null}
-          <span className="nums">{blocks.length}</span> {t("tool.steps")}
-          {files > 0 ? ` · ${files} ${t("tool.files")}` : ""}
-        </span>
-        {add || del ? (
-          <span className="stats">
-            <span className="add">+{add}</span> <span className="del">−{del}</span>
+      {/* The head carries the same tail as a row — stats, state, action slot —
+          so the group's totals and state sit in the rows' own columns. */}
+      <div className="tool-row tool-group-row">
+        <button
+          type="button"
+          className="tool-group-head"
+          aria-expanded={open}
+          onClick={() => setUserOpen((v) => !(v ?? open))}
+        >
+          <span className="tool-chevron" aria-hidden="true">
+            <IconChevronRight />
           </span>
-        ) : null}
-      </button>
+          <span className="tool-group-title nums">
+            {blocks.length} {t("tool.steps")}
+            {files > 0 ? ` · ${files} ${t("tool.files")}` : ""}
+          </span>
+        </button>
+        <span className="tool-tail">
+          {add || del ? (
+            <span className="stats">
+              <span className="add">+{add}</span> <span className="del">−{del}</span>
+            </span>
+          ) : null}
+          <ToolState
+            status={running ? "running" : failed ? "error" : "done"}
+            label={running ? t("tool.running") : failed ? t("tool.error") : t("tool.done")}
+          />
+          <span className="tool-action" />
+        </span>
+      </div>
       {open && (
         <div className="tool-group-body">
           {blocks.map((b) => (
