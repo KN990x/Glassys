@@ -112,13 +112,11 @@
   --lh-body: 1.6;
   --track-tight: -0.011em;
 
-  /* Radii. --r-inner is --r-xl minus the composer's own padding, so a button
-     inside a rounded box is concentric with it instead of nearly square. */
+  /* Radii */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
-  --r-inner: 16px;
   --r-full: 999px;
 
   /* Elevation */
@@ -1293,6 +1291,12 @@ details label { margin-top: var(--s-2); }
            0 calc(var(--page-gutter) + env(safe-area-inset-left));
   border-bottom: 1px solid var(--stroke);
   background: var(--bg-elev);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .topbar, .tabbar {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px) saturate(1.4);
+  }
 }
 .topbar-inner {
   width: 100%;
