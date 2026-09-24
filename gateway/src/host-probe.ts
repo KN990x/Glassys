@@ -102,8 +102,9 @@ export function parseDf(stdout: string): HostDisk[] {
     if (!fs.startsWith("/dev/") || fs.startsWith("/dev/loop")) continue;
     if (mount.startsWith("/snap/") || mount.startsWith("/boot/efi")) continue;
     if (mount.startsWith("/System/Volumes/") && mount !== "/System/Volumes/Data") continue;
-    // Xcode mounts one read-only disk image per simulator runtime.
-    if (mount.startsWith("/Library/Developer/")) continue;
+    // Xcode mounts one read-only disk image per simulator runtime, and macOS
+    // mounts its recovery volume on its own now and then.
+    if (mount.startsWith("/Library/Developer/") || mount === "/Volumes/Recovery") continue;
     if (seen.has(fs)) continue;
     seen.add(fs);
     disks.push({ mount, fs, size, used });
@@ -118,6 +119,43 @@ export function parseMeminfoSwap(text: string): { total: number; used: number } 
   const free = kb("SwapFree");
   if (!Number.isFinite(total) || !Number.isFinite(free) || total <= 0) return undefined;
   return { total: total * 1024, used: (total - free) * 1024 };
+}
+
+/** MemAvailable from /proc/meminfo, in bytes: what the kernel could hand out without swapping. */
+export function parseMeminfoAvailable(text: string): number | undefined {
+  const kb = Number(text.match(/^MemAvailable:\s+(\d+)/m)?.[1]);
+  return Number.isFinite(kb) ? kb * 1024 : undefined;
+}
+
+/**
+ * Reclaimable memory from `vm_stat`: free, inactive and speculative pages. On
+ * macOS os.freemem() counts only free pages, so a Mac with its file cache
+ * warm read as 90% used.
+ */
+export function parseVmStatAvailable(stdout: string): number | undefined {
+  const page = Number(stdout.match(/page size of (\d+) bytes/)?.[1]);
+  const pages = (label: string) => Number(stdout.match(new RegExp(`^Pages ${label}:\\s+(\\d+)`, "m"))?.[1]);
+  const free = pages("free");
+  const inactive = pages("inactive");
+  const speculative = pages("speculative");
+  if (![page, free, inactive].every(Number.isFinite)) return undefined;
+  return (free + inactive + (Number.isFinite(speculative) ? speculative : 0)) * page;
+}
+
+async function availableMemory(meminfo: string | undefined): Promise<number> {
+  if (meminfo) {
+    const available = parseMeminfoAvailable(meminfo);
+    if (available !== undefined) return available;
+  }
+  if (platform === "darwin") {
+    try {
+      const available = parseVmStatAvailable((await exec("vm_stat", [])).stdout);
+      if (available !== undefined) return available;
+    } catch {
+      /* fall back to free pages */
+    }
+  }
+  return os.freemem();
 }
 
 export function parseOsRelease(text: string): string | undefined {
@@ -146,17 +184,17 @@ async function osName(): Promise<string> {
 }
 
 export async function hostOverview(): Promise<HostOverview> {
-  const [name, disks, swap] = await Promise.all([
+  const [name, disks, meminfo] = await Promise.all([
     osName(),
     exec("df", ["-kP"]).then(
       (r) => parseDf(r.stdout),
       () => [] as HostDisk[],
     ),
-    platform === "linux"
-      ? readFile("/proc/meminfo", "utf8").then(parseMeminfoSwap, () => undefined)
-      : Promise.resolve(undefined),
+    platform === "linux" ? readFile("/proc/meminfo", "utf8").catch(() => undefined) : Promise.resolve(undefined),
   ]);
+  const swap = meminfo ? parseMeminfoSwap(meminfo) : undefined;
   const total = os.totalmem();
+  const available = Math.min(total, await availableMemory(meminfo));
   const load = os.loadavg();
   return {
     hostname: os.hostname(),
@@ -166,7 +204,7 @@ export async function hostOverview(): Promise<HostOverview> {
     uptimeSec: Math.floor(os.uptime()),
     load: [load[0] ?? 0, load[1] ?? 0, load[2] ?? 0],
     cpus: os.cpus().length,
-    mem: { total, used: Math.max(0, total - os.freemem()) },
+    mem: { total, used: Math.max(0, total - available) },
     ...(swap ? { swap } : {}),
     disks,
   };
