@@ -39,7 +39,7 @@ Host install one-liner (README / `docs/deploy/host.md`): `curl -fsSL …/scripts
 
 ## Rules
 
-- English in code, comments, and `AGENTS.md`. The public `README.md` is bilingual (English then Spanish); keep both halves in sync.
+- English in code and comments. The public `README.md` is bilingual (English then Spanish); keep both halves in sync.
 - UI strings live in `web/src/locales/en.json` and `es.json` with the same keys (`pnpm lint` checks this).
 - Do not hardcode hostnames, workspace paths, models, or reverse-proxy stacks.
 - Do not commit `data/`, `.env`, `secrets.json`, or `config.yaml`. Ship `config.example.yaml` and `.env.example`.
@@ -47,7 +47,12 @@ Host install one-liner (README / `docs/deploy/host.md`): `curl -fsSL …/scripts
 - Honor `capabilities.resume` / `autoRun`. Do not advertise them if the runtime does not.
 - Gemini is selectable only when `probe()` succeeds (`@google/gemini-cli-sdk` linked or published).
 
-Read `AGENTS.md` before changing adapters or the protocol.
+Before changing adapters or the protocol:
+
+- `protocol/` is versioned (`protocolVersion` major `1`). Changes are additive; the client rejects an incompatible major.
+- Each adapter imports only its own vendor SDK, through its local runtime (SDK or ACP), never print-mode CLI output.
+- Runs travel over the WebSocket with keepalive, never SSE or long HTTP. Paint text from the first token.
+- Host views (`GET /api/host/*`) only read. An action in them drafts a prompt for the agent; do not add an endpoint that changes the host.
 
 ## Tests
 
