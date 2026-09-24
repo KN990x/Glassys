@@ -8,6 +8,7 @@ import {
   IconPlus,
   IconRailClose,
   IconRailOpen,
+  IconSearch,
   IconSettings,
   IconSun,
   IconThreads,
@@ -24,8 +25,9 @@ export function nextTheme(current: Theme): Theme {
 }
 
 /**
- * Persistent desktop rail: who the host is, what threads it has, and the two
- * controls the operator reaches for without looking. It collapses to a 56px
+ * Persistent desktop rail: which space this is, its workspaces and threads, and
+ * which machine the agent runs on. Its head shares the 56px header band with
+ * the topbar and the inspector; its foot is one row. It collapses to a 56px
  * strip so a narrow laptop can give the transcript the width instead.
  */
 export function Sidebar({
@@ -35,6 +37,7 @@ export function Sidebar({
   host,
   threads,
   onNew,
+  onSearch,
   onSettings,
   settingsRef,
   onCopyFailed,
@@ -49,6 +52,7 @@ export function Sidebar({
   host: HostInfo;
   threads: ThreadListProps;
   onNew: () => void;
+  onSearch: () => void;
   onSettings: () => void;
   onCopyFailed: () => void;
   settingsRef?: Ref<HTMLButtonElement>;
@@ -61,6 +65,7 @@ export function Sidebar({
   const connected = statusClass === "connected";
   const themeGlyph = theme === "light" ? <IconSun /> : theme === "system" ? <IconMonitor /> : <IconMoon />;
   const themeLabel = `${t("settings.theme")}: ${t(`settings.theme.${theme}`)}`;
+  const newDisabled = threads.busy || threads.waiting;
 
   if (collapsed) {
     return (
@@ -76,31 +81,32 @@ export function Sidebar({
             <IconRailOpen />
           </button>
         </div>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={onNew}
-          disabled={threads.busy || threads.waiting}
-          aria-label={t("threads.new")}
-          title={t("threads.new")}
-        >
-          <IconPlus />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => onCollapse(false)}
-          aria-label={t("threads.title")}
-          title={t("threads.title")}
-        >
-          <IconThreads />
-        </button>
-        <div className="sidebar-foot mini-foot">
-          <span
-            className={`status dot-only ${statusClass}`}
-            aria-live="polite"
-            title={statusLabel}
+        <div className="mini-actions">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onNew}
+            disabled={newDisabled}
+            aria-label={t("threads.new")}
+            title={t("threads.new")}
           >
+            <IconPlus />
+          </button>
+          <button type="button" className="icon-btn" onClick={onSearch} aria-label={t("nav.search")} title={t("nav.search")}>
+            <IconSearch />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onCollapse(false)}
+            aria-label={t("threads.title")}
+            title={t("threads.title")}
+          >
+            <IconThreads />
+          </button>
+        </div>
+        <div className="sidebar-foot mini-foot">
+          <span className={`status dot-only ${statusClass}`} aria-live="polite" title={statusLabel}>
             <span className="visually-hidden">{statusLabel}</span>
           </span>
           <button
@@ -122,14 +128,12 @@ export function Sidebar({
     <aside className="sidebar" aria-label={t("nav.threads")}>
       <div className="sidebar-head">
         <div className="brand tight">
-          <GlassysMark size={22} />
-          <div className="sidebar-identity">
-            <strong className="truncate">{spaceName}</strong>
-            {/* Connected is the normal state; only the exceptions need a word. */}
-            <span className={`status ${statusClass}${connected ? " dot-only" : ""}`} aria-live="polite" title={statusLabel}>
-              {connected ? <span className="visually-hidden">{statusLabel}</span> : statusLabel}
-            </span>
-          </div>
+          <GlassysMark size={20} />
+          <strong className="truncate">{spaceName}</strong>
+          {/* Connected is the normal state; only an exception earns a word. */}
+          <span className={`status ${statusClass}${connected ? " dot-only quiet" : ""}`} aria-live="polite" title={statusLabel}>
+            {connected ? <span className="visually-hidden">{statusLabel}</span> : statusLabel}
+          </span>
         </div>
         <button
           type="button"
@@ -143,45 +147,41 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-actions">
-        <button
-          type="button"
-          className="ghost sidebar-new"
-          onClick={onNew}
-          disabled={threads.busy || threads.waiting}
-        >
+        <button type="button" className="rail-new" onClick={onNew} disabled={newDisabled}>
           <IconPlus />
           <span className="truncate">{t("threads.new")}</span>
           <Kbd>⌘⇧O</Kbd>
         </button>
+        <button type="button" className="icon-btn" onClick={onSearch} aria-label={t("nav.search")} title={t("nav.search")}>
+          <IconSearch />
+        </button>
       </div>
 
       <div className="sidebar-scroll">
-        <ThreadList {...threads} />
+        <ThreadList {...threads} showFilter={false} />
       </div>
 
       <div className="sidebar-foot">
-        <HostContext info={host} variant="card" onCopyFailed={onCopyFailed} />
-        <div className="sidebar-foot-actions">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => onTheme(nextTheme(theme))}
-            aria-label={themeLabel}
-            title={themeLabel}
-          >
-            {themeGlyph}
-          </button>
-          <button
-            ref={settingsRef}
-            type="button"
-            className="icon-btn"
-            onClick={onSettings}
-            aria-label={t("nav.settings")}
-            title={t("nav.settings")}
-          >
-            <IconSettings />
-          </button>
-        </div>
+        <HostContext info={host} variant="rail" onCopyFailed={onCopyFailed} />
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => onTheme(nextTheme(theme))}
+          aria-label={themeLabel}
+          title={themeLabel}
+        >
+          {themeGlyph}
+        </button>
+        <button
+          ref={settingsRef}
+          type="button"
+          className="icon-btn"
+          onClick={onSettings}
+          aria-label={t("nav.settings")}
+          title={t("nav.settings")}
+        >
+          <IconSettings />
+        </button>
       </div>
     </aside>
   );

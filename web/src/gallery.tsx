@@ -155,7 +155,7 @@ function ChatShell({
     >
       {!mobile && (
         <Sidebar spaceName="web-01" statusClass="connected" statusLabel="Connected" host={host}
-          threads={threadProps} onNew={() => {}} onSettings={() => {}} onCopyFailed={() => {}}
+          threads={threadProps} onNew={() => {}} onSearch={() => {}} onSettings={() => {}} onCopyFailed={() => {}}
           collapsed={Boolean(mini)} onCollapse={() => {}} theme="dark" onTheme={() => {}} />
       )}
       <div className="chat-shell">
@@ -166,11 +166,9 @@ function ChatShell({
                 {mobile && <span className="status dot-only connected" title="Connected" />}
                 <strong className="truncate">Disk pressure on web-01</strong>
               </button>
-              {mobile ? <HostContext info={host} variant="inline" onCopyFailed={() => {}} />
-                      : <span className="host-context muted truncate">www · main (dirty)</span>}
+              <HostContext info={host} variant={mobile ? "inline" : "path"} onCopyFailed={() => {}} />
             </div>
             <div className="top-actions">
-              {!mobile && <span className="muted usage-chip">↓18.2k ↑3,120</span>}
               <button type="button" className="icon-btn" aria-label="Search"><IconSearch /></button>
               <button type="button" className="icon-btn" aria-label="More"><IconMore /></button>
             </div>

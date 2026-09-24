@@ -3,7 +3,7 @@ import type { ThreadSummary } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { cwdBasename, formatRelativeShort, groupThreadsByCwd, truncateMiddle } from "../format";
 import { IconChevronRight, IconPin, IconPinOff, IconRename, IconSearch, IconTrash } from "./Icon";
-import { StatusBadge } from "./Primitives";
+import { ListRow, StatusBadge } from "./Primitives";
 
 export type ThreadListProps = {
   threads: ThreadSummary[];
@@ -22,6 +22,8 @@ export type ThreadListProps = {
   onOpenCwd?: (cwd: string) => void;
   onPin?: (cwd: string) => void;
   onUnpin?: (cwd: string) => void;
+  /** The rail finds threads through the palette; the phone sheet keeps a field. */
+  showFilter?: boolean;
 };
 
 type Workspace = {
@@ -84,6 +86,7 @@ export function ThreadList({
   onOpenCwd,
   onPin,
   onUnpin,
+  showFilter = true,
 }: ThreadListProps) {
   const t = useT();
   const [editing, setEditing] = useState<string | null>(null);
@@ -101,17 +104,19 @@ export function ThreadList({
 
   return (
     <div className="thread-list-body">
-      <label className="thread-filter search-field">
-        <span className="visually-hidden">{t("threads.filter")}</span>
-        <IconSearch />
-        <input
-          type="search"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={t("threads.filter")}
-          aria-label={t("threads.filter")}
-        />
-      </label>
+      {showFilter && (
+        <label className="thread-filter search-field">
+          <span className="visually-hidden">{t("threads.filter")}</span>
+          <IconSearch />
+          <input
+            type="search"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t("threads.filter")}
+            aria-label={t("threads.filter")}
+          />
+        </label>
+      )}
 
       {threads.length === 0 && !recents?.length && <p className="muted thread-hint">{t("threads.empty")}</p>}
 
@@ -148,11 +153,20 @@ export function ThreadList({
                   title={ws.cwd}
                   aria-current={isCurrent ? "true" : undefined}
                 >
-                  <span className="ws-name truncate">{label}</span>
-                  <span className="ws-path truncate">
-                    {truncateMiddle(ws.cwd, 30)}
-                    {isCurrent && git ? ` · ${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}` : ""}
+                  <span className="ws-line">
+                    <span className="ws-name truncate">{label}</span>
+                    {isCurrent && git ? (
+                      <span
+                        className={`ws-branch${git.dirty ? " dirty" : ""}`}
+                        title={git.dirty ? `${git.branch} (${t("chat.gitDirty")})` : git.branch}
+                      >
+                        {git.branch}
+                        {/* The amber dot says it to the eye; this says it aloud. */}
+                        {git.dirty ? <span className="visually-hidden"> ({t("chat.gitDirty")})</span> : null}
+                      </span>
+                    ) : null}
                   </span>
+                  <span className="ws-path truncate">{truncateMiddle(ws.cwd, 30)}</span>
                 </button>
                 <span className="ws-meta">
                   {ws.threads.length > 0 && <span className="ws-count nums">{ws.threads.length}</span>}
@@ -195,49 +209,51 @@ export function ThreadList({
                           </button>
                         </form>
                       ) : (
-                        <>
-                          <button
-                            type="button"
-                            className={`ghost picker-item${th.id === currentId ? " current" : ""}`}
-                            onClick={() => void onSwitch(th.id)}
-                            title={th.title}
-                          >
-                            <strong>{th.title}</strong>
-                            <span className="thread-meta muted">
-                              {th.id === currentId && busy ? (
-                                <span className="pulse thread-live" aria-label={t("status.running")} />
-                              ) : null}
-                              <span className="nums">{formatRelativeShort(th.updatedAt, Date.now(), locale)}</span>
+                        <ListRow
+                          current={th.id === currentId}
+                          onClick={() => void onSwitch(th.id)}
+                          title={th.title}
+                          tail={
+                            <span className="thread-meta">
                               {th.adapter && th.adapter !== currentAdapter ? (
                                 <StatusBadge>{th.adapter}</StatusBadge>
                               ) : null}
+                              {th.id === currentId && busy ? (
+                                <span className="pulse thread-live" aria-label={t("status.running")} />
+                              ) : (
+                                <span className="nums">{formatRelativeShort(th.updatedAt, Date.now(), locale)}</span>
+                              )}
                             </span>
-                          </button>
-                          <span className="row-actions">
-                            <button
-                              type="button"
-                              className="icon-btn sm"
-                              aria-label={t("threads.rename")}
-                              title={t("threads.rename")}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditing(th.id);
-                                setDraftTitle(th.title);
-                              }}
-                            >
-                              <IconRename />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn sm danger-hover"
-                              aria-label={t("threads.delete")}
-                              title={t("threads.delete")}
-                              onClick={(e) => void onDelete(th.id, e)}
-                            >
-                              <IconTrash />
-                            </button>
-                          </span>
-                        </>
+                          }
+                          actions={
+                            <>
+                              <button
+                                type="button"
+                                className="icon-btn sm"
+                                aria-label={t("threads.rename")}
+                                title={t("threads.rename")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditing(th.id);
+                                  setDraftTitle(th.title);
+                                }}
+                              >
+                                <IconRename />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn sm danger-hover"
+                                aria-label={t("threads.delete")}
+                                title={t("threads.delete")}
+                                onClick={(e) => void onDelete(th.id, e)}
+                              >
+                                <IconTrash />
+                              </button>
+                            </>
+                          }
+                        >
+                          {th.title}
+                        </ListRow>
                       )}
                     </li>
                   ))}

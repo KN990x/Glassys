@@ -392,5 +392,8 @@
   "palette.run": "para ejecutar",
   "palette.close": "para cerrar",
   "login.reveal": "Mostrar la contraseña",
-  "login.hide": "Ocultar la contraseña"
+  "login.hide": "Ocultar la contraseña",
+  "nav.search": "Buscar hilos y comandos",
+  "activity.tokens": "Tokens entrada / salida",
+  "activity.duration": "Duración"
 }

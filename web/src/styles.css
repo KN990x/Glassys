@@ -1070,45 +1070,60 @@ details label { margin-top: var(--s-2); }
 }
 .app-shell > * { min-width: 0; min-height: 0; }
 
+/* The rail's children carry their own inline padding, so the head's and the
+   foot's hairlines run edge to edge and line up with the topbar's. */
 .sidebar {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: var(--s-3);
   min-height: 0;
   min-width: 0;
-  padding: 0 var(--s-3);
   padding-top: env(safe-area-inset-top);
-  padding-left: calc(var(--s-3) + env(safe-area-inset-left));
-  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom));
+  padding-left: env(safe-area-inset-left);
   background: var(--surface-1);
   border-right: 1px solid var(--stroke);
 }
-/* Matches the topbar so the rail's name and the thread title share a baseline;
-   the rail used to start 8px lower. */
+/* The header band: 56px with its hairline, in all three columns. */
 .sidebar-head {
   min-height: var(--topbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  padding: 0 var(--s-2);
+  padding: 0 var(--s-3) 0 var(--s-4);
+  border-bottom: 1px solid var(--stroke);
 }
 .sidebar-head .brand { min-width: 0; }
-.sidebar.mini {
-  padding: 0 var(--s-1);
-  padding-left: calc(var(--s-1) + env(safe-area-inset-left));
-  justify-items: center;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+.status.quiet::before { display: none; }
+.sidebar-actions {
+  display: flex;
   gap: var(--s-1);
+  align-items: center;
+  padding: var(--s-3) var(--s-3) var(--s-2);
 }
-.sidebar.mini .sidebar-head { justify-content: center; padding: 0; }
-.mini-foot { align-self: end; justify-items: center; gap: var(--s-1); border-top: 0; }
-.mini-foot .status { justify-content: center; }
-.sidebar-identity { display: grid; gap: var(--s-05); min-width: 0; }
-.sidebar-identity strong { font-size: var(--fs-base); font-weight: 600; }
-.sidebar-actions { display: flex; gap: var(--s-2); align-items: center; }
-.sidebar-new { flex: 1; justify-content: flex-start; gap: var(--s-2); }
-.sidebar-new .kbd { margin-left: auto; }
+.rail-new {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: 1;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.rail-new:hover:not(:disabled) { background: var(--hover-bg); }
+.rail-new svg { width: var(--icon-md); height: var(--icon-md); color: var(--muted); flex: none; }
+/* The shortcut is a hint for the pointer that is already there. */
+.rail-new .kbd { margin-left: auto; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.rail-new:hover .kbd, .rail-new:focus-visible .kbd { opacity: 1; }
+/* A list that runs under the foot fades out instead of slicing a row in half. */
 .sidebar-scroll {
   overflow: auto;
   overscroll-behavior: contain;
@@ -1116,38 +1131,50 @@ details label { margin-top: var(--s-2); }
   display: grid;
   align-content: start;
   gap: var(--s-3);
-  margin: 0 calc(var(--s-2) * -1);
-  padding: 0 var(--s-2);
+  padding: var(--s-1) var(--s-3) var(--s-4);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--s-2), #000 calc(100% - var(--s-5)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--s-2), #000 calc(100% - var(--s-5)), transparent);
 }
 .sidebar-foot {
-  display: grid;
-  gap: var(--s-2);
-  padding-top: var(--s-3);
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--topbar-h);
+  padding: var(--s-2) var(--s-3) calc(var(--s-2) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--stroke);
 }
-.sidebar-foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-1); }
+.sidebar.mini { justify-items: center; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.sidebar.mini .sidebar-head { justify-content: center; padding: 0; width: 100%; }
+.mini-actions { display: grid; gap: var(--s-1); padding-top: var(--s-3); justify-items: center; }
+.mini-foot { grid-row: 4; flex-direction: column; justify-content: flex-end; width: 100%; border-top: 0; }
+.mini-foot .status { justify-content: center; }
 .thread-list-body { display: grid; gap: var(--s-3); align-content: start; }
 .thread-hint { margin: 0; font-size: var(--fs-xs); }
 
-/* Workspace, then its threads. One row per directory instead of the same path
-   under Pinned, as a group heading and as the heading's subtitle. */
-.ws-tree { display: grid; gap: var(--s-1); align-content: start; min-width: 0; }
+/* Workspace, then its threads. The name line carries the branch and the
+   count; the path sits under it in mono. Nothing here is accented: the thread
+   you are in is marked by the selection, not by a blue path above it. */
+.ws-tree { display: grid; gap: var(--s-2); align-content: start; min-width: 0; }
 .ws-group { display: grid; gap: var(--s-05); min-width: 0; }
 .ws-row {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--s-1);
   min-width: 0;
+  padding-left: var(--s-1);
   border-radius: var(--r-md);
 }
 .ws-row:hover { background: var(--hover-bg); }
+/* Twisty and count are one name-line tall and sit on that line, so neither
+   floats in the middle of a two-line block. */
 .ws-twisty {
   display: grid;
   place-items: center;
   flex: none;
   width: var(--s-5);
   height: var(--s-5);
+  margin-top: var(--s-1);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1167,49 +1194,65 @@ details label { margin-top: var(--s-2); }
   border: 0;
   background: transparent;
   text-align: left;
+  line-height: var(--lh-ui);
   cursor: pointer;
 }
 .ws-open:disabled { cursor: default; opacity: 1; }
+.ws-line { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .ws-name { font-size: var(--fs-base); font-weight: 500; color: var(--text); }
-.ws-path { font-size: var(--fs-xs); color: var(--muted); font-family: var(--mono); }
-.ws-group.current .ws-name { color: var(--text); }
-.ws-group.current .ws-path { color: var(--muted); }
-.ws-meta { display: flex; align-items: center; gap: var(--s-1); flex: none; padding-right: var(--s-2); }
-.ws-count {
-  font-size: var(--fs-xs);
-  color: var(--faint);
-  min-width: var(--s-4);
-  text-align: right;
+.ws-path { font-size: var(--fs-sm); color: var(--faint); font-family: var(--mono); }
+.ws-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex: none;
+  max-width: 50%;
+  padding: 0 var(--s-1);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.ws-branch.dirty::after {
+  content: "";
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  flex: none;
+  border-radius: var(--r-full);
+  background: var(--warn);
+}
+.ws-meta {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: var(--s-5);
+  margin-top: var(--s-1);
+  padding-right: var(--s-2);
+}
+.ws-count { font-size: var(--fs-xs); color: var(--faint); min-width: var(--s-4); text-align: right; }
 .ws-row:hover .ws-meta,
 .ws-row:focus-within .ws-meta { opacity: 0; }
 
-.host-context.host-card {
-  display: flex;
-  max-width: none;
-  font-size: var(--fs-sm);
-  align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-2);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
-  background: var(--bg-muted);
-  min-width: 0;
-}
+/* The rail's foot: which machine, which agent. The path is the thread's and
+   lives in the topbar. */
+.host-context.host-rail { display: flex; align-items: center; gap: var(--s-2); flex: 1; min-width: 0; padding-left: var(--s-1); }
 .host-glyph {
   display: grid;
   place-items: center;
   flex: none;
   width: var(--control-h-sm);
   height: var(--control-h-sm);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: var(--surface-3);
   color: var(--muted);
 }
-.host-lines { display: grid; gap: var(--s-05); min-width: 0; flex: 1; }
-.host-name { font-size: var(--fs-sm); color: var(--text); }
-.host-detail { font-size: var(--fs-xs); color: var(--muted); font-family: var(--mono); }
-.host-copy-btn { flex: none; }
+.host-lines { display: grid; gap: 0; min-width: 0; flex: 1; line-height: var(--lh-ui); }
+.host-name { font-size: var(--fs-sm); font-weight: 500; color: var(--text); }
+.host-detail { font-size: var(--fs-xs); color: var(--muted); }
 
 .tabbar {
   position: fixed;
@@ -1314,8 +1357,6 @@ details label { margin-top: var(--s-2); }
   opacity: 0;
   transition: opacity var(--dur) var(--ease);
 }
-.thread-row:hover .row-actions,
-.thread-row:focus-within .row-actions,
 .ws-row:hover .row-actions,
 .ws-row:focus-within .row-actions { opacity: 1; }
 .icon-btn.danger-hover:hover:not(:disabled) { color: var(--danger); background: var(--danger-bg); }
@@ -1323,21 +1364,19 @@ details label { margin-top: var(--s-2); }
   .row-actions { opacity: 1; }
   .ws-row:hover .ws-meta, .ws-row:focus-within .ws-meta { opacity: 1; }
   .row-actions { position: static; transform: none; background: none; padding-left: 0; }
-  .thread-row, .ws-row { display: flex; align-items: center; }
-  .thread-row .picker-item, .ws-row .ws-open { flex: 1; }
+  .ws-row .ws-open { flex: 1; }
 }
 
 /* ---------------------------------------------------------------------------
    Activity inspector: what this thread did to the host.
    --------------------------------------------------------------------------- */
 .inspector {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  gap: var(--s-3);
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   min-width: 0;
-  padding: 0 var(--s-3) calc(var(--s-3) + env(safe-area-inset-bottom));
   padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--surface-1);
   border-left: 1px solid var(--stroke);
 }
@@ -1346,41 +1385,47 @@ details label { margin-top: var(--s-2); }
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
+  flex: none;
   min-height: var(--topbar-h);
+  padding: 0 var(--s-3) 0 var(--s-4);
+  border-bottom: 1px solid var(--stroke);
 }
 .inspector-head h2 { margin: 0; font-size: var(--fs-base); font-weight: 600; }
-.inspector-meta { display: flex; flex-wrap: wrap; gap: var(--s-1); }
-.inspector-meta:empty { display: none; }
-.inspector .segmented { display: flex; }
-.inspector .segment { flex: 1; }
-.inspector-body { overflow: auto; overscroll-behavior: contain; min-height: 0; }
-.activity-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
-.activity-empty { font-size: var(--fs-sm); padding: var(--s-2); }
-.activity-row {
-  display: flex;
-  align-items: center;
+/* Two figures side by side, value over label, instead of a row of pills. */
+.inspector-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2);
-  width: 100%;
-  min-height: var(--row-h);
-  padding: var(--s-1) var(--s-2);
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-  transition: background var(--dur) var(--ease);
+  margin: 0;
+  padding: var(--s-3) var(--s-3) 0;
 }
-.activity-row:hover { background: var(--hover-bg); }
-.activity-row code { font-family: var(--mono); font-size: var(--fs-xs); flex: 1; min-width: 0; }
-.activity-row > .truncate { flex: 1; }
-.activity-glyph { display: grid; place-items: center; flex: none; color: var(--faint); }
-.activity-glyph svg { width: var(--icon-sm); height: var(--icon-sm); }
-.activity-touches { font-size: var(--fs-xs); color: var(--faint); flex: none; }
+.stat {
+  display: grid;
+  gap: var(--s-05);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--bg-muted);
+  min-width: 0;
+}
+.stat dt { font-size: var(--fs-xs); color: var(--muted); }
+.stat dd { margin: 0; font-size: var(--fs-chat); font-weight: 600; line-height: var(--lh-ui); }
+.stat-sep { color: var(--faint); font-weight: 400; }
+.inspector-tabs { flex: none; padding: var(--s-3) var(--s-3) var(--s-2); }
+.inspector-tabs .segmented { display: flex; }
+.inspector-tabs .segment { flex: 1; }
+.inspector-body { flex: 1; overflow: auto; overscroll-behavior: contain; min-height: 0; padding: 0 var(--s-3) var(--s-3); }
+/* minmax(0, 1fr): a grid item is as wide as its content by default, so a long
+   command pushed its row and its state glyph past the panel edge. */
+.activity-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-05); }
+.activity-empty { font-size: var(--fs-sm); padding: var(--s-2); }
+.activity-state { display: grid; place-items: center; width: var(--icon-md); color: var(--faint); }
+.activity-state svg { width: var(--icon-md); height: var(--icon-md); }
+.activity-state.running { color: var(--accent); }
+.activity-state.running svg { animation: spin 1s linear infinite; }
+.activity-state.denied, .activity-state.error { color: var(--danger); }
+.activity-touches { color: var(--faint); }
 .activity-file { display: grid; gap: var(--s-05); }
-.activity-file .disclosure { padding-left: var(--s-6); }
+.activity-file .disclosure { padding-left: var(--s-7); }
 .activity-file .disclosure-toggle { font-size: var(--fs-xs); }
 
 /* Below the inspector breakpoint the panel is a sheet over the transcript. */
@@ -1488,8 +1533,10 @@ button.host-copy {
   transition: color var(--dur) var(--ease);
 }
 button.host-copy:hover { color: var(--text); }
+/* On the desktop topbar the subtitle is the thread's path and branch, in the
+   face paths are set in everywhere else. */
+.host-path { font-family: var(--mono); font-size: var(--fs-sm); }
 .top-actions { display: flex; gap: var(--s-2); align-items: center; min-width: 0; }
-.usage-chip { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------------------
    Transcript
@@ -2271,12 +2318,20 @@ mark {
   gap: var(--s-2);
 }
 .thread-panel h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
-.thread-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+/* The guide line runs down the centre of the workspace's twisty, and a thread
+   title starts at the same x as the workspace name above it. */
+.thread-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-05);
+  margin: 0 0 0 calc(var(--s-1) + var(--s-5) / 2);
+  padding: 0 0 0 calc(var(--s-1) + 1px);
+  border-left: 1px solid var(--stroke);
+}
 .thread-row { position: relative; min-width: 0; }
-.thread-row .picker-item { min-width: 0; }
-.thread-meta { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
-.thread-live { width: var(--s-2); height: var(--s-2); flex: none; background: var(--accent); }
-.thread-list { padding-left: var(--s-5); border-left: 1px solid var(--stroke); margin-left: var(--s-2); }
+.thread-meta { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.thread-live { width: var(--dot-sm); height: var(--dot-sm); flex: none; background: var(--accent); }
 .thread-rename { display: flex; gap: var(--s-1); min-width: 0; }
 .thread-rename input { min-width: 0; flex: 1; }
 .thread-filter { margin: 0; }

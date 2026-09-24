@@ -392,5 +392,8 @@
   "palette.run": "to run",
   "palette.close": "to close",
   "login.reveal": "Show the password",
-  "login.hide": "Hide the password"
+  "login.hide": "Hide the password",
+  "nav.search": "Search threads and commands",
+  "activity.tokens": "Tokens in / out",
+  "activity.duration": "Run time"
 }

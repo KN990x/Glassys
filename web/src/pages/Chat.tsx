@@ -23,7 +23,7 @@ import { Kbd } from "../components/Primitives";
 import { Settings } from "./Settings";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
-import { blockMatchesQuery, cwdBasename, formatTokens, slashQuery } from "../format";
+import { blockMatchesQuery, cwdBasename, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 import { ActivityPanel } from "../components/ActivityPanel";
@@ -980,6 +980,11 @@ export function Chat({
           threads={threadListProps}
           settingsRef={settingsBtn}
           onNew={() => void onNewThread()}
+          onSearch={() => {
+            setSlashOpen(false);
+            setPaletteQuery("");
+            setPaletteOpen(true);
+          }}
           onSettings={() => openSettings()}
           onCopyFailed={onCopyFailed}
           collapsed={railCollapsed}
@@ -1063,25 +1068,15 @@ export function Chat({
                         )}
                         <strong className="truncate">{threadTitle}</strong>
                       </button>
-                      {isDesktop ? (
-                        <span className="host-context muted truncate" title={config.agent.cwd}>
-                          {[cwdBasename(config.agent.cwd), git ? `${git.branch}${git.dirty ? ` (${t("chat.gitDirty")})` : ""}` : ""]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      ) : (
-                        <HostContext info={hostInfo} variant="inline" onCopyFailed={onCopyFailed} />
-                      )}
+                      <HostContext
+                        info={hostInfo}
+                        variant={isDesktop ? "path" : "inline"}
+                        onCopyFailed={onCopyFailed}
+                      />
                     </>
                   )}
                 </div>
                 <div className="top-actions">
-                  {isDesktop && liveUsage && (
-                    <span className="muted usage-chip" title={t("chat.usageTotal")}>
-                      ↓{formatTokens(liveUsage.inputTokens, config.space.locale)} ↑
-                      {formatTokens(liveUsage.outputTokens, config.space.locale)}
-                    </span>
-                  )}
                   <button
                     type="button"
                     className="icon-btn"
@@ -1328,6 +1323,7 @@ export function Chat({
             locale={config.space.locale}
             onClose={() => toggleActivity(false)}
             duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
+            usage={liveUsage}
           />
         ) : (
           <div className="inspector-sheet" role="dialog" aria-modal="true" aria-label={t("nav.activity")}>
@@ -1337,6 +1333,7 @@ export function Chat({
               locale={config.space.locale}
               onClose={() => toggleActivity(false)}
               duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
+              usage={liveUsage}
             />
           </div>
         ))}

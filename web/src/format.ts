@@ -85,7 +85,9 @@ export function blockMatchesQuery(
 export function formatTokens(n: number | undefined, locale = "en"): string {
   if (!Number.isFinite(n) || n === undefined) return "0";
   const lang = locale.startsWith("es") ? "es" : "en";
-  if (n >= 10_000) {
+  // Both sides of an in/out pair read in one format: "18.2k / 3.1k", never
+  // "18.2k / 3,120".
+  if (n >= 1_000) {
     const scaled = n >= 1_000_000 ? n / 1_000_000 : n / 1_000;
     const unit = n >= 1_000_000 ? "M" : "k";
     return `${new Intl.NumberFormat(lang, { maximumFractionDigits: 1 }).format(scaled)}${unit}`;

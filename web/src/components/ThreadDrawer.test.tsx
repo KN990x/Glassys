@@ -67,7 +67,7 @@ describe("ThreadDrawer", () => {
     expect(host.textContent).toContain("main");
     expect(host.textContent).toContain("dirty");
     expect(host.textContent).toContain("/opt/pinned");
-    expect(host.querySelector("button.primary")?.hasAttribute("disabled")).toBe(true);
+    expect(host.querySelector("button.rail-new")?.hasAttribute("disabled")).toBe(true);
     expect(document.body.style.overflow).toBe("hidden");
   });
 
@@ -101,7 +101,7 @@ describe("ThreadDrawer", () => {
       proto?.set?.call(search, "old");
       search.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const titles = [...host.querySelectorAll(".thread-list .picker-item strong")].map((el) => el.textContent);
+    const titles = [...host.querySelectorAll(".thread-list .list-row-text")].map((el) => el.textContent);
     expect(titles).toEqual(["Old"]);
   });
 });

@@ -70,12 +70,7 @@ export function ThreadDrawer({
             <IconClose />
           </button>
         </header>
-        <button
-          type="button"
-          className="primary sidebar-new"
-          onClick={onNew}
-          disabled={list.busy || list.waiting}
-        >
+        <button type="button" className="rail-new" onClick={onNew} disabled={list.busy || list.waiting}>
           <IconPlus />
           {t("threads.new")}
         </button>

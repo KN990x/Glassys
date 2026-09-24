@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useT } from "../i18n";
 import { truncateMiddle } from "../format";
-import { IconCheck, IconCopy, IconServer } from "./Icon";
+import { IconServer } from "./Icon";
 
 export type HostInfo = {
   hostLabel: string;
@@ -11,9 +11,10 @@ export type HostInfo = {
 };
 
 /**
- * Which machine this is. The rail shows one card — four 11px labelled rows of
- * icons took more height than the thread list they sat under. The phone topbar
- * keeps the single clipped line; both copy the cwd on click.
+ * Which machine this is. The rail's foot names the machine and the agent in one
+ * row — the workspace path belongs to the thread and lives in the topbar, where
+ * it used to be repeated. The phone topbar keeps the single clipped line, and
+ * both line forms copy the cwd on click.
  */
 export function HostContext({
   info,
@@ -21,7 +22,7 @@ export function HostContext({
   onCopyFailed,
 }: {
   info: HostInfo;
-  variant: "card" | "inline";
+  variant: "rail" | "inline" | "path";
   onCopyFailed: () => void;
 }) {
   const t = useT();
@@ -40,46 +41,37 @@ export function HostContext({
 
   const branch = info.git ? `${info.git.branch}${info.git.dirty ? ` (${t("chat.gitDirty")})` : ""}` : "";
 
-  if (variant === "inline") {
+  if (variant === "rail") {
     return (
-      <span className="host-context muted">
-        <button
-          type="button"
-          className="host-copy"
-          title={info.cwd}
-          aria-label={t("chat.copyCwd")}
-          onClick={copy}
-        >
-          {[info.hostLabel, info.cwd, branch, info.adapter].filter(Boolean).join(" · ")}
-          {copied ? ` · ${t("chat.copied")}` : ""}
-        </button>
-      </span>
+      <div className="host-context host-rail" title={[info.hostLabel, info.adapter].filter(Boolean).join(" · ")}>
+        <span className="host-glyph" aria-hidden="true">
+          <IconServer />
+        </span>
+        <span className="host-lines">
+          <span className="host-name truncate">{info.hostLabel || t("host.machine")}</span>
+          <span className="host-detail truncate">{info.adapter || "—"}</span>
+        </span>
+      </div>
     );
   }
 
+  const parts =
+    variant === "path"
+      ? [truncateMiddle(info.cwd, 56), branch]
+      : [info.hostLabel, info.cwd, branch, info.adapter];
+
   return (
-    <div className="host-context host-card">
-      <span className="host-glyph" aria-hidden="true">
-        <IconServer />
-      </span>
-      <div className="host-lines">
-        <span className="host-name truncate" title={info.hostLabel}>
-          {info.hostLabel || t("host.machine")}
-        </span>
-        <span className="host-detail truncate" title={[info.cwd, branch].filter(Boolean).join(" · ")}>
-          {truncateMiddle(info.cwd, 26) || "—"}
-          {branch ? ` · ${branch}` : ""}
-        </span>
-      </div>
+    <span className={`host-context muted${variant === "path" ? " host-path" : ""}`}>
       <button
         type="button"
-        className="icon-btn sm host-copy-btn"
-        onClick={copy}
+        className="host-copy"
+        title={copied ? t("chat.copied") : `${t("chat.copyCwd")}: ${info.cwd}`}
         aria-label={t("chat.copyCwd")}
-        title={copied ? t("chat.copied") : t("chat.copyCwd")}
+        onClick={copy}
       >
-        {copied ? <IconCheck /> : <IconCopy />}
+        {parts.filter(Boolean).join(" · ")}
+        {copied ? ` · ${t("chat.copied")}` : ""}
       </button>
-    </div>
+    </span>
   );
 }
