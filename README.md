@@ -39,6 +39,10 @@
 </p>
 
 <p align="center">
+  <img src="./docs/assets/host.png" alt="Glassys host overview: uptime, load, memory and swap, every disk with a usage bar, and the failed services" width="100%">
+</p>
+
+<p align="center">
   <img src="./docs/assets/mobile.png" alt="Glassys on a phone: the same run, the composer bar, and the bottom tab bar" width="270">
 </p>
 
@@ -72,14 +76,23 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 ## Interface
 
 The PWA is one surface at two sizes. Wide screens get a persistent rail: one row
-per workspace with its threads nested under it, and the host card at the bottom.
-It collapses to a 56px strip with `⌘B`. Phones get the same tree as a sheet plus
-a bottom tab bar, and the composer clears the home indicator.
+per workspace with its threads nested under it, and the machine and its agent at
+the bottom. It collapses to a 56px strip with `⌘B`. Phones get the same tree as
+a sheet plus a bottom tab bar — Chat, Threads, Host, Files, Settings — and the
+composer clears the home indicator.
+
+- **Host views** — beside the chat, the machine the agent works on:
+  **Overview** (uptime, load, memory, swap, every disk, failed services),
+  **Services** (systemd or launchd), **Logs** (the journal, filterable, with
+  Follow) and **Files** (a read-only browser with previews). They only read:
+  Diagnose, Restart, Review this host or Ask the agent draft a prompt into the
+  composer, and the agent does the work. Glassys's own data directory is never
+  browsable.
 
 - **Transcript** — thinking, then the run itself: consecutive tool calls fold
   into one band ("6 steps · 3 files +4 −2"), shell calls render as a terminal
   block, diffs get a sign channel, and text paints from the first token.
-- **Activity** — `⌘I`, or the phone's third tab: every command this thread ran
+- **Activity** — `⌘I`, or the button in the chat's topbar: every command this thread ran
   with how it ended, and every file it read or rewrote, derived from the
   transcript. Clicking a row jumps to that call.
 - **Composer** — one card. Attach, saved prompts, the model chip and the
@@ -89,7 +102,7 @@ a bottom tab bar, and the composer clears the home indicator.
   workspaces, and your saved prompts. Typing `/` in the composer filters the
   same prompts inline.
 - **Saved operations** — slash templates you define in Settings. The empty
-  transcript offers them as cards, so a fresh thread starts with one tap.
+  transcript offers them as a list, so a fresh thread starts with one tap.
 - **Scheduled prompts** — cron or a one-shot time, queued when the gateway is
   idle.
 - **Settings** — appearance, agent, session, templates, schedules, updates,
@@ -226,16 +239,24 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 ## Interfaz
 
 La PWA es una sola superficie a dos tamaños. En pantalla ancha hay un rail fijo:
-una fila por workspace con sus hilos anidados debajo, y la tarjeta del host al
+una fila por workspace con sus hilos anidados debajo, y la máquina y su agente al
 pie. Se pliega a una tira de 56px con `⌘B`. En el teléfono ese mismo árbol
-aparece como hoja, con una barra inferior, y el composer respeta el indicador de
-inicio.
+aparece como hoja, con una barra inferior —Chat, Hilos, Host, Archivos, Ajustes—
+y el composer respeta el indicador de inicio.
+
+- **Vistas del host** — junto al chat, la máquina en la que trabaja el agente:
+  **Resumen** (encendido, carga, memoria, swap, cada disco y los servicios con
+  fallos), **Servicios** (systemd o launchd), **Logs** (el journal, con filtros
+  y Seguir) y **Archivos** (un explorador de solo lectura con vista previa).
+  Solo leen: Diagnosticar, Reiniciar, Revisar este host o Preguntar al agente
+  redactan un prompt en el composer, y el agente hace el trabajo. El directorio
+  de datos de Glassys nunca se puede explorar.
 
 - **Transcript** — el razonamiento y después la ejecución: las llamadas
   consecutivas se agrupan en una banda («6 pasos · 3 archivos +4 −2»), las de
   shell se dibujan como un bloque de terminal, los diffs llevan canal de signo,
   y el texto se pinta desde el primer token.
-- **Actividad** — `⌘I`, o la tercera pestaña en el teléfono: cada comando que ha
+- **Actividad** — `⌘I`, o el botón del topbar del chat: cada comando que ha
   ejecutado el hilo y cómo terminó, y cada archivo leído o reescrito, derivado
   del transcript. Al pulsar una fila, el transcript salta a esa llamada.
 - **Composer** — una sola tarjeta. Adjuntar, prompts guardados, el chip de
@@ -245,7 +266,7 @@ inicio.
   actualizar, workspaces y tus prompts guardados. Escribir `/` en el composer
   filtra esos mismos prompts en línea.
 - **Operaciones guardadas** — plantillas slash que defines en Ajustes. El
-  transcript vacío las ofrece como tarjetas, así un hilo nuevo arranca de un
+  transcript vacío las ofrece como una lista, así un hilo nuevo arranca de un
   toque.
 - **Prompts programados** — cron o una hora única, encolados cuando la pasarela
   está libre.
