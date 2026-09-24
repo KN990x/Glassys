@@ -103,6 +103,7 @@ export function CommandPalette({
           <IconSearch />
           <input
             ref={inputRef}
+            type="search"
             value={query}
             onChange={(e) => onQuery?.(e.target.value)}
             placeholder={t("palette.placeholder")}

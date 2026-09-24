@@ -615,9 +615,12 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   color: var(--muted);
   min-width: 0;
 }
-.callout-icon { display: grid; place-items: center; height: var(--icon-xl); flex: none; }
-.callout-text { flex: 1; min-width: 0; overflow-wrap: anywhere; align-self: center; }
-.callout .ghost.tiny { flex: none; align-self: center; }
+/* The icon sits in a box one small control tall, and the text is padded so its
+   first line centres on that box: a one-line callout lines up with a Retry
+   button beside it, and a three-line one keeps the icon on its first line. */
+.callout-icon { display: grid; place-items: center; height: var(--control-h-sm); flex: none; }
+.callout-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-block: calc((var(--control-h-sm) - 1lh) / 2); }
+.callout .ghost.tiny { flex: none; }
 .callout.tone-warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
 .callout.tone-danger { color: var(--danger); background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
 .callout.tone-ok { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 26%, transparent); }
@@ -690,6 +693,8 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .setting-row.stack-row .setting-control > textarea,
 .setting-row.stack-row .setting-control > select { width: 100%; }
 .setting-control .switch-row { flex: none; }
+.setting-control > .skeleton { width: var(--w-control); }
+.setting-control > .skeleton .skeleton-line { height: var(--control-h); border-radius: var(--r-md); }
 
 .kbd {
   display: inline-flex;
@@ -1129,11 +1134,11 @@ details label { margin-top: var(--s-2); }
 .topbar-search { flex: 1; }
 .search-count { flex: none; font-size: var(--fs-xs); }
 
+/* The same column as .transcript-inner: the gutter sits outside the width, so
+   an alert's edges line up with the messages under it. */
 .alert-stack {
-  width: min(var(--content-max), 100%);
+  width: min(var(--content-max), calc(100% - 2 * var(--page-gutter)));
   margin: var(--s-3) auto 0;
-  padding-inline: calc(var(--page-gutter) + env(safe-area-inset-left))
-                  calc(var(--page-gutter) + env(safe-area-inset-right));
   display: grid;
   gap: var(--s-2);
   box-sizing: border-box;
@@ -1150,9 +1155,9 @@ details label { margin-top: var(--s-2); }
 .banner.alert.error { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
 .banner.alert.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
 .banner.alert.info { background: var(--info-bg); border-color: var(--stroke); }
-.alert-icon { display: grid; place-items: center; height: var(--icon-xl); flex: none; }
-.alert-text { flex: 1; min-width: 0; overflow-wrap: anywhere; align-self: center; }
-.banner.alert .ghost.tiny, .banner.alert .icon-btn { flex: none; align-self: center; }
+.alert-icon { display: grid; place-items: center; height: var(--control-h-sm); flex: none; }
+.alert-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-block: calc((var(--control-h-sm) - 1lh) / 2); }
+.banner.alert .ghost.tiny, .banner.alert .icon-btn { flex: none; }
 
 /* Absolute, not a reserved column: a fixed action slot clipped every thread
    title to make room for two buttons that are only visible on hover. */
@@ -1325,7 +1330,7 @@ details label { margin-top: var(--s-2); }
 .status.reconnecting, .status.connecting, .status.queued, .status.running { color: var(--warn); }
 .status.error { color: var(--danger); }
 .status.dot-only { gap: 0; flex: none; }
-.host-context { display: block; font-size: var(--fs-xs); max-width: min(var(--w-sheet), calc(100vw - var(--w-number))); }
+.host-context { display: block; font-size: var(--fs-xs); min-width: 0; max-width: 100%; }
 button.host-copy {
   display: block;
   width: 100%;
