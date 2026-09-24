@@ -2,6 +2,15 @@ import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
   ConfigPatch,
+  DirListing,
+  FilePreview,
+  HostCapabilities,
+  HostOverview,
+  LogPage,
+  LogPriority,
+  ServiceScope,
+  ServiceStateFilter,
+  ServiceUnit,
   MessageAttachment,
   ModelListResponse,
   RedactedConfig,
@@ -33,7 +42,22 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   return data;
 }
 
+function query(params: Record<string, string | number | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 export const api = {
+  hostCapabilities: () => req<HostCapabilities>("/api/host/capabilities"),
+  hostOverview: () => req<HostOverview>("/api/host/overview"),
+  hostServices: (scope: ServiceScope, state: ServiceStateFilter) =>
+    req<{ units: ServiceUnit[] }>(`/api/host/services${query({ scope, state })}`),
+  hostLogs: (p: { unit?: string; priority?: LogPriority; lines?: number; cursor?: string; scope?: ServiceScope }) =>
+    req<LogPage>(`/api/host/logs${query(p)}`),
+  hostFiles: (path: string) => req<DirListing>(`/api/host/files${query({ path })}`),
+  hostFile: (path: string) => req<FilePreview>(`/api/host/file${query({ path })}`),
   status: () => req<{ setupComplete: boolean; onboarded: boolean }>("/api/auth/status"),
   me: () => req<{ onboarded: boolean; setupComplete: boolean }>("/api/auth/me"),
   setup: (password: string) =>

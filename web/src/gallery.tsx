@@ -27,6 +27,8 @@ import { SegmentedControl } from "./components/SegmentedControl";
 import { PopAnchor, Popover } from "./components/Popover";
 import { Callout, Disclosure, Kbd, SettingGroup, SettingRow, Skeleton, StatusBadge } from "./components/Primitives";
 import { Settings } from "./pages/Settings";
+import { HostViews, type HostSource, type HostViewId } from "./pages/host/HostViews";
+import { ViewTabs } from "./components/ViewTabs";
 import { Wizard } from "./pages/Wizard";
 import {
   IconClose,
@@ -58,6 +60,97 @@ const threads = [
   { id: "t2", title: "Rotate nginx certificates", adapter: "cursor", cwd: "/srv/www", updatedAt: new Date(Date.now() - 9e6).toISOString() },
   { id: "t3", title: "Failed timer audit", adapter: "claude", cwd: "/etc/systemd/system", updatedAt: new Date(Date.now() - 9e7).toISOString() },
 ];
+
+const GB = 1024 ** 3;
+const hostCaps = { overview: true, services: "systemd", logs: "journald", files: true } as const;
+const units = [
+  { name: "backup.service", description: "Nightly backup to object storage", load: "loaded", active: "failed", sub: "failed" },
+  { name: "caddy.service", description: "Caddy web server", load: "loaded", active: "active", sub: "running" },
+  { name: "certbot.timer", description: "Renew certificates twice a day", load: "loaded", active: "failed", sub: "failed" },
+  { name: "postgresql.service", description: "PostgreSQL 16 database server", load: "loaded", active: "active", sub: "running" },
+  { name: "sshd.service", description: "OpenSSH server daemon", load: "loaded", active: "active", sub: "running" },
+  { name: "unattended-upgrades.service", description: "Unattended upgrades shutdown", load: "loaded", active: "inactive", sub: "dead" },
+];
+const now = Date.now();
+/* The gallery's gateway: fixed sample data, so every host view renders offline. */
+const fakeHost: HostSource = {
+  hostOverview: async () => ({
+    hostname: "web-01",
+    os: "Debian GNU/Linux 12 (bookworm)",
+    kernel: "6.1.0-18-amd64",
+    arch: "x64",
+    uptimeSec: 12 * 86400 + 4 * 3600,
+    load: [1.42, 0.98, 0.77],
+    cpus: 4,
+    mem: { total: 8 * GB, used: 5.9 * GB },
+    swap: { total: 2 * GB, used: 0.3 * GB },
+    disks: [
+      { mount: "/", fs: "/dev/sda1", size: 48.9 * GB, used: 46 * GB },
+      { mount: "/srv/data", fs: "/dev/sdb1", size: 98.3 * GB, used: 19 * GB },
+      { mount: "/var/lib/postgresql", fs: "/dev/sdc1", size: 196 * GB, used: 150 * GB },
+    ],
+  }),
+  hostServices: async (_scope, state) => ({
+    units: units.filter((u) => state === "all" || (state === "failed" ? u.active === "failed" : u.active === "active")),
+  }),
+  hostLogs: async () => ({
+    entries: [
+      { ts: now - 9e5, priority: 6, unit: "caddy.service", message: "serving initial configuration" },
+      { ts: now - 6e5, priority: 4, unit: "certbot.timer", message: "Challenge failed for domain web-01.example.net" },
+      { ts: now - 5e5, priority: 3, unit: "backup.service", message: "rclone: failed to upload: 403 Forbidden" },
+      { ts: now - 4e5, priority: 3, unit: "backup.service", message: "backup.service: Main process exited, code=exited, status=1/FAILURE" },
+      { ts: now - 3e5, priority: 6, unit: "sshd.service", message: "Accepted publickey for ops from 10.0.0.12 port 51622 ssh2" },
+      { ts: now - 1e5, priority: 6, unit: "systemd-journald.service", message: "Vacuuming done, freed 5.7G of archived journals" },
+    ],
+    cursor: "c1",
+  }),
+  hostFiles: async (path) => ({
+    path,
+    parent: path === "/" ? null : path.split("/").slice(0, -1).join("/") || "/",
+    truncated: false,
+    entries: [
+      { name: "sites-available", type: "dir", size: 4096, mtime: now - 8e7, mode: 0o755 },
+      { name: "sites-enabled", type: "dir", size: 4096, mtime: now - 4e6, mode: 0o755 },
+      { name: "mime.types", type: "file", size: 5231, mtime: now - 9e9, mode: 0o644 },
+      { name: "nginx.conf", type: "file", size: 1480, mtime: now - 4e5, mode: 0o644 },
+    ],
+  }),
+  hostFile: async (path) => ({
+    path,
+    size: 1480,
+    binary: false,
+    truncated: false,
+    text: "user www-data;\nworker_processes auto;\npid /run/nginx.pid;\n\nevents {\n    worker_connections 768;\n}\n\nhttp {\n    sendfile on;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_prefer_server_ciphers on;\n    include /etc/nginx/sites-enabled/*;\n}\n",
+  }),
+};
+
+function HostShell({ view, mobile }: { view: HostViewId; mobile?: boolean }) {
+  const [v, setV] = useState<HostViewId>(view);
+  return (
+    <div className={`app-shell${mobile ? "" : " has-rail"}`} style={{ height: "100%" }}>
+      {!mobile && (
+        <Sidebar spaceName="web-01" statusClass="connected" statusLabel="Connected" host={host}
+          threads={threadProps} onNew={() => {}} onSearch={() => {}} onSettings={() => {}} onCopyFailed={() => {}}
+          collapsed={false} onCollapse={() => {}} theme="dark" onTheme={() => {}} />
+      )}
+      <div className="chat-shell">
+        <header className="topbar">
+          <div className="topbar-inner">
+            <div className="topbar-title">
+              <span className="topbar-heading"><strong className="truncate">{v[0]!.toUpperCase() + v.slice(1)}</strong></span>
+              <span className="host-context muted host-path truncate">ops@web-01</span>
+            </div>
+            {!mobile && <ViewTabs value={v} onChange={(n) => n !== "chat" && setV(n)} caps={hostCaps} />}
+            <div className="top-actions" />
+          </div>
+        </header>
+        <HostViews view={v} onView={setV} caps={hostCaps} source={fakeHost} locale="en" cwd="/etc/nginx"
+          narrow={Boolean(mobile)} onDraft={() => {}} onMention={() => {}} />
+      </div>
+      {mobile && <BottomNav active={v === "files" ? "files" : "host"} onSelect={() => {}} />}
+    </div>
+  );
+}
 
 const galleryModels = [
   {
@@ -172,6 +265,7 @@ function ChatShell({
               </button>
               <HostContext info={host} variant={mobile ? "inline" : "path"} onCopyFailed={() => {}} />
             </div>
+            {!mobile && <ViewTabs value="chat" onChange={() => {}} caps={hostCaps} />}
             <div className="top-actions">
               <button type="button" className="icon-btn" aria-label="Search"><IconSearch /></button>
               <button type="button" className="icon-btn" aria-label="More"><IconMore /></button>
@@ -336,6 +430,23 @@ function Gallery() {
         <Frame width="100%" height={420}><ChatShell mini /></Frame>
       </Row>
 
+      <Row title="Host — overview" note="Four figures, disks with a bar each, and the failed services that need a prompt.">
+        <Frame width="100%" height={760}><HostShell view="overview" /></Frame>
+      </Row>
+      <Row title="Host — services, logs, files">
+        <div style={{ display: "grid", gap: "16px" }}>
+          <Frame width="100%" height={560}><HostShell view="services" /></Frame>
+          <Frame width="100%" height={520}><HostShell view="logs" /></Frame>
+          <Frame width="100%" height={520}><HostShell view="files" /></Frame>
+        </div>
+      </Row>
+      <Row title="Host — phone">
+        <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+          <Frame width={390} height={760}><HostShell view="overview" mobile /></Frame>
+          <Frame width={390} height={760}><HostShell view="services" mobile /></Frame>
+        </div>
+      </Row>
+
       <Row title="Tool rows" note="Every row ends at the same x, with or without a copy button.">
         <div style={{ width: "min(760px, 100%)", display: "grid", gap: "12px" }}>
           {tools.map((b) => <ToolCard key={b.id} block={b} shellLines={12} showDiff />)}
@@ -441,10 +552,18 @@ document.documentElement.style.colorScheme = document.documentElement.dataset.th
 const shot = new URLSearchParams(location.search).get("shot");
 
 createRoot(document.getElementById("root")!).render(
-  shot === "desktop" || shot === "phone" ? (
+  shot === "desktop" || shot === "phone" || shot === "host" || shot === "host-phone" ? (
     <I18nProvider locale="en">
       <div className="app">
-        {shot === "desktop" ? <ChatShell inspector /> : <ChatShell mobile />}
+        {shot === "desktop" ? (
+          <ChatShell inspector />
+        ) : shot === "host" ? (
+          <HostShell view="overview" />
+        ) : shot === "host-phone" ? (
+          <HostShell view="overview" mobile />
+        ) : (
+          <ChatShell mobile />
+        )}
       </div>
     </I18nProvider>
   ) : (

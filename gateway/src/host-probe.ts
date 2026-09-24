@@ -102,6 +102,8 @@ export function parseDf(stdout: string): HostDisk[] {
     if (!fs.startsWith("/dev/") || fs.startsWith("/dev/loop")) continue;
     if (mount.startsWith("/snap/") || mount.startsWith("/boot/efi")) continue;
     if (mount.startsWith("/System/Volumes/") && mount !== "/System/Volumes/Data") continue;
+    // Xcode mounts one read-only disk image per simulator runtime.
+    if (mount.startsWith("/Library/Developer/")) continue;
     if (seen.has(fs)) continue;
     seen.add(fs);
     disks.push({ mount, fs, size, used });
@@ -207,7 +209,10 @@ export function parseLaunchctl(stdout: string): ServiceUnit[] {
     const [pid, status, label] = line.split("\t");
     if (!label) continue;
     const running = pid !== undefined && pid !== "-";
-    const failed = !running && status !== undefined && status !== "0";
+    // A negative status is the signal launchd stopped the job with — an idle
+    // agent it reaped on demand, not a failure. Only a positive exit code is.
+    const code = Number(status);
+    const failed = !running && Number.isFinite(code) && code > 0;
     units.push({
       name: label.trim(),
       description: "",

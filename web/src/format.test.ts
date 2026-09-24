@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { blockMatchesQuery, cwdBasename, formatRelativeTime, groupThreadsByCwd, slashQuery } from "./format";
+import {
+  blockMatchesQuery,
+  cwdBasename,
+  formatBytes,
+  formatRelativeTime,
+  formatUptime,
+  groupThreadsByCwd,
+  slashQuery,
+} from "./format";
 
 describe("format", () => {
   it("formats relative times", () => {
@@ -32,5 +40,21 @@ describe("format", () => {
     expect(slashQuery("/status")).toBe("status");
     expect(slashQuery("hello /status")).toBeNull();
     expect(slashQuery("/status\nmore")).toBeNull();
+  });
+});
+
+
+describe("host formats", () => {
+  it("formats bytes in binary units", () => {
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(1536)).toBe("1.5 KB");
+    expect(formatBytes(6.2 * 1024 ** 3)).toBe("6.2 GB");
+    expect(formatBytes(120 * 1024 ** 3)).toBe("120 GB");
+  });
+
+  it("formats uptime with the two largest units", () => {
+    expect(formatUptime(45 * 60)).toBe("45m");
+    expect(formatUptime(3 * 3600 + 20 * 60)).toBe("3h 20m");
+    expect(formatUptime(12 * 86400 + 4 * 3600)).toBe("12d 4h");
   });
 });

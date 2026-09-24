@@ -56,12 +56,6 @@ export function isImageMime(mime: string): boolean {
   return n === "image/jpeg" || n === "image/png" || n === "image/webp" || n === "image/gif";
 }
 
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 102.4) / 10} KB`;
-  return `${Math.round(n / 1024 / 102.4) / 10} MB`;
-}
-
 export function slashQuery(text: string): string | null {
   if (!text.startsWith("/")) return null;
   if (text.includes("\n")) return null;
@@ -101,4 +95,37 @@ export function truncateMiddle(value: string, max = 34): string {
   const head = Math.ceil((max - 1) / 2);
   const tail = Math.floor((max - 1) / 2);
   return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
+}
+
+/** 1536 -> "1.5 KB", binary multiples with the units operators read in df -h. */
+export function formatBytes(n: number, locale = "en"): string {
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  let v = Math.max(0, n);
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  const lang = locale.startsWith("es") ? "es" : "en";
+  const digits = v >= 100 || i === 0 ? 0 : 1;
+  return `${new Intl.NumberFormat(lang, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(v)} ${units[i]}`;
+}
+
+/** Uptime the way `uptime` says it, shortest units first dropped: "12d 4h", "3h 20m", "45m". */
+export function formatUptime(sec: number): string {
+  const d = Math.floor(sec / 86_400);
+  const h = Math.floor((sec % 86_400) / 3_600);
+  const m = Math.floor((sec % 3_600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+/** A journal timestamp: time only when it is today, date and time otherwise. */
+export function formatLogTime(ts: number, now = Date.now(), locale = "en"): string {
+  const lang = locale.startsWith("es") ? "es" : "en";
+  const d = new Date(ts);
+  const sameDay = new Date(now).toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  return sameDay ? time : `${d.toLocaleDateString(lang, { month: "short", day: "2-digit" })} ${time}`;
 }

@@ -42,6 +42,7 @@ describe("parsers", () => {
 /dev/disk3s1s1 482797652 11000000 200000000 6% /
 /dev/disk3s6 482797652 4000000 200000000 2% /System/Volumes/VM
 /dev/disk3s5 482797652 250000000 200000000 56% /System/Volumes/Data
+/dev/disk5s1 8898560 8601444 297116 97% /Library/Developer/CoreSimulator/Volumes/iOS_23C54
 `;
     expect(parseDf(mac).map((d) => d.mount)).toEqual(["/", "/System/Volumes/Data"]);
   });
@@ -72,11 +73,13 @@ describe("parsers", () => {
   });
 
   it("reads launchctl list", () => {
-    const out = "PID\tStatus\tLabel\n123\t0\tcom.example.run\n-\t78\tcom.example.broken\n-\t0\tcom.example.idle\n";
+    const out =
+      "PID\tStatus\tLabel\n123\t0\tcom.example.run\n-\t78\tcom.example.broken\n-\t0\tcom.example.idle\n-\t-9\tcom.example.reaped\n";
     expect(parseLaunchctl(out).map((u) => [u.name, u.active])).toEqual([
       ["com.example.run", "active"],
       ["com.example.broken", "failed"],
       ["com.example.idle", "inactive"],
+      ["com.example.reaped", "inactive"],
     ]);
   });
 

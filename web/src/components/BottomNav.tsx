@@ -1,10 +1,14 @@
 import type { ReactNode } from "react";
 import { useT } from "../i18n";
-import { IconActivity, IconHistory, IconSettings, IconThreads } from "./Icon";
+import { IconFiles, IconHistory, IconOverview, IconSettings, IconThreads } from "./Icon";
 
-export type NavTarget = "chat" | "threads" | "activity" | "settings";
+export type NavTarget = "chat" | "threads" | "host" | "files" | "settings";
 
-/** Mobile home row. Thumb-reachable, and it respects the home-indicator inset. */
+/**
+ * Mobile home row. Thumb-reachable, and it respects the home-indicator inset.
+ * Activity left it for a button in the chat's topbar: it belongs to a thread,
+ * while Host and Files belong to the machine.
+ */
 export function BottomNav({
   active,
   onSelect,
@@ -16,7 +20,8 @@ export function BottomNav({
   const items: Array<{ id: NavTarget; label: string; glyph: ReactNode }> = [
     { id: "chat", label: t("nav.chat"), glyph: <IconThreads /> },
     { id: "threads", label: t("nav.threads"), glyph: <IconHistory /> },
-    { id: "activity", label: t("nav.activity"), glyph: <IconActivity /> },
+    { id: "host", label: t("nav.host"), glyph: <IconOverview /> },
+    { id: "files", label: t("nav.files"), glyph: <IconFiles /> },
     { id: "settings", label: t("nav.settings"), glyph: <IconSettings /> },
   ];
   return (

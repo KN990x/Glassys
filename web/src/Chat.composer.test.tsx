@@ -58,6 +58,7 @@ vi.mock("./api", () => ({
       ],
     })),
     saveConfig: (...args: unknown[]) => saveConfig(...args),
+    hostCapabilities: vi.fn(async () => ({ overview: true, services: "systemd", logs: "journald", files: true })),
     logout: vi.fn(),
     threads: vi.fn(async () => ({ threads: [], currentId: null })),
     newThread: vi.fn(async () => ({ threads: [], currentId: null })),

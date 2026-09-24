@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import type {
   AdapterPublicInfo,
   ClientMessage,
+  HostCapabilities,
   MessageAttachment,
   ModelCatalogItem,
   ModelListSource,
@@ -27,6 +28,8 @@ import { blockMatchesQuery, cwdBasename, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 import { ActivityPanel } from "../components/ActivityPanel";
+import { HostViews, type HostViewId } from "./host/HostViews";
+import { ViewTabs, type AppView } from "../components/ViewTabs";
 import {
   IconActivity,
   IconArrowDown,
@@ -176,6 +179,11 @@ export function Chat({
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
+  /* The chat, or one of the host views beside it. The phone's Host tab goes
+     back to whichever of overview, services and logs was open last. */
+  const [view, setView] = useState<AppView>("chat");
+  const [lastHostView, setLastHostView] = useState<Exclude<HostViewId, "files">>("overview");
+  const [hostCaps, setHostCaps] = useState<HostCapabilities | null>(null);
   const [slashOpen, setSlashOpen] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState<"schedules" | "updates" | undefined>();
   const [schedulePrefill, setSchedulePrefill] = useState("");
@@ -402,6 +410,15 @@ export function Chat({
     } catch {
       /* private mode */
     }
+  }, []);
+
+  useEffect(() => {
+    api.hostCapabilities().then(setHostCaps, () => setHostCaps({ overview: true, services: null, logs: null, files: true }));
+  }, []);
+
+  const showView = useCallback((next: AppView) => {
+    setView(next);
+    if (next === "overview" || next === "services" || next === "logs") setLastHostView(next);
   }, []);
 
   const toggleActivity = useCallback((next: boolean) => {
@@ -702,6 +719,25 @@ export function Chat({
     }
   }
 
+  /** A host view's action: back to the chat with the prompt in the composer. */
+  function draftPrompt(body: string) {
+    showView("chat");
+    setText(body);
+    setSlashOpen(false);
+    requestAnimationFrame(() => {
+      if (!composer.current) return;
+      resizeComposer(composer.current);
+      composer.current.focus();
+      composer.current.setSelectionRange(body.length, body.length);
+    });
+  }
+
+  /** Mention a path: appended to whatever the operator already wrote. */
+  function mentionInComposer(snippet: string) {
+    const next = text.trim() ? `${text.replace(/\s+$/, "")} ${snippet} ` : `${snippet} `;
+    draftPrompt(next);
+  }
+
   function insertTemplate(body: string) {
     setText(body);
     setSlashOpen(false);
@@ -918,9 +954,11 @@ export function Chat({
     ? "settings"
     : threadOpen
       ? "threads"
-      : activityOpen
-        ? "activity"
-        : "chat";
+      : view === "files"
+        ? "files"
+        : view !== "chat"
+          ? "host"
+          : "chat";
 
   function openThreads() {
     pushOverlay("threads");
@@ -978,7 +1016,7 @@ export function Chat({
       className={[
         "app-shell",
         isDesktop ? (railCollapsed ? "has-mini-rail" : "has-rail") : "",
-        activityOpen && hasInspectorColumn ? "has-inspector" : "",
+        activityOpen && hasInspectorColumn && view === "chat" ? "has-inspector" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -1041,7 +1079,19 @@ export function Chat({
             ) : (
               <>
                 <div className="topbar-title">
-                  {renaming ? (
+                  {view !== "chat" ? (
+                    <>
+                      <span className="topbar-heading">
+                        {!isDesktop && (
+                          <span className={`status dot-only ${statusClass}`} aria-live="polite" title={t(statusKey)}>
+                            <span className="visually-hidden">{t(statusKey)}</span>
+                          </span>
+                        )}
+                        <strong className="truncate">{t(`nav.${view}`)}</strong>
+                      </span>
+                      <span className="host-context muted host-path truncate">{hostLabel}</span>
+                    </>
+                  ) : renaming ? (
                     <form
                       className="thread-rename"
                       onSubmit={(e) => {
@@ -1088,7 +1138,9 @@ export function Chat({
                     </>
                   )}
                 </div>
+                {isDesktop && <ViewTabs value={view} onChange={showView} caps={hostCaps} />}
                 <div className="top-actions">
+                  {view === "chat" && (
                   <button
                     type="button"
                     className="icon-btn"
@@ -1101,7 +1153,8 @@ export function Chat({
                   >
                     <IconSearch />
                   </button>
-                  {isDesktop && (
+                  )}
+                  {view === "chat" && (
                     <button
                       type="button"
                       className={`icon-btn${activityOpen ? " current" : ""}`}
@@ -1113,6 +1166,7 @@ export function Chat({
                       <IconActivity />
                     </button>
                   )}
+                  {view === "chat" && (
                   <PopAnchor>
                     <button
                       type="button"
@@ -1170,11 +1224,25 @@ export function Chat({
                       </button>
                     </Popover>
                   </PopAnchor>
+                  )}
                 </div>
               </>
             )}
           </div>
         </header>
+        {view !== "chat" ? (
+          <HostViews
+            view={view}
+            onView={showView}
+            caps={hostCaps}
+            locale={config.space.locale}
+            cwd={config.agent.cwd}
+            narrow={!isDesktop}
+            onDraft={draftPrompt}
+            onMention={mentionInComposer}
+          />
+        ) : (
+          <>
         <main className="chat-main">
           <h1 className="visually-hidden">{t("app.name")}</h1>
           <AlertStack alerts={alerts} />
@@ -1301,6 +1369,8 @@ export function Chat({
             ) : null
           }
         />
+          </>
+        )}
       </div>
       {!isDesktop && (
         <BottomNav
@@ -1316,19 +1386,23 @@ export function Chat({
               openSettings();
               return;
             }
-            if (target === "activity") {
-              if (threadOpen) closeThreads();
-              toggleActivity(true);
-              return;
-            }
             if (threadOpen) closeThreads();
             if (settings) closeSettings();
-            toggleActivity(false);
-            composer.current?.focus();
+            if (target === "host") {
+              showView(lastHostView);
+              return;
+            }
+            if (target === "files") {
+              showView("files");
+              return;
+            }
+            showView("chat");
+            requestAnimationFrame(() => composer.current?.focus());
           }}
         />
       )}
       {activityOpen &&
+        view === "chat" &&
         (hasInspectorColumn ? (
           <ActivityPanel
             blocks={blocks}
