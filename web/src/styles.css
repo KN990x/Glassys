@@ -2893,7 +2893,12 @@ mark {
   font-size: var(--fs-sm);
   line-height: var(--lh-code);
 }
+/* The browser skips laying out and painting lines outside the list's view, and
+   remembers each one's height once seen: thousands of journal lines, wrapped
+   to any height, without a windowing library. */
 .log-line {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--row-h);
   position: relative;
   display: grid;
   grid-template-columns: 8ch minmax(0, 16ch) minmax(0, 1fr);

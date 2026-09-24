@@ -420,7 +420,8 @@ export function ServicesView({
 // ---------------------------------------------------------------- logs
 
 const FOLLOW_MS = 5_000;
-const MAX_LOG_ROWS = 2_000;
+/** Lines kept while following; older ones scroll off the top. */
+export const MAX_LOG_ROWS = 5_000;
 
 function priorityClass(p: number): string {
   if (p <= 3) return "err";
