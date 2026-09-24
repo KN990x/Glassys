@@ -174,3 +174,89 @@ export function Skeleton({ rows = 3, label }: { rows?: number; label: string }) 
     </div>
   );
 }
+
+/**
+ * One list row for every list: threads, activity, palette, services, files.
+ * 32px, a 16px glyph, text that truncates, a tail pinned to the right edge and
+ * hover actions that sit over the tail instead of reserving a column for
+ * themselves — a reserved slot left every row 30px short on the right.
+ */
+export function ListRow({
+  glyph,
+  children,
+  tail,
+  actions,
+  current,
+  onClick,
+  title,
+  className,
+  disabled,
+  mono,
+}: {
+  glyph?: ReactNode;
+  children: ReactNode;
+  tail?: ReactNode;
+  actions?: ReactNode;
+  current?: boolean;
+  onClick?: () => void;
+  title?: string;
+  className?: string;
+  disabled?: boolean;
+  mono?: boolean;
+}) {
+  const body = (
+    <>
+      {glyph ? (
+        <span className="list-row-glyph" aria-hidden="true">
+          {glyph}
+        </span>
+      ) : null}
+      <span className={`list-row-text truncate${mono ? " mono" : ""}`}>{children}</span>
+      {tail ? <span className="list-row-tail">{tail}</span> : null}
+    </>
+  );
+  return (
+    <div className={`list-row${current ? " current" : ""}${className ? ` ${className}` : ""}`}>
+      {onClick ? (
+        <button
+          type="button"
+          className="list-row-main"
+          onClick={onClick}
+          title={title}
+          disabled={disabled}
+          aria-current={current ? "true" : undefined}
+        >
+          {body}
+        </button>
+      ) : (
+        <span className="list-row-main" title={title}>
+          {body}
+        </span>
+      )}
+      {actions ? <span className="list-row-actions">{actions}</span> : null}
+    </div>
+  );
+}
+
+/** Share of a whole as a thin bar: amber from 70%, red from 90%. */
+export function meterTone(ratio: number): Tone {
+  if (ratio >= 0.9) return "danger";
+  if (ratio >= 0.7) return "warn";
+  return "ok";
+}
+
+export function Meter({ value, max, label }: { value: number; max: number; label: string }) {
+  const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
+  return (
+    <span
+      className={`meter tone-${meterTone(ratio)}`}
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={value}
+    >
+      <span className="meter-fill" style={{ width: `${(ratio * 100).toFixed(1)}%` }} />
+    </span>
+  );
+}

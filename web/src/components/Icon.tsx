@@ -4,7 +4,9 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
+  AtSign,
   BarChart3,
+  Boxes,
   Brain,
   Check,
   ChevronDown,
@@ -12,20 +14,28 @@ import {
   ChevronRight,
   CircleAlert,
   Clock,
+  CircleDot,
   Command,
   Copy,
+  Cpu,
   Download,
   Eye,
   EyeOff,
   FilePen,
+  FileCode,
   FileText,
   Folder,
+  FolderOpen,
+  FolderTree,
+  Gauge,
   GitBranch,
   HardDrive,
   History,
   Info,
   ListChecks,
+  LayoutDashboard,
   Loader2,
+  MemoryStick,
   MessageSquare,
   Monitor,
   Moon,
@@ -35,10 +45,13 @@ import {
   PanelLeftOpen,
   Paperclip,
   Pencil,
+  Pause,
   Pin,
   PinOff,
+  Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   ScrollText,
   Search,
   Send,
@@ -120,6 +133,19 @@ export const IconTerminal = icon(Terminal);
 export const IconThreads = icon(MessageSquare);
 export const IconTrash = icon(Trash2);
 export const IconClose = icon(X);
+export const IconMention = icon(AtSign);
+export const IconServices = icon(Boxes);
+export const IconDot = icon(CircleDot);
+export const IconCpu = icon(Cpu);
+export const IconFileCode = icon(FileCode);
+export const IconFolderOpen = icon(FolderOpen);
+export const IconFiles = icon(FolderTree);
+export const IconGauge = icon(Gauge);
+export const IconOverview = icon(LayoutDashboard);
+export const IconMemory = icon(MemoryStick);
+export const IconPause = icon(Pause);
+export const IconPlay = icon(Play);
+export const IconRestart = icon(RotateCcw);
 
 /**
  * The product mark: a viewfinder framing a single focus point. The brackets are

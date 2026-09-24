@@ -25,6 +25,30 @@
     U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Half of a systems UI is monospace: paths, units, commands, logs. A system
+   stack rendered Menlo on one host and DejaVu on the next, so the mono ships
+   too, on the same two subsets. */
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ---------------------------------------------------------------------------
    Glassys design tokens.
    Every rule below consumes these; no loose rem/px literals in component CSS.
@@ -32,35 +56,38 @@
 :root {
   color-scheme: dark;
 
-  /* Surfaces and ink */
-  --bg: #0a0a0a;
-  --surface-1: #111111;
-  --surface-2: #171717;
-  --surface-3: #1f1f1f;
+  /* Surfaces and ink. Neutrals lean a hair warm (zinc), so the dark theme is
+     not the blue-black of a terminal emulator. */
+  --bg: #0b0b0c;
+  --surface-1: #111113;
+  --surface-2: #17171a;
+  --surface-3: #202023;
   --bg-elev: var(--surface-1);
   --bg-muted: var(--surface-2);
-  --stroke: #262626;
-  --stroke-strong: #333333;
-  --text: #ededed;
-  --muted: #a1a1a1;
-  --faint: #8a8a8a;
+  --stroke: #26262a;
+  --stroke-strong: #3a3a40;
+  --text: #ececee;
+  --muted: #a1a1aa;
+  --faint: #8b8b94;
 
-  /* Accent and state */
-  --accent: #3d7dfa;
+  /* Accent and state. The accent is kept for focus, work in progress, links and
+     a switched-on switch; nothing is blue merely for being selected. */
+  --accent: #4c82f7;
   --accent-bg: color-mix(in srgb, var(--accent) 16%, transparent);
   --danger: #e5484d;
-  --danger-bg: color-mix(in srgb, var(--danger) 14%, transparent);
+  --danger-bg: color-mix(in srgb, var(--danger) 10%, transparent);
   --ok: #46a758;
-  --ok-bg: color-mix(in srgb, var(--ok) 14%, transparent);
+  --ok-bg: color-mix(in srgb, var(--ok) 10%, transparent);
   --warn: #ef9f27;
-  --warn-bg: color-mix(in srgb, var(--warn) 14%, transparent);
+  --warn-bg: color-mix(in srgb, var(--warn) 10%, transparent);
   --info-bg: color-mix(in srgb, var(--muted) 12%, transparent);
 
-  /* Interaction. Hover is neutral and selection is accented, so the two can
-     never be confused; every list row, tab and card uses this one pair. */
-  --hover-bg: color-mix(in srgb, var(--text) 7%, transparent);
-  --selected-bg: color-mix(in srgb, var(--accent) 9%, transparent);
+  /* Interaction. Hover and selection are both neutral and told apart by weight
+     and a 2px marker in ink, so the accent stays free to mean "working". */
+  --hover-bg: color-mix(in srgb, var(--text) 5%, transparent);
+  --selected-bg: color-mix(in srgb, var(--text) 9%, transparent);
   --selected-ink: var(--text);
+  --selected-marker: var(--text);
 
   /* Button surfaces */
   --btn: #fafafa;
@@ -104,19 +131,25 @@
   --fs-xs: 11px;
   --fs-sm: 12px;
   --fs-base: 14px;
-  --fs-md: 15px;
   --fs-chat: 15px;
   --fs-lg: 17px;
   --fs-xl: 20px;
+  --fs-2xl: 24px;
+  /* Monospace runs a size smaller than the prose around it and never below
+     12px: an 11px path was the least legible text in the product. */
+  --fs-code: 13px;
   --lh-tight: 1.3;
+  --lh-ui: 1.4;
   --lh-body: 1.6;
   --track-tight: -0.011em;
 
-  /* Radii */
+  /* Radii. A box inside another one, n px from its edge, takes the outer
+     radius minus n, so the two curves stay concentric: a 16px composer with
+     8px padding holds 8px chips. */
   --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 20px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
   --r-full: 999px;
 
   /* Elevation */
@@ -135,7 +168,7 @@
   /* Typefaces. Inter ships with the gateway so the product reads the same on
      every host; the system stack stays as the fallback while it loads. */
   --font: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Layout */
   --content-max: 760px;
@@ -144,12 +177,20 @@
   --rail-w-sm: 208px;
   --rail-w-mini: 56px;
   --inspector-w: 320px;
-  --topbar-h: 57px;
+  /* The header band is 56px including its hairline, in all three columns. */
+  --topbar-h: 56px;
   --dot: 8px;
+  --dot-sm: 6px;
   --lh-code: 1.55;
   --tabbar-h: 56px;
-  --control-h: 36px;
-  --control-h-sm: 30px;
+  /* One control scale. Everything that sits in a row — button, input, chip,
+     list row, send — is 32; a chip or segment is 28; an icon button inside a
+     row is 24; gates and primary forms step up to 40. On a touch screen every
+     one of them grows to --tap at once. */
+  --control-h-lg: 40px;
+  --control-h: 32px;
+  --control-h-sm: 28px;
+  --control-h-xs: 24px;
   --row-h: 32px;
 
   /* Fixed dimensions of single elements. They are not rhythm steps, but they
@@ -174,9 +215,9 @@
   --qr-size: 9rem;
   --thumb: 56px;
   --badge: 18px;
-  --switch-w: 40px;
-  --switch-h: 24px;
-  --switch-knob: 18px;
+  --switch-w: 32px;
+  --switch-h: 18px;
+  --switch-knob: 14px;
 
   /* Stacking order, so a new overlay is placed rather than guessed. */
   --z-sticky: 2;
@@ -194,7 +235,7 @@
   --icon-md: 16px;
   --icon-lg: 18px;
   --icon-xl: 20px;
-  --composer-btn: 40px;
+  --composer-btn: 32px;
   --composer-pad: var(--s-1);
   --tap: 40px;
 
@@ -222,8 +263,8 @@ html[data-theme="light"] {
   --ok: #2f7d32;
   --warn: #9a5800;
 
-  --hover-bg: color-mix(in srgb, var(--text) 6%, transparent);
-  --selected-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  --hover-bg: color-mix(in srgb, var(--text) 4%, transparent);
+  --selected-bg: color-mix(in srgb, var(--text) 7%, transparent);
 
   --btn: #18181b;
   --btn-fg: #fafafa;
@@ -444,7 +485,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 }
 .icon-btn:hover:not(:disabled) { background: var(--ghost-hover); color: var(--text); }
 .icon-btn.current { background: var(--selected-bg); color: var(--text); }
-.icon-btn.sm { width: var(--control-h-sm); height: var(--control-h-sm); min-height: var(--control-h-sm); }
+.icon-btn.sm { width: var(--control-h-xs); height: var(--control-h-xs); min-height: var(--control-h-xs); border-radius: var(--r-sm); }
 
 @media (pointer: coarse) {
   .tiny { min-height: var(--tap); padding: 0 var(--s-3); }
@@ -514,8 +555,8 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .switch:hover:not(:disabled) { border-color: var(--accent); }
 .switch-knob {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 1px;
+  left: 1px;
   width: var(--switch-knob);
   height: var(--switch-knob);
   border-radius: var(--r-full);
@@ -527,13 +568,14 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   transform: translateX(calc(var(--switch-w) - var(--switch-knob) - 4px));
 }
 
+/* A borderless track two pixels around 28px segments: a 32px control, the
+   same height as the buttons beside it, with concentric 8/6 radii. */
 .segmented {
   display: inline-flex;
   flex: none;
   gap: var(--s-05);
   padding: var(--s-05);
   border-radius: var(--r-md);
-  border: 1px solid var(--stroke);
   background: var(--bg-muted);
 }
 .segment {
@@ -555,7 +597,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 }
 .segment:hover:not(.current) { color: var(--text); }
 .segment.current { background: var(--segment-bg); color: var(--text); box-shadow: var(--e-1); }
-.segmented.sm .segment { min-height: var(--s-6); padding: 0 var(--s-2); font-size: var(--fs-xs); }
+.segmented.sm .segment { min-height: var(--control-h-xs); padding: 0 var(--s-2); font-size: var(--fs-xs); }
 
 .pop-anchor { position: relative; min-width: 0; }
 .pop {
@@ -587,7 +629,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   gap: var(--s-1);
   flex: none;
   padding: 0 var(--s-2);
-  min-height: var(--s-6);
+  min-height: var(--s-5);
   border-radius: var(--r-full);
   border: 1px solid var(--stroke);
   background: var(--info-bg);
@@ -597,7 +639,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   white-space: nowrap;
 }
 .badge.mono { font-family: var(--mono); }
-.badge-dot { width: var(--s-2); height: var(--s-2); border-radius: var(--r-full); background: currentColor; flex: none; }
+.badge-dot { width: var(--dot-sm); height: var(--dot-sm); border-radius: var(--r-full); background: currentColor; flex: none; }
 .badge.tone-ok { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
 .badge.tone-warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
 .badge.tone-danger { color: var(--danger); background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
@@ -612,19 +654,27 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   border: 1px solid var(--stroke);
   background: var(--info-bg);
   font-size: var(--fs-sm);
-  color: var(--muted);
+  color: var(--text);
   min-width: 0;
 }
+.callout-icon { color: var(--muted); }
 /* The icon sits in a box one small control tall, and the text is padded so its
    first line centres on that box: a one-line callout lines up with a Retry
    button beside it, and a three-line one keeps the icon on its first line. */
 .callout-icon { display: grid; place-items: center; height: var(--control-h-sm); flex: none; }
 .callout-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-block: calc((var(--control-h-sm) - 1lh) / 2); }
 .callout .ghost.tiny { flex: none; }
-.callout.tone-warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
-.callout.tone-danger { color: var(--danger); background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
-.callout.tone-ok { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 26%, transparent); }
-.callout.tone-accent { color: var(--accent); background: var(--accent-bg); border-color: color-mix(in srgb, var(--accent) 26%, transparent); }
+/* A whole paragraph in amber was the loudest thing on any screen it sat on.
+   The tone is carried by the icon, a faint wash and the edge; the words stay
+   in ink so they read like everything else. */
+.callout.tone-warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 22%, transparent); }
+.callout.tone-danger { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 22%, transparent); }
+.callout.tone-ok { background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 22%, transparent); }
+.callout.tone-accent { background: var(--accent-bg); border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+.callout.tone-warn .callout-icon { color: var(--warn); }
+.callout.tone-danger .callout-icon { color: var(--danger); }
+.callout.tone-ok .callout-icon { color: var(--ok); }
+.callout.tone-accent .callout-icon { color: var(--accent); }
 
 .disclosure { display: grid; gap: var(--s-1); min-width: 0; }
 .disclosure-head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
@@ -696,6 +746,95 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .setting-control > .skeleton { width: var(--w-control); }
 .setting-control > .skeleton .skeleton-line { height: var(--control-h); border-radius: var(--r-md); }
 
+.list-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--r-md);
+  /* What the hover actions paint behind themselves, so a truncated title fades
+     under them instead of showing through. Lists on another surface set it. */
+  --row-surface: var(--surface-1);
+}
+.list-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: 1;
+  min-width: 0;
+  min-height: var(--row-h);
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-base);
+  line-height: var(--lh-ui);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease);
+}
+button.list-row-main { cursor: pointer; }
+button.list-row-main:hover:not(:disabled) { background: var(--hover-bg); }
+button.list-row-main:disabled { opacity: 1; cursor: default; }
+.list-row.current > .list-row-main { background: var(--selected-bg); font-weight: 500; }
+.list-row.current::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: var(--s-2);
+  bottom: var(--s-2);
+  width: 2px;
+  border-radius: var(--r-full);
+  background: var(--selected-marker);
+}
+.list-row-glyph { display: grid; place-items: center; flex: none; width: var(--icon-md); color: var(--faint); }
+.list-row-glyph svg { width: var(--icon-md); height: var(--icon-md); }
+.list-row.current .list-row-glyph { color: var(--text); }
+.list-row-text { flex: 1; }
+.list-row-text.mono { font-family: var(--mono); font-size: var(--fs-code); }
+.list-row-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: none;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.list-row-tail svg { width: var(--icon-sm); height: var(--icon-sm); }
+.list-row-actions {
+  position: absolute;
+  right: var(--s-1);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-05);
+  padding-left: var(--s-5);
+  background: linear-gradient(to right, transparent, var(--row-surface) var(--s-4));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.list-row:hover > .list-row-actions,
+.list-row:focus-within > .list-row-actions { opacity: 1; pointer-events: auto; }
+@media (hover: none) {
+  .list-row-actions { position: static; transform: none; opacity: 1; pointer-events: auto; background: none; padding-left: 0; }
+}
+
+.meter {
+  display: block;
+  width: 100%;
+  height: var(--s-1);
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--ok); transition: width var(--dur) var(--ease); }
+.meter.tone-warn .meter-fill { background: var(--warn); }
+.meter.tone-danger .meter-fill { background: var(--danger); }
+
 .kbd {
   display: inline-flex;
   align-items: center;
@@ -703,7 +842,6 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   min-width: var(--s-5);
   padding: 0 var(--s-1);
   border: 1px solid var(--stroke);
-  border-bottom-width: 2px;
   border-radius: var(--r-sm);
   background: var(--bg-muted);
   color: var(--muted);
@@ -732,10 +870,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   min-height: 100%;
   display: grid;
   place-items: center;
-  /* A very quiet wash, so an empty page is not a flat rectangle. */
-  background:
-    radial-gradient(60rem 30rem at 50% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
-    var(--bg);
+  background: var(--bg);
   padding: max(var(--s-6), env(safe-area-inset-top)) max(var(--s-6), env(safe-area-inset-right))
            max(var(--s-6), env(safe-area-inset-bottom)) max(var(--s-6), env(safe-area-inset-left));
   overflow: auto;
@@ -846,7 +981,7 @@ details label { margin-top: var(--s-2); }
   white-space: nowrap;
 }
 .steps li.done .step-bar { background: var(--stroke-strong); }
-.steps li.active .step-bar { background: var(--accent); }
+.steps li.active .step-bar { background: var(--text); }
 .steps li.active .step-name { color: var(--text); }
 /* On a phone only the step you are on can afford a name. */
 @media (max-width: 640px) {
@@ -894,9 +1029,9 @@ details label { margin-top: var(--s-2); }
   font-weight: 600;
 }
 .adapter-card-state { margin-left: auto; display: flex; align-items: center; gap: var(--s-2); flex: none; }
-.adapter-check { display: grid; place-items: center; color: var(--accent); }
+.adapter-check { display: grid; place-items: center; color: var(--text); }
 .adapter-check svg { width: var(--icon-md); height: var(--icon-md); }
-.adapter-card.current .adapter-mono { background: var(--accent-bg); color: var(--accent); }
+.adapter-card.current .adapter-mono { background: var(--surface-3); color: var(--text); }
 .adapter-card:hover:not(.disabled) { border-color: var(--stroke-strong); background: var(--hover-bg); }
 .adapter-card-body { display: grid; gap: var(--s-05); min-width: 0; }
 .adapter-card-body strong { font-weight: 600; }
@@ -1038,7 +1173,7 @@ details label { margin-top: var(--s-2); }
 .ws-name { font-size: var(--fs-base); font-weight: 500; color: var(--text); }
 .ws-path { font-size: var(--fs-xs); color: var(--muted); font-family: var(--mono); }
 .ws-group.current .ws-name { color: var(--text); }
-.ws-group.current .ws-path { color: var(--accent); }
+.ws-group.current .ws-path { color: var(--muted); }
 .ws-meta { display: flex; align-items: center; gap: var(--s-1); flex: none; padding-right: var(--s-2); }
 .ws-count {
   font-size: var(--fs-xs);
@@ -1152,9 +1287,13 @@ details label { margin-top: var(--s-2); }
   border: 1px solid transparent;
   background: var(--info-bg);
 }
-.banner.alert.error { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
-.banner.alert.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
+.banner.alert.error { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 22%, transparent); }
+.banner.alert.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 22%, transparent); }
 .banner.alert.info { background: var(--info-bg); border-color: var(--stroke); }
+.banner.alert.error, .banner.alert.warn, .banner.alert.info { color: var(--text); }
+.banner.alert .alert-icon { color: var(--muted); }
+.banner.alert.error .alert-icon { color: var(--danger); }
+.banner.alert.warn .alert-icon { color: var(--warn); }
 .alert-icon { display: grid; place-items: center; height: var(--control-h-sm); flex: none; }
 .alert-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-block: calc((var(--control-h-sm) - 1lh) / 2); }
 .banner.alert .ghost.tiny, .banner.alert .icon-btn { flex: none; }
@@ -1429,8 +1568,8 @@ button.host-copy:hover { color: var(--text); }
   width: var(--control-h);
   height: var(--control-h);
   border-radius: var(--r-md);
-  background: var(--bg-muted);
-  color: var(--accent);
+  background: var(--surface-3);
+  color: var(--text);
 }
 .empty-action-glyph svg { width: var(--icon-md); height: var(--icon-md); }
 .empty-action-text { display: grid; gap: var(--s-05); min-width: 0; }
@@ -2003,7 +2142,7 @@ mark {
   .chip-btn.risk-danger .chip-label { display: none; }
 }
 .pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
-.picker-check { position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--accent); }
+.picker-check { position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--text); }
 .picker-check svg { width: var(--icon-sm); height: var(--icon-sm); }
 
 .model-picker { display: grid; gap: var(--s-3); }
@@ -2081,7 +2220,7 @@ mark {
 }
 .picker-item.current svg,
 .settings-tab.current svg,
-.tabbar-item.current svg { color: var(--accent); }
+.tabbar-item.current svg { color: var(--text); }
 .picker-item.current::before {
   content: "";
   position: absolute;
@@ -2090,7 +2229,7 @@ mark {
   bottom: var(--s-2);
   width: 2px;
   border-radius: var(--r-full);
-  background: var(--accent);
+  background: var(--selected-marker);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2220,7 +2359,7 @@ mark {
   color: var(--warn);
 }
 .confirm-icon.destructive { background: var(--danger-bg); color: var(--danger); }
-.confirm-icon.archive, .confirm-icon.info { background: var(--accent-bg); color: var(--accent); }
+.confirm-icon.archive, .confirm-icon.info { background: var(--surface-3); color: var(--text); }
 
 .palette-group + li .picker-item { margin-top: 0; }
 .palette-list .picker-item { min-height: var(--control-h); display: flex; align-items: center; gap: var(--s-2); }
@@ -2401,7 +2540,7 @@ mark {
 .md > :last-child { margin-bottom: 0; }
 .md p { margin: 0 0 var(--s-3); }
 .md h1, .md h2, .md h3 { font-size: var(--fs-lg); font-weight: 600; margin: var(--s-5) 0 var(--s-2); }
-.md h4, .md h5, .md h6 { font-size: var(--fs-md); font-weight: 600; margin: var(--s-4) 0 var(--s-2); }
+.md h4, .md h5, .md h6 { font-size: var(--fs-chat); font-weight: 600; margin: var(--s-4) 0 var(--s-2); }
 .md a { color: var(--accent); text-underline-offset: 2px; }
 .md hr { border: 0; border-top: 1px solid var(--stroke); margin: var(--s-5) 0; }
 .md ul, .md ol { padding-left: var(--s-5); margin: 0 0 var(--s-3); }
