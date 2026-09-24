@@ -44,6 +44,7 @@ import { listWorkspaces } from "./workspaces.js";
 import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
 import { liveThreadId } from "./threads.js";
 import { readGitContext } from "./host-git.js";
+import { hostCapabilities, hostOverview, listDir, listServices, previewFile, readLogs } from "./host-probe.js";
 import { ensureVapidKeys, removePushSubscription, savePushSubscription } from "./push.js";
 import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNextRun, scheduleTimezone } from "./schedules.js";
 import { adminUpdateSnapshot, fetchBehind, startUpgrade } from "./admin-update.js";
@@ -633,6 +634,61 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       user: userInfo().username,
       ...(git ? { git } : {}),
     });
+    return true;
+  }
+
+  // Host views: read-only listings of this machine. Every one requires a
+  // session, and none of them changes anything.
+  if (method === "GET" && path.startsWith("/api/host/")) {
+    if (!(await requireAuth(req, res))) return true;
+    const q = url.searchParams;
+    try {
+      if (path === "/api/host/capabilities") {
+        send(res, 200, await hostCapabilities());
+        return true;
+      }
+      if (path === "/api/host/overview") {
+        send(res, 200, await hostOverview());
+        return true;
+      }
+      if (path === "/api/host/services") {
+        const scope = q.get("scope") === "user" ? "user" : "system";
+        const stateParam = q.get("state");
+        const state = stateParam === "failed" || stateParam === "active" ? stateParam : "all";
+        send(res, 200, { units: await listServices(scope, state) });
+        return true;
+      }
+      if (path === "/api/host/logs") {
+        const priority = q.get("priority");
+        send(
+          res,
+          200,
+          await readLogs({
+            unit: q.get("unit") || undefined,
+            priority: priority === "err" || priority === "warning" || priority === "info" ? priority : undefined,
+            lines: Number(q.get("lines")) || undefined,
+            cursor: q.get("cursor") || undefined,
+            scope: q.get("scope") === "user" ? "user" : "system",
+          }),
+        );
+        return true;
+      }
+      if (path === "/api/host/files") {
+        send(res, 200, await listDir(q.get("path") || ""));
+        return true;
+      }
+      if (path === "/api/host/file") {
+        send(res, 200, await previewFile(q.get("path") || ""));
+        return true;
+      }
+      send(res, 404, { error: "not found" });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        send(res, err.status, { error: err.message });
+        return true;
+      }
+      send(res, 502, { error: err instanceof Error ? err.message : "probe failed" });
+    }
     return true;
   }
 

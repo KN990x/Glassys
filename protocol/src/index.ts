@@ -518,3 +518,93 @@ export function isMessageAttachment(value: unknown): value is MessageAttachment 
 function optionalAttachments(value: unknown): boolean {
   return value === undefined || (Array.isArray(value) && value.every(isMessageAttachment));
 }
+
+/*
+ * Host views. Read-only observations of the machine the gateway runs on: the
+ * PWA shows them, and every action they offer is drafted as a prompt for the
+ * agent, never executed by the gateway.
+ */
+export type HostServiceManager = "systemd" | "launchd";
+export type HostLogSource = "journald";
+
+export interface HostCapabilities {
+  overview: boolean;
+  services: HostServiceManager | null;
+  logs: HostLogSource | null;
+  files: boolean;
+}
+
+export interface HostDisk {
+  mount: string;
+  fs: string;
+  size: number;
+  used: number;
+}
+
+export interface HostOverview {
+  hostname: string;
+  os: string;
+  kernel: string;
+  arch: string;
+  uptimeSec: number;
+  load: [number, number, number];
+  cpus: number;
+  mem: { total: number; used: number };
+  swap?: { total: number; used: number };
+  disks: HostDisk[];
+}
+
+export type ServiceScope = "system" | "user";
+export type ServiceStateFilter = "failed" | "active" | "all";
+
+export interface ServiceUnit {
+  name: string;
+  description: string;
+  load: string;
+  active: string;
+  sub: string;
+}
+
+export type LogPriority = "err" | "warning" | "info";
+
+export interface LogEntry {
+  /** Milliseconds since the epoch. */
+  ts: number;
+  unit?: string;
+  /** syslog priority, 0 (emerg) to 7 (debug). */
+  priority: number;
+  message: string;
+  pid?: number;
+}
+
+export interface LogPage {
+  entries: LogEntry[];
+  /** Pass back as `cursor` to receive only newer entries. */
+  cursor?: string;
+}
+
+export type FileEntryType = "file" | "dir" | "link" | "other";
+
+export interface FileEntry {
+  name: string;
+  type: FileEntryType;
+  size: number;
+  /** Milliseconds since the epoch. */
+  mtime: number;
+  mode: number;
+}
+
+export interface DirListing {
+  path: string;
+  parent: string | null;
+  entries: FileEntry[];
+  truncated: boolean;
+}
+
+export interface FilePreview {
+  path: string;
+  size: number;
+  binary: boolean;
+  truncated: boolean;
+  text?: string;
+}

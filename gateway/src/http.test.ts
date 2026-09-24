@@ -113,6 +113,28 @@ describe("http api", () => {
     expect(ok.status).toBe(200);
   });
 
+  it("serves the host views only to a session, and never the data directory", async () => {
+    const anon = await fetch(`${base}/api/host/capabilities`);
+    expect(anon.status).toBe(401);
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const auth = { Authorization: `Bearer ${token}` };
+    const caps = await fetch(`${base}/api/host/capabilities`, { headers: auth });
+    expect(caps.status).toBe(200);
+    expect(((await caps.json()) as { files: boolean }).files).toBe(true);
+    const secrets = await fetch(`${base}/api/host/file?path=${encodeURIComponent(join(dir, "secrets.json"))}`, {
+      headers: auth,
+    });
+    expect(secrets.status).toBe(403);
+    const listing = await fetch(`${base}/api/host/files?path=${encodeURIComponent(dir)}`, { headers: auth });
+    expect(listing.status).toBe(403);
+  });
+
   it("does not swap in Cursor's catalog for another adapter", async () => {
     await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
     const login = await fetch(`${base}/api/auth/login`, {
