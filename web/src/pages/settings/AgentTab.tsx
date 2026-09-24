@@ -13,7 +13,7 @@ import { ModelPicker } from "../../components/ModelPicker";
 import { CatalogFallbackNotice } from "../../components/CatalogFallback";
 import { SdkLoginControls } from "../../components/SdkLogin";
 import { WorkspacePicker } from "../../components/WorkspacePicker";
-import { Callout, SettingGroup, SettingRow, StatusBadge } from "../../components/Primitives";
+import { Callout, SettingGroup, SettingRow, Skeleton, StatusBadge } from "../../components/Primitives";
 import { Switch } from "../../components/Switch";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
@@ -80,13 +80,19 @@ export function AgentTab({
 
       <SettingGroup title={t("wizard.step.adapter")} hint={currentAdapter?.description}>
         <SettingRow label={t("wizard.step.adapter")} htmlFor="set-adapter">
-          <select id="set-adapter" value={draft.agent.adapter} onChange={(e) => pickAdapter(e.target.value)}>
-            {adapters.map((a) => (
-              <option key={a.id} value={a.id} disabled={!adapterSelectable(a) && a.id !== draft.agent.adapter}>
-                {a.displayName}
-              </option>
-            ))}
-          </select>
+          {/* An empty select read as "no adapters"; until the list arrives it is
+              a placeholder the same size as the control. */}
+          {adapters.length === 0 && !adaptersError ? (
+            <Skeleton rows={1} label={t("wizard.adapters.loading")} />
+          ) : (
+            <select id="set-adapter" value={draft.agent.adapter} onChange={(e) => pickAdapter(e.target.value)}>
+              {adapters.map((a) => (
+                <option key={a.id} value={a.id} disabled={!adapterSelectable(a) && a.id !== draft.agent.adapter}>
+                  {a.displayName}
+                </option>
+              ))}
+            </select>
+          )}
         </SettingRow>
       </SettingGroup>
 

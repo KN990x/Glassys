@@ -312,7 +312,9 @@ export function Hunk({ hunk, emptyLabel }: { hunk: string; emptyLabel: string })
                 <span className="diff-sign" aria-hidden="true">
                   {added ? "+" : removed ? "−" : ""}
                 </span>
-                <code className="diff-code">{added || removed ? line.slice(1) : line}</code>
+                {/* Context lines carry a leading space in unified diff, the same column
+                    as the + and −; keeping it pushed them one character right. */}
+                <code className="diff-code">{added || removed || line.startsWith(" ") ? line.slice(1) : line}</code>
               </div>
             );
           })}
