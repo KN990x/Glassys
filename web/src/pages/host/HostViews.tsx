@@ -294,6 +294,7 @@ export function ServicesView({
   const [state, setState] = useState<ServiceStateFilter>("all");
   const [scope, setScope] = useState<ServiceScope>("system");
   const [q, setQ] = useState("");
+  const [openUnit, setOpenUnit] = useState<string | null>(null);
   const services = useLoad(
     () => (caps?.services ? source.hostServices(scope, state).then((r) => r.units) : Promise.resolve([])),
     [source, scope, state, caps?.services],
@@ -368,15 +369,24 @@ export function ServicesView({
       {services.data ? (
         <div className="host-card list">
           {units.length === 0 ? <p className="muted host-empty">{t("services.empty")}</p> : null}
+          {/* Tapping a unit opens its actions under it: the same gesture with a
+              pointer or a thumb, where hover-only buttons did not exist on a
+              phone. */}
           {units.map((u) => (
-            <ListRow
-              key={u.name}
-              className="unit-row"
-              glyph={<span className={`unit-dot tone-${unitTone(u)}`} />}
-              tail={<StatusBadge tone={unitTone(u)}>{u.sub || u.active}</StatusBadge>}
-              title={u.description || u.name}
-              actions={
-                <>
+            <div key={u.name} className={`unit-item${openUnit === u.name ? " open" : ""}`}>
+              <ListRow
+                className="unit-row"
+                glyph={<span className={`unit-dot tone-${unitTone(u)}`} />}
+                tail={<StatusBadge tone={unitTone(u)}>{u.sub || u.active}</StatusBadge>}
+                title={u.description || u.name}
+                current={openUnit === u.name}
+                onClick={() => setOpenUnit((cur) => (cur === u.name ? null : u.name))}
+              >
+                <span className="unit-name">{u.name}</span>
+                {u.description ? <span className="unit-desc">{u.description}</span> : null}
+              </ListRow>
+              {openUnit === u.name ? (
+                <div className="unit-actions">
                   <button type="button" className="ghost tiny" onClick={() => onLogs(u.name)}>
                     <IconLogs />
                     {t("services.logs")}
@@ -397,12 +407,9 @@ export function ServicesView({
                     <IconRestart />
                     {t("services.restart")}
                   </button>
-                </>
-              }
-            >
-              <span className="unit-name">{u.name}</span>
-              {u.description ? <span className="unit-desc">{u.description}</span> : null}
-            </ListRow>
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
       ) : null}
@@ -725,13 +732,18 @@ export function FilesView({
             >
               {copied ? <IconCheck /> : <IconCopy />}
             </button>
-            <button type="button" className="ghost tiny" onClick={() => onMention(`\`${file}\``)}>
+            <button type="button" className="ghost tiny" title={t("files.mention")} onClick={() => onMention(`\`${file}\``)}>
               <IconMention />
-              {t("files.mention")}
+              <span className="btn-label">{t("files.mention")}</span>
             </button>
-            <button type="button" className="ghost tiny" onClick={() => onDraft(fill(t("prompt.draft.fileChange"), { path: file }))}>
+            <button
+              type="button"
+              className="ghost tiny"
+              title={t("files.askChange")}
+              onClick={() => onDraft(fill(t("prompt.draft.fileChange"), { path: file }))}
+            >
               <IconZap />
-              {t("files.askChange")}
+              <span className="btn-label">{t("files.askChange")}</span>
             </button>
           </div>
           <div className="files-scroll">

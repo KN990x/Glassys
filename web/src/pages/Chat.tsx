@@ -29,31 +29,27 @@ import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
 import { ActivityPanel } from "../components/ActivityPanel";
 import { HostViews, type HostViewId } from "./host/HostViews";
-import { ViewTabs, type AppView } from "../components/ViewTabs";
+import { type AppView } from "../components/ViewTabs";
+import { Topbar } from "../components/Topbar";
 import {
   IconActivity,
   IconArrowDown,
   IconClock,
-  IconClose,
   IconExport,
   IconFolder,
   IconMoon,
-  IconMore,
   IconPlus,
   IconRailClose,
   IconRailOpen,
   IconRefresh,
-  IconRename,
   IconSearch,
   IconSettings,
   IconStop,
   IconThreads,
-  IconTrash,
 } from "../components/Icon";
-import { PopAnchor, Popover } from "../components/Popover";
 import { Sidebar, nextTheme } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
-import { HostContext, type HostInfo } from "../components/HostContext";
+import { type HostInfo } from "../components/HostContext";
 import { AlertStack, type Alert } from "../components/AlertStack";
 import { useConfirm } from "../components/ConfirmDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
@@ -160,9 +156,6 @@ export function Chat({
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [renameDraft, setRenameDraft] = useState("");
   const [railCollapsed, setRailCollapsed] = useState(() => {
     try {
       return localStorage.getItem(RAIL_KEY) === "1";
@@ -1044,192 +1037,39 @@ export function Chat({
         />
       )}
       <div className="chat-shell">
-        <header className="topbar">
-          <div className="topbar-inner">
-            {searchOpen ? (
-              <span className="search-field topbar-search">
-                <IconSearch />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t("chat.search")}
-                  aria-label={t("chat.search")}
-                  ref={searchRef}
-                  autoFocus
-                />
-                {search.trim() ? (
-                  <span className="search-count nums muted">
-                    {visibleBlocks.length}/{blocks.length}
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  className="icon-btn sm"
-                  aria-label={t("chat.searchClose")}
-                  title={t("chat.searchClose")}
-                  onClick={() => {
-                    setSearchOpen(false);
-                    setSearch("");
-                  }}
-                >
-                  <IconClose />
-                </button>
-              </span>
-            ) : (
-              <>
-                <div className="topbar-title">
-                  {view !== "chat" ? (
-                    <>
-                      <span className="topbar-heading">
-                        {!isDesktop && (
-                          <span className={`status dot-only ${statusClass}`} aria-live="polite" title={t(statusKey)}>
-                            <span className="visually-hidden">{t(statusKey)}</span>
-                          </span>
-                        )}
-                        <strong className="truncate">{t(`nav.${view}`)}</strong>
-                      </span>
-                      <span className="host-context muted host-path truncate">{hostLabel}</span>
-                    </>
-                  ) : renaming ? (
-                    <form
-                      className="thread-rename"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (currentThreadId) void onRenameThread(currentThreadId, renameDraft);
-                        setRenaming(false);
-                      }}
-                    >
-                      <input
-                        value={renameDraft}
-                        aria-label={t("threads.rename")}
-                        onChange={(e) => setRenameDraft(e.target.value)}
-                        onBlur={() => setRenaming(false)}
-                        autoFocus
-                      />
-                      <button type="submit" className="ghost tiny">
-                        {t("threads.saveTitle")}
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="topbar-heading"
-                        disabled={!currentThreadId}
-                        title={currentThreadId ? t("threads.rename") : threadTitle}
-                        onClick={() => {
-                          setRenameDraft(currentThread?.title || "");
-                          setRenaming(true);
-                        }}
-                      >
-                        {!isDesktop && (
-                          <span className={`status dot-only ${statusClass}`} aria-live="polite" title={t(statusKey)}>
-                            <span className="visually-hidden">{t(statusKey)}</span>
-                          </span>
-                        )}
-                        <strong className="truncate">{threadTitle}</strong>
-                      </button>
-                      <HostContext
-                        info={hostInfo}
-                        variant={isDesktop ? "path" : "inline"}
-                        onCopyFailed={onCopyFailed}
-                      />
-                    </>
-                  )}
-                </div>
-                {isDesktop && <ViewTabs value={view} onChange={showView} caps={hostCaps} />}
-                <div className="top-actions">
-                  {view === "chat" && (
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    onClick={() => {
-                      setSearchOpen(true);
-                      queueMicrotask(() => searchRef.current?.focus());
-                    }}
-                    aria-label={t("chat.search")}
-                    title={t("chat.search")}
-                  >
-                    <IconSearch />
-                  </button>
-                  )}
-                  {view === "chat" && (
-                    <button
-                      type="button"
-                      className={`icon-btn${activityOpen ? " current" : ""}`}
-                      aria-pressed={activityOpen}
-                      onClick={() => toggleActivity(!activityOpen)}
-                      aria-label={t("nav.activity")}
-                      title={t("nav.activity")}
-                    >
-                      <IconActivity />
-                    </button>
-                  )}
-                  {view === "chat" && (
-                  <PopAnchor>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-expanded={menuOpen}
-                      aria-label={t("chat.more")}
-                      title={t("chat.more")}
-                      onClick={() => setMenuOpen((v) => !v)}
-                    >
-                      <IconMore />
-                    </button>
-                    <Popover
-                      open={menuOpen}
-                      onClose={() => setMenuOpen(false)}
-                      label={t("chat.more")}
-                      side="bottom"
-                      align="end"
-                    >
-                      <button
-                        type="button"
-                        className="ghost picker-item"
-                        disabled={!currentThreadId}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setRenameDraft(currentThread?.title || "");
-                          setRenaming(true);
-                        }}
-                      >
-                        <IconRename />
-                        <strong>{t("threads.rename")}</strong>
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost picker-item"
-                        disabled={!currentThreadId}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          void onExport();
-                        }}
-                      >
-                        <IconExport />
-                        <strong>{t("chat.export")}</strong>
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost picker-item danger-hover"
-                        disabled={!currentThreadId}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          if (currentThreadId) void onDeleteThread(currentThreadId, { stopPropagation: () => undefined });
-                        }}
-                      >
-                        <IconTrash />
-                        <strong>{t("threads.delete")}</strong>
-                      </button>
-                    </Popover>
-                  </PopAnchor>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </header>
+        <Topbar
+          view={view}
+          onView={showView}
+          caps={hostCaps}
+          isDesktop={isDesktop}
+          statusClass={statusClass}
+          statusLabel={t(statusKey)}
+          hostLabel={hostLabel}
+          hostInfo={hostInfo}
+          onCopyFailed={onCopyFailed}
+          threadId={currentThreadId}
+          threadTitle={{ shown: threadTitle, stored: currentThread?.title || "" }}
+          onRename={(id, title) => void onRenameThread(id, title)}
+          onExport={() => void onExport()}
+          onDelete={(id) => void onDeleteThread(id, { stopPropagation: () => undefined })}
+          search={{
+            open: searchOpen,
+            value: search,
+            onChange: setSearch,
+            onOpen: () => {
+              setSearchOpen(true);
+              queueMicrotask(() => searchRef.current?.focus());
+            },
+            onClose: () => {
+              setSearchOpen(false);
+              setSearch("");
+            },
+            inputRef: searchRef,
+            count: `${visibleBlocks.length}/${blocks.length}`,
+          }}
+          activityOpen={activityOpen}
+          onActivity={toggleActivity}
+        />
         {view !== "chat" ? (
           <HostViews
             view={view}

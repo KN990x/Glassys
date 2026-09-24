@@ -78,6 +78,9 @@ describe("HostViews", () => {
 
   it("drafts a prompt instead of acting on a unit", async () => {
     const onDraft = await render("services");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Restart")).toBe(false);
+    const row = [...host.querySelectorAll(".unit-row .list-row-main")].find((b) => b.textContent?.includes("backup.service"));
+    await act(async () => (row as HTMLButtonElement).click());
     const restart = [...host.querySelectorAll("button")].find((b) => b.textContent === "Restart");
     await act(async () => restart?.click());
     expect(onDraft).toHaveBeenCalledWith(expect.stringContaining("Restart backup.service"));

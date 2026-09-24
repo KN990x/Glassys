@@ -454,8 +454,8 @@
   "files.pick": "Pick a file to preview it.",
   "files.readOnly": "Read-only — changes go through the agent",
   "prompt.draft.review": "Review this host: load, memory, disks and failed services. Tell me what needs attention before changing anything.",
-  "prompt.draft.diagnose": "Diagnose why {unit} is {state}. Read its status and recent journal first, and tell me what you find before changing anything.",
-  "prompt.draft.restart": "Restart {unit} and confirm it came back healthy. Show its status and the last journal lines afterwards.",
+  "prompt.draft.diagnose": "Diagnose why {unit} is {state}. Read its status and recent logs first, and tell me what you find before changing anything.",
+  "prompt.draft.restart": "Restart {unit} and confirm it came back healthy. Show its status and its last log lines afterwards.",
   "prompt.draft.explainLogs": "Explain these journal lines from {source} and tell me whether anything needs action:",
   "prompt.draft.fileChange": "In {path}, "
 }

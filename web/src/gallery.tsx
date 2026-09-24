@@ -14,7 +14,6 @@ import { I18nProvider } from "./i18n";
 import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
 import { AlertStack } from "./components/AlertStack";
-import { HostContext } from "./components/HostContext";
 import { ToolCard, ToolGroup } from "./components/ToolCard";
 import { Transcript } from "./components/Transcript";
 import { Composer } from "./components/Composer";
@@ -28,12 +27,11 @@ import { PopAnchor, Popover } from "./components/Popover";
 import { Callout, Disclosure, Kbd, SettingGroup, SettingRow, Skeleton, StatusBadge } from "./components/Primitives";
 import { Settings } from "./pages/Settings";
 import { HostViews, type HostSource, type HostViewId } from "./pages/host/HostViews";
-import { ViewTabs } from "./components/ViewTabs";
+import { Topbar, type TopbarSearch } from "./components/Topbar";
 import { Wizard } from "./pages/Wizard";
 import {
   IconClose,
   IconFolder,
-  IconMore,
   IconPlus,
   IconSearch,
   IconStop,
@@ -124,6 +122,15 @@ const fakeHost: HostSource = {
   }),
 };
 
+const gallerySearch: TopbarSearch = {
+  open: false,
+  value: "",
+  onChange: () => {},
+  onOpen: () => {},
+  onClose: () => {},
+  inputRef: { current: null },
+};
+
 function HostShell({ view, mobile }: { view: HostViewId; mobile?: boolean }) {
   const [v, setV] = useState<HostViewId>(view);
   return (
@@ -134,16 +141,25 @@ function HostShell({ view, mobile }: { view: HostViewId; mobile?: boolean }) {
           collapsed={false} onCollapse={() => {}} theme="dark" onTheme={() => {}} />
       )}
       <div className="chat-shell">
-        <header className="topbar">
-          <div className="topbar-inner">
-            <div className="topbar-title">
-              <span className="topbar-heading"><strong className="truncate">{v[0]!.toUpperCase() + v.slice(1)}</strong></span>
-              <span className="host-context muted host-path truncate">ops@web-01</span>
-            </div>
-            {!mobile && <ViewTabs value={v} onChange={(n) => n !== "chat" && setV(n)} caps={hostCaps} />}
-            <div className="top-actions" />
-          </div>
-        </header>
+        <Topbar
+          view={v}
+          onView={(n) => n !== "chat" && setV(n)}
+          caps={hostCaps}
+          isDesktop={!mobile}
+          statusClass="connected"
+          statusLabel="Connected"
+          hostLabel="ops@web-01"
+          hostInfo={host}
+          onCopyFailed={() => {}}
+          threadId="t1"
+          threadTitle={{ shown: "", stored: "" }}
+          onRename={() => {}}
+          onExport={() => {}}
+          onDelete={() => {}}
+          search={gallerySearch}
+          activityOpen={false}
+          onActivity={() => {}}
+        />
         <HostViews view={v} onView={setV} caps={hostCaps} source={fakeHost} locale="en" cwd="/etc/nginx"
           narrow={Boolean(mobile)} onDraft={() => {}} onMention={() => {}} />
       </div>
@@ -256,22 +272,25 @@ function ChatShell({
           collapsed={Boolean(mini)} onCollapse={() => {}} theme="dark" onTheme={() => {}} />
       )}
       <div className="chat-shell">
-        <header className="topbar">
-          <div className="topbar-inner">
-            <div className="topbar-title">
-              <button type="button" className="topbar-heading">
-                {mobile && <span className="status dot-only connected" title="Connected" />}
-                <strong className="truncate">Disk pressure on web-01</strong>
-              </button>
-              <HostContext info={host} variant={mobile ? "inline" : "path"} onCopyFailed={() => {}} />
-            </div>
-            {!mobile && <ViewTabs value="chat" onChange={() => {}} caps={hostCaps} />}
-            <div className="top-actions">
-              <button type="button" className="icon-btn" aria-label="Search"><IconSearch /></button>
-              <button type="button" className="icon-btn" aria-label="More"><IconMore /></button>
-            </div>
-          </div>
-        </header>
+        <Topbar
+          view="chat"
+          onView={() => {}}
+          caps={hostCaps}
+          isDesktop={!mobile}
+          statusClass="connected"
+          statusLabel="Connected"
+          hostLabel="ops@web-01"
+          hostInfo={host}
+          onCopyFailed={() => {}}
+          threadId="t1"
+          threadTitle={{ shown: "Disk pressure on web-01", stored: "Disk pressure on web-01" }}
+          onRename={() => {}}
+          onExport={() => {}}
+          onDelete={() => {}}
+          search={gallerySearch}
+          activityOpen={Boolean(inspector)}
+          onActivity={() => {}}
+        />
         <main className="chat-main">
           <div className="transcript">
             <div className="transcript-inner">

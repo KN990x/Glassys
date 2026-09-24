@@ -2842,6 +2842,8 @@ mark {
 .disk-pct.tone-danger { color: var(--danger); }
 @media (max-width: 640px) {
   .unit-desc { display: none; }
+  .btn-label { display: none; }
+  .composer-warn span { display: none; }
   .disk-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--s-2); }
   .disk-row .meter { grid-column: 1 / -1; grid-row: 2; }
   .disk-figures { display: none; }
@@ -2854,8 +2856,17 @@ mark {
 .unit-name { font-family: var(--mono); font-size: var(--fs-code); }
 .unit-desc { margin-left: var(--s-3); font-size: var(--fs-sm); color: var(--muted); font-weight: 400; }
 .host-card.list .list-row { --row-surface: var(--bg-elev); }
-.list-row-actions .ghost.tiny { min-height: var(--control-h-xs); border-color: transparent; background: var(--surface-3); }
-.list-row-actions .ghost.tiny:hover:not(:disabled) { background: var(--stroke-strong); }
+.unit-item { display: grid; gap: var(--s-05); min-width: 0; }
+.unit-item.open { padding-bottom: var(--s-1); }
+/* The actions line up under the unit's name, past the state dot. */
+.unit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  padding-left: calc(var(--s-2) + var(--icon-md) + var(--s-2));
+}
+.unit-actions .ghost.tiny { border-color: transparent; background: var(--surface-3); }
+.unit-actions .ghost.tiny:hover:not(:disabled) { background: var(--stroke-strong); }
 
 .log-list {
   flex: 1;
