@@ -380,302 +380,302 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
           </select>
         </label>
       </div>
-      <div className="panel">
-        {/* Language and theme used to be asked inside the adapter step, which
-            made step one ask three unrelated questions. */}
-        <div className="brand tight">
-          <GlassysMark size={22} />
+      {/* The mark stands above the panel, not inside it as a fourth heading. */}
+      <div className="gate-column">
+        <div className="gate-brand">
+          <GlassysMark size={28} />
           <strong>{t("app.name")}</strong>
         </div>
-        {/* Named steps: five unlabelled hairlines and a 1/5 said how far along
-            the operator was, but never what was still coming. */}
-        <ol className="steps">
-          {steps.map((s, i) => (
-            <li
-              key={s}
-              className={i === step ? "active" : i < step ? "done" : ""}
-              aria-current={i === step ? "step" : undefined}
-            >
-              <span className="step-bar" aria-hidden="true" />
-              <span className="step-name">{t(`wizard.step.${s}`)}</span>
-            </li>
-          ))}
-        </ol>
-        <div className="panel-heading">
-          <p className="eyebrow">
-            {t("wizard.title")} · <span className="nums">{step + 1}/{steps.length}</span>
-          </p>
-          <h2>{t(`wizard.step.${id}`)}</h2>
-        </div>
-
-        {id === "adapter" && (
-          <div className="stack">
-            <p>{t("wizard.adapter.body")}</p>
-            {!adaptersReady && <p className="muted">{t("wizard.adapters.loading")}</p>}
-            {adaptersError && (
-              <Callout
-                tone="danger"
-                action={
-                  <button type="button" className="ghost tiny" onClick={() => loadAdapters()}>
-                    {t("wizard.adapters.retry")}
-                  </button>
-                }
-              >
-                {adaptersError}
-              </Callout>
-            )}
-            {adapters.map((a) => {
-              const selectable = adapterSelectable(a);
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  className={`adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
-                  aria-pressed={adapterId === a.id}
-                  disabled={!selectable}
-                  onClick={() => setAdapterId(a.id)}
-                >
-                  <span className="adapter-mono" aria-hidden="true">
-                    {a.displayName.slice(0, 1)}
-                  </span>
-                  <span className="adapter-card-body">
-                    <strong>{a.displayName}</strong>
-                    {a.description ? <span className="muted">{a.description}</span> : null}
-                    {!selectable && a.available && !a.available.ok && a.available.error ? (
-                      <span className="muted">{a.available.error}</span>
-                    ) : a.id === "acp" && selectable ? (
-                      <span className="muted">{t("wizard.acp.needsCommand")}</span>
-                    ) : null}
-                  </span>
-                  <span className="adapter-card-state">
-                    {selectable ? (
-                      adapterId === a.id ? (
-                        <span className="adapter-check">
-                          <IconCheck />
-                        </span>
-                      ) : null
-                    ) : (
-                      <StatusBadge tone="danger" dot>
-                        {t("wizard.adapter.unavailable")}
-                      </StatusBadge>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
+        <div className="panel">
+          {/* Progress is one 2px bar along the panel's top edge; the step's name is
+              the heading below it. Five labelled bars plus an eyebrow plus the
+              heading were three ways of saying the same thing. */}
+          <div
+            className="wizard-progress"
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={steps.length}
+            aria-valuenow={step + 1}
+            aria-label={t("wizard.title")}
+          >
+            <span style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
           </div>
-        )}
-
-        {id === "workspace" && (
-          <div className="stack">
-            <p>{t("wizard.workspace.body")}</p>
-            <WorkspacePicker value={cwd} onChange={setCwd} />
-          </div>
-        )}
-
-        {id === "phone" && <ReachabilityCard />}
-
-        {id === "credential" && (
-          <div className="stack">
-            <p>{t("wizard.cred.body")}</p>
-            <div className="row wrap">
-              {caps?.auth.kind === "sdk-login" &&
-                (auth?.loggedIn ? (
-                  <StatusBadge tone="ok" dot>
-                    {auth.email || t("wizard.cred.signedIn")}
-                  </StatusBadge>
-                ) : (
-                  <StatusBadge dot>{t("wizard.cred.signedOut")}</StatusBadge>
-                ))}
-              {(config.secrets.adapters?.[adapterId]?.apiKey.configured ||
-                (adapterId === "cursor" && config.secrets.cursorApiKey.configured)) && (
-                <StatusBadge tone="ok" dot>
-                  {t("wizard.cred.keyConfigured")}
-                </StatusBadge>
-              )}
-            </div>
-            {caps?.auth.kind === "sdk-login" && (
-              <SdkLoginControls
-                adapterId={adapterId}
-                onSignedIn={async () => {
-                  onConfig(await api.config());
-                  await refreshAuth();
-                  const r = await api.models(adapterId).catch(() => null);
-                  if (r) {
-                    setModels(r.models);
-                    setModelSource(r.source);
-                    setModelError(r.error || "");
-                  }
-                }}
-              />
-            )}
-            <p className="muted">
-              {caps?.auth.kind === "sdk-login" ? t("wizard.cred.loginHint") : t("wizard.cred.keyHint")}
-              {caps?.auth.envNames?.length ? ` ${caps.auth.envNames.join(", ")}` : ""}
+          <div className="panel-heading">
+            <p className="eyebrow">
+              {t("wizard.title")} · <span className="nums">{step + 1}/{steps.length}</span>
             </p>
-            {caps?.auth.kind === "sdk-login" &&
-              !auth?.loggedIn &&
-              !adapterKeyConfigured(config.secrets, adapterId) &&
-              !apiKey.trim() && <Callout tone="warn">{t("wizard.cred.unsignedWarn")}</Callout>}
-            <details>
-              <summary>{t("wizard.cred.optional")}</summary>
-              <label>
-                {t("wizard.cred.key")}
-                <input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-              </label>
-              <p className="muted">{t("wizard.cred.keyHint")}</p>
-            </details>
+            <h2>{t(`wizard.step.${id}`)}</h2>
           </div>
-        )}
 
-        {id === "model" && (
-          <div className="stack">
-            <p>{t("wizard.model.body")}</p>
-            <CatalogFallbackNotice liveCatalog={caps?.liveCatalog} source={modelSource} error={modelError} />
-            <ModelPicker
-              models={models}
-              modelId={model}
-              params={modelParams}
-              preferred={caps?.defaultModel}
-              onChange={(nextId, nextParams) => {
-                setModel(nextId);
-                setModelParams(nextParams);
-              }}
-            />
-          </div>
-        )}
-
-        {id === "acp" && (
-          <div className="stack">
-            <p>{t("wizard.acp.body")}</p>
-            {discover.length > 0 && (
-              <label>
-                {t("wizard.acp.registry")}
-                <select
-                  value={optionString(options, "registryId", "")}
-                  onChange={(e) => {
-                    const item = discover.find((d) => d.id === e.target.value);
-                    setOptions({
-                      ...options,
-                      registryId: e.target.value,
-                      command: item?.command || optionString(options, "command", ""),
-                      args: item?.args || optionStringArray(options, "args", []),
-                    });
-                  }}
+          {id === "adapter" && (
+            <div className="stack">
+              <p>{t("wizard.adapter.body")}</p>
+              {!adaptersReady && <p className="muted">{t("wizard.adapters.loading")}</p>}
+              {adaptersError && (
+                <Callout
+                  tone="danger"
+                  action={
+                    <button type="button" className="ghost tiny" onClick={() => loadAdapters()}>
+                      {t("wizard.adapters.retry")}
+                    </button>
+                  }
                 >
-                  <option value="">{t("wizard.acp.custom")}</option>
-                  {discover.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label>
-              {t("wizard.acp.command")}
-              <input
-                value={optionString(options, "command", "")}
-                onChange={(e) => setOptions(setOption(options, "command", e.target.value))}
-                placeholder={t("wizard.acp.commandPlaceholder")}
-              />
-            </label>
-            <label>
-              {t("wizard.acp.args")}
-              <input
-                value={optionStringArray(options, "args", []).join(" ")}
-                onChange={(e) => setOptions(setOption(options, "args", e.target.value.split(/\s+/).filter(Boolean)))}
-                placeholder={t("wizard.acp.argsPlaceholder")}
-              />
-            </label>
-          </div>
-        )}
+                  {adaptersError}
+                </Callout>
+              )}
+              {adapters.map((a) => {
+                const selectable = adapterSelectable(a);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className={`adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
+                    aria-pressed={adapterId === a.id}
+                    disabled={!selectable}
+                    onClick={() => setAdapterId(a.id)}
+                  >
+                    <span className="adapter-mono" aria-hidden="true">
+                      {a.displayName.slice(0, 1)}
+                    </span>
+                    <span className="adapter-card-body">
+                      <strong>{a.displayName}</strong>
+                      {a.description ? <span className="muted">{a.description}</span> : null}
+                      {!selectable && a.available && !a.available.ok && a.available.error ? (
+                        <span className="muted">{a.available.error}</span>
+                      ) : a.id === "acp" && selectable ? (
+                        <span className="muted">{t("wizard.acp.needsCommand")}</span>
+                      ) : null}
+                    </span>
+                    <span className="adapter-card-state">
+                      {selectable ? (
+                        adapterId === a.id ? (
+                          <span className="adapter-check">
+                            <IconCheck />
+                          </span>
+                        ) : null
+                      ) : (
+                        <StatusBadge tone="danger" dot>
+                          {t("wizard.adapter.unavailable")}
+                        </StatusBadge>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-        {id === "rules" && (
-          <div className="stack">
-            <p>{t("wizard.rules.body")}</p>
-            {(["project", "user", "plugins"] as SettingSource[]).map((s) => (
-              <Switch
-                key={s}
-                label={t(`wizard.rules.${s}`)}
-                checked={optionStringArray(options, "settingSources", ["project", "user"]).includes(s)}
-                onChange={(next) => {
-                  const cur = optionStringArray(options, "settingSources", ["project", "user"]);
-                  setOptions(setOption(options, "settingSources", next ? [...cur, s] : cur.filter((x) => x !== s)));
+          {id === "workspace" && (
+            <div className="stack">
+              <p>{t("wizard.workspace.body")}</p>
+              <WorkspacePicker value={cwd} onChange={setCwd} />
+            </div>
+          )}
+
+          {id === "phone" && <ReachabilityCard />}
+
+          {id === "credential" && (
+            <div className="stack">
+              <p>{t("wizard.cred.body")}</p>
+              <div className="row wrap">
+                {caps?.auth.kind === "sdk-login" &&
+                  (auth?.loggedIn ? (
+                    <StatusBadge tone="ok" dot>
+                      {auth.email || t("wizard.cred.signedIn")}
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge dot>{t("wizard.cred.signedOut")}</StatusBadge>
+                  ))}
+                {(config.secrets.adapters?.[adapterId]?.apiKey.configured ||
+                  (adapterId === "cursor" && config.secrets.cursorApiKey.configured)) && (
+                  <StatusBadge tone="ok" dot>
+                    {t("wizard.cred.keyConfigured")}
+                  </StatusBadge>
+                )}
+              </div>
+              {caps?.auth.kind === "sdk-login" && (
+                <SdkLoginControls
+                  adapterId={adapterId}
+                  onSignedIn={async () => {
+                    onConfig(await api.config());
+                    await refreshAuth();
+                    const r = await api.models(adapterId).catch(() => null);
+                    if (r) {
+                      setModels(r.models);
+                      setModelSource(r.source);
+                      setModelError(r.error || "");
+                    }
+                  }}
+                />
+              )}
+              <p className="muted">
+                {caps?.auth.kind === "sdk-login" ? t("wizard.cred.loginHint") : t("wizard.cred.keyHint")}
+                {caps?.auth.envNames?.length ? ` ${caps.auth.envNames.join(", ")}` : ""}
+              </p>
+              {caps?.auth.kind === "sdk-login" &&
+                !auth?.loggedIn &&
+                !adapterKeyConfigured(config.secrets, adapterId) &&
+                !apiKey.trim() && <Callout tone="warn">{t("wizard.cred.unsignedWarn")}</Callout>}
+              <details>
+                <summary>{t("wizard.cred.optional")}</summary>
+                <label>
+                  {t("wizard.cred.key")}
+                  <input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                </label>
+                <p className="muted">{t("wizard.cred.keyHint")}</p>
+              </details>
+            </div>
+          )}
+
+          {id === "model" && (
+            <div className="stack">
+              <p>{t("wizard.model.body")}</p>
+              <CatalogFallbackNotice liveCatalog={caps?.liveCatalog} source={modelSource} error={modelError} />
+              <ModelPicker
+                models={models}
+                modelId={model}
+                params={modelParams}
+                preferred={caps?.defaultModel}
+                onChange={(nextId, nextParams) => {
+                  setModel(nextId);
+                  setModelParams(nextParams);
                 }}
               />
-            ))}
-          </div>
-        )}
+            </div>
+          )}
 
-        {id === "execution" && (
-          <div className="stack">
-            <p>{t("wizard.exec.body")}</p>
-            {caps?.sandbox && (
-              <Switch
-                checked={optionBool(options, "sandbox", false)}
-                label={t("wizard.exec.sandbox")}
-                hint={t("settings.sandboxHint")}
-                onChange={(next) => setOptions(setOption(options, "sandbox", next))}
-              />
-            )}
-            {caps?.autoRun && (
-              <Switch
-                checked={optionBool(options, "autoRun", true)}
-                label={t("wizard.exec.autoRun")}
-                hint={t("settings.autoRunHint")}
-                onChange={(next) => setOptions(setAutoRun(options, next, caps?.toolConfirmation))}
-              />
-            )}
-            {caps?.toolConfirmation === "permission-mode" && (
+          {id === "acp" && (
+            <div className="stack">
+              <p>{t("wizard.acp.body")}</p>
+              {discover.length > 0 && (
+                <label>
+                  {t("wizard.acp.registry")}
+                  <select
+                    value={optionString(options, "registryId", "")}
+                    onChange={(e) => {
+                      const item = discover.find((d) => d.id === e.target.value);
+                      setOptions({
+                        ...options,
+                        registryId: e.target.value,
+                        command: item?.command || optionString(options, "command", ""),
+                        args: item?.args || optionStringArray(options, "args", []),
+                      });
+                    }}
+                  >
+                    <option value="">{t("wizard.acp.custom")}</option>
+                    {discover.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
-                {t("wizard.exec.permissionMode")}
-                <select
-                  value={optionString(options, "permissionMode", "bypassPermissions")}
-                  onChange={(e) => setOptions(setPermissionMode(options, e.target.value))}
-                >
-                  <option value="bypassPermissions">{t("wizard.exec.permission.bypass")}</option>
-                  <option value="dontAsk">{t("wizard.exec.permission.dontAsk")}</option>
-                  <option value="acceptEdits">{t("wizard.exec.permission.acceptEdits")}</option>
-                </select>
+                {t("wizard.acp.command")}
+                <input
+                  value={optionString(options, "command", "")}
+                  onChange={(e) => setOptions(setOption(options, "command", e.target.value))}
+                  placeholder={t("wizard.acp.commandPlaceholder")}
+                />
               </label>
-            )}
-            {caps?.toolConfirmation === "auto-review-deny" && <Callout tone="warn">{t("wizard.exec.danger")}</Callout>}
-            {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
-            {caps?.toolConfirmation === "permission-mode" && <Callout tone="warn">{t("wizard.exec.permission.hint")}</Callout>}
-          </div>
-        )}
+              <label>
+                {t("wizard.acp.args")}
+                <input
+                  value={optionStringArray(options, "args", []).join(" ")}
+                  onChange={(e) => setOptions(setOption(options, "args", e.target.value.split(/\s+/).filter(Boolean)))}
+                  placeholder={t("wizard.acp.argsPlaceholder")}
+                />
+              </label>
+            </div>
+          )}
 
-        {error && <Callout tone="danger">{error}</Callout>}
-        <div className="row wizard-nav">
-          {/* Reserved: Back appearing and disappearing shifted Continue sideways. */}
-          <button
-            type="button"
-            className={`ghost${step === 0 ? " reserved" : ""}`}
-            onClick={() => setStep((s) => s - 1)}
-            disabled={step === 0}
-          >
-            {t("wizard.back")}
-          </button>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void next()}
-            disabled={
-              !adaptersReady ||
-              adapters.length === 0 ||
-              submitting ||
-              (id === "credential" &&
-                !wizardCredentialReady({
-                  authKind: caps?.auth.kind,
-                  loggedIn: auth?.loggedIn,
-                  keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
-                  apiKeyDraft: apiKey,
-                }))
-            }
-          >
-            {last ? t("wizard.finish") : t("wizard.next")}
-          </button>
+          {id === "rules" && (
+            <div className="stack">
+              <p>{t("wizard.rules.body")}</p>
+              {(["project", "user", "plugins"] as SettingSource[]).map((s) => (
+                <Switch
+                  key={s}
+                  label={t(`wizard.rules.${s}`)}
+                  checked={optionStringArray(options, "settingSources", ["project", "user"]).includes(s)}
+                  onChange={(next) => {
+                    const cur = optionStringArray(options, "settingSources", ["project", "user"]);
+                    setOptions(setOption(options, "settingSources", next ? [...cur, s] : cur.filter((x) => x !== s)));
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {id === "execution" && (
+            <div className="stack">
+              <p>{t("wizard.exec.body")}</p>
+              {caps?.sandbox && (
+                <Switch
+                  checked={optionBool(options, "sandbox", false)}
+                  label={t("wizard.exec.sandbox")}
+                  hint={t("settings.sandboxHint")}
+                  onChange={(next) => setOptions(setOption(options, "sandbox", next))}
+                />
+              )}
+              {caps?.autoRun && (
+                <Switch
+                  checked={optionBool(options, "autoRun", true)}
+                  label={t("wizard.exec.autoRun")}
+                  hint={t("settings.autoRunHint")}
+                  onChange={(next) => setOptions(setAutoRun(options, next, caps?.toolConfirmation))}
+                />
+              )}
+              {caps?.toolConfirmation === "permission-mode" && (
+                <label>
+                  {t("wizard.exec.permissionMode")}
+                  <select
+                    value={optionString(options, "permissionMode", "bypassPermissions")}
+                    onChange={(e) => setOptions(setPermissionMode(options, e.target.value))}
+                  >
+                    <option value="bypassPermissions">{t("wizard.exec.permission.bypass")}</option>
+                    <option value="dontAsk">{t("wizard.exec.permission.dontAsk")}</option>
+                    <option value="acceptEdits">{t("wizard.exec.permission.acceptEdits")}</option>
+                  </select>
+                </label>
+              )}
+              {caps?.toolConfirmation === "auto-review-deny" && <Callout tone="warn">{t("wizard.exec.danger")}</Callout>}
+              {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
+              {caps?.toolConfirmation === "permission-mode" && <Callout tone="warn">{t("wizard.exec.permission.hint")}</Callout>}
+            </div>
+          )}
+
+          {error && <Callout tone="danger">{error}</Callout>}
+          <div className="row wizard-nav">
+            {/* Reserved: Back appearing and disappearing shifted Continue sideways. */}
+            <button
+              type="button"
+              className={`ghost${step === 0 ? " reserved" : ""}`}
+              onClick={() => setStep((s) => s - 1)}
+              disabled={step === 0}
+            >
+              {t("wizard.back")}
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void next()}
+              disabled={
+                !adaptersReady ||
+                adapters.length === 0 ||
+                submitting ||
+                (id === "credential" &&
+                  !wizardCredentialReady({
+                    authKind: caps?.auth.kind,
+                    loggedIn: auth?.loggedIn,
+                    keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
+                    apiKeyDraft: apiKey,
+                  }))
+              }
+            >
+              {last ? t("wizard.finish") : t("wizard.next")}
+            </button>
+          </div>
         </div>
       </div>
     </main>

@@ -4,7 +4,7 @@ import type { PromptTemplate } from "@glassys/protocol";
 import { Kbd } from "./Primitives";
 import { IconSearch, IconZap } from "./Icon";
 
-export type PaletteGroup = "product" | "workspace" | "template";
+export type PaletteGroup = "product" | "thread" | "workspace" | "template";
 
 export type PaletteItem = {
   id: string;
@@ -131,10 +131,10 @@ export function CommandPalette({
                   <span className="palette-glyph" aria-hidden="true">
                     {item.glyph ?? <IconZap />}
                   </span>
-                  <span className="palette-text">
-                    <strong>{item.label}</strong>
-                    {item.hint ? <span className="muted">{item.hint}</span> : null}
-                  </span>
+                  {/* One line: the label, then the hint in mono on the right. A second
+                      line under every row made the list twice as tall to scan. */}
+                  <strong className="palette-label truncate">{item.label}</strong>
+                  {item.hint ? <span className="palette-hint truncate">{item.hint}</span> : null}
                   {item.kbd ? <Kbd>{item.kbd}</Kbd> : null}
                 </button>
               </li>

@@ -38,8 +38,8 @@ describe("CatalogFallbackNotice", () => {
         </I18nProvider>,
       );
     });
-    expect(host.querySelector(".warn")?.textContent).toBe("Live catalog unavailable — showing adapter defaults. Sign in or check the API key.");
-    expect(host.querySelector(".warn")?.textContent).not.toMatch(/CURSOR_API_KEY/);
+    expect(host.querySelector(".callout-text")?.textContent).toBe("Live catalog unavailable — showing adapter defaults. Sign in or check the API key.");
+    expect(host.querySelector(".callout-text")?.textContent).not.toMatch(/CURSOR_API_KEY/);
     expect(host.querySelector("details")?.textContent).toMatch(/CURSOR_API_KEY/);
     act(() => root.unmount());
     host.remove();

@@ -173,7 +173,7 @@
   "threads.pin": "Fijar",
   "threads.unpin": "Quitar",
   "palette.title": "Comandos",
-  "palette.placeholder": "Buscar comandos y plantillas",
+  "palette.placeholder": "Buscar hilos, comandos y plantillas",
   "palette.empty": "Sin coincidencias",
   "palette.newThread": "Hilo nuevo",
   "palette.cancel": "Cancelar run",
@@ -393,5 +393,6 @@
   "nav.search": "Buscar hilos y comandos",
   "activity.tokens": "Tokens entrada / salida",
   "activity.duration": "Duración",
-  "chat.placeholderHint": "Mensaje al agente — / para prompts guardados"
+  "chat.placeholderHint": "Mensaje al agente — / para prompts guardados",
+  "palette.group.thread": "Hilos"
 }

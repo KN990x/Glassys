@@ -44,6 +44,7 @@ import {
   IconSearch,
   IconSettings,
   IconStop,
+  IconThreads,
   IconTrash,
 } from "../components/Icon";
 import { PopAnchor, Popover } from "../components/Popover";
@@ -778,6 +779,17 @@ export function Chat({
         openSettings("schedules", body);
       },
     },
+    // The rail lost its filter field; finding a thread by name happens here.
+    ...threads
+      .filter((th) => th.id !== currentThreadId)
+      .map((th) => ({
+        id: `thread:${th.id}`,
+        group: "thread" as const,
+        label: th.title || t("threads.untitled"),
+        hint: cwdBasename(th.cwd),
+        glyph: <IconThreads />,
+        run: () => void onSwitchThread(th.id),
+      })),
     ...pins.concat(recents.filter((c) => !pins.includes(c))).map((cwd) => ({
       id: `cwd:${cwd}`,
       group: "workspace" as const,

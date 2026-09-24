@@ -52,30 +52,33 @@ export function Setup({
       <div className="gate-corner">
         <LocaleSwitch locale={locale} onChange={onLocale} />
       </div>
-      <div className="panel">
-        <div className="brand tight">
-          <GlassysMark size={22} />
+      {/* The mark stands above the panel, not inside it as a fourth heading. */}
+      <div className="gate-column">
+        <div className="gate-brand">
+          <GlassysMark size={28} />
           <strong>{t("app.name")}</strong>
         </div>
-        <div className="panel-heading">
-          <h2>{t("setup.title")}</h2>
-          <p className="muted">{t("setup.body")}</p>
+        <div className="panel">
+          <div className="panel-heading">
+            <h2>{t("setup.title")}</h2>
+            <p className="muted">{t("setup.body")}</p>
+          </div>
+          <form onSubmit={submit} className="stack">
+            <label>
+              {t("setup.password")}
+              <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+            <label>
+              {t("setup.confirm")}
+              <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </label>
+            {error && <Callout tone="danger">{error}</Callout>}
+            <button className="primary" type="submit" disabled={submitting}>
+              {submitting && <span className="spinner sm" aria-hidden="true" />}
+              {t("setup.submit")}
+            </button>
+          </form>
         </div>
-        <form onSubmit={submit} className="stack">
-          <label>
-            {t("setup.password")}
-            <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </label>
-          <label>
-            {t("setup.confirm")}
-            <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-          </label>
-          {error && <Callout tone="danger">{error}</Callout>}
-          <button className="primary" type="submit" disabled={submitting}>
-            {submitting && <span className="spinner sm" aria-hidden="true" />}
-            {t("setup.submit")}
-          </button>
-        </form>
       </div>
     </main>
   );

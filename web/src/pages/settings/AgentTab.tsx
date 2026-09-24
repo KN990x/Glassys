@@ -74,9 +74,9 @@ export function AgentTab({
 
   return (
     <>
-      {/* One line, in the tone of the thing it warns about, instead of a
-          three-sentence orange paragraph above every control. */}
-      <Callout tone="warn">{t("settings.newThread")}</Callout>
+      {/* A note, not an alarm: saving a change that archives the thread still
+          asks first, so this only has to say what will happen. */}
+      <Callout>{t("settings.newThread")}</Callout>
 
       <SettingGroup title={t("wizard.step.adapter")} hint={currentAdapter?.description}>
         <SettingRow label={t("wizard.step.adapter")} htmlFor="set-adapter">

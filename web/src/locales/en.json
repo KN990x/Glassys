@@ -173,7 +173,7 @@
   "threads.pin": "Pin",
   "threads.unpin": "Unpin",
   "palette.title": "Commands",
-  "palette.placeholder": "Search commands and templates",
+  "palette.placeholder": "Search threads, commands and templates",
   "palette.empty": "No matches",
   "palette.newThread": "New thread",
   "palette.cancel": "Cancel run",
@@ -393,5 +393,6 @@
   "nav.search": "Search threads and commands",
   "activity.tokens": "Tokens in / out",
   "activity.duration": "Run time",
-  "chat.placeholderHint": "Message the agent — / for saved prompts"
+  "chat.placeholderHint": "Message the agent — / for saved prompts",
+  "palette.group.thread": "Threads"
 }

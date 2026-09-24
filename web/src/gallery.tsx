@@ -30,8 +30,12 @@ import { Settings } from "./pages/Settings";
 import { Wizard } from "./pages/Wizard";
 import {
   IconClose,
+  IconFolder,
   IconMore,
+  IconPlus,
   IconSearch,
+  IconStop,
+  IconThreads,
 } from "./components/Icon";
 import type { ToolBlock } from "./transcript";
 
@@ -402,9 +406,10 @@ function Gallery() {
       )}
       {overlay === "palette" && (
         <CommandPalette open query="" onClose={() => setOverlay("")} onQuery={() => {}} items={[
-          { id: "new", group: "product", label: "New thread", run: () => {} },
-          { id: "cancel", group: "product", label: "Cancel run", run: () => {} },
-          { id: "w1", group: "workspace", label: "www", hint: "/srv/www", run: () => {} },
+          { id: "new", group: "product", label: "New thread", glyph: <IconPlus />, kbd: "⌘⇧O", run: () => {} },
+          { id: "cancel", group: "product", label: "Cancel run", glyph: <IconStop />, kbd: "esc", run: () => {} },
+          { id: "th2", group: "thread", label: "Rotate nginx certificates", hint: "www", glyph: <IconThreads />, run: () => {} },
+          { id: "w1", group: "workspace", label: "www", hint: "/srv/www", glyph: <IconFolder />, run: () => {} },
           { id: "t1", group: "template", label: "Host status", hint: "/status", run: () => {} },
         ]} />
       )}

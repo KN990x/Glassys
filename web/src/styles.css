@@ -195,18 +195,18 @@
 
   /* Fixed dimensions of single elements. They are not rhythm steps, but they
      belong in one place so two dialogs cannot disagree about their width. */
-  --w-panel: 460px;
-  --w-panel-wide: 680px;
-  --w-dialog: 920px;
+  --w-panel: 400px;
+  --w-panel-wide: 520px;
+  --w-dialog: 880px;
   --w-dialog-sm: 400px;
-  --h-dialog: 720px;
+  --h-dialog: 680px;
   --w-palette: 36rem;
   --h-palette: 26rem;
   --h-palette-inline: 15rem;
   --w-sheet: 22rem;
   --w-pop: 16rem;
   --w-control: 15rem;
-  --w-measure: 34rem;
+  --w-measure: 600px;
   --w-chip-max: 12rem;
   --w-hint-max: 18rem;
   --w-number: 7rem;
@@ -721,6 +721,8 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   min-width: 0;
 }
 .setting-rows > * + * { border-top: 1px solid var(--stroke); }
+/* A group whose rows all depend on capabilities the adapter lacks. */
+.setting-rows:empty { display: none; }
 .setting-row {
   display: flex;
   align-items: center;
@@ -730,7 +732,9 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   min-height: var(--s-8);
   min-width: 0;
 }
-.setting-row.stack-row { display: grid; gap: var(--s-2); }
+/* A grid inherits space-between from the flex row, and a space-between grid
+   does not stretch its one track: stacked controls came out 316px wide. */
+.setting-row.stack-row { display: grid; gap: var(--s-2); justify-content: stretch; }
 .setting-text { display: grid; gap: var(--s-05); min-width: 0; }
 .setting-label { font-size: var(--fs-base); color: var(--text); }
 .setting-hint { font-size: var(--fs-sm); color: var(--muted); }
@@ -743,6 +747,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .setting-row.stack-row .setting-control > textarea,
 .setting-row.stack-row .setting-control > select { width: 100%; }
 .setting-control .switch-row { flex: none; }
+.setting-control > .stack { flex: 1; min-width: 0; }
 .setting-control > .skeleton { width: var(--w-control); }
 .setting-control > .skeleton .skeleton-line { height: var(--control-h); border-radius: var(--r-md); }
 
@@ -875,9 +880,31 @@ button.list-row-main:disabled { opacity: 1; cursor: default; }
            max(var(--s-6), env(safe-area-inset-bottom)) max(var(--s-6), env(safe-area-inset-left));
   overflow: auto;
 }
+.gate-column { display: grid; justify-items: center; gap: var(--s-5); width: min(var(--w-panel), 100%); }
+.gate.wide .gate-column { width: min(var(--w-panel-wide), 100%); }
+.gate-brand { display: flex; align-items: center; gap: var(--s-2); color: var(--text); }
+.gate-brand strong { font-size: var(--fs-lg); font-weight: 600; letter-spacing: var(--track-tight); }
+/* Gates are the one place controls step up to 40px: a sign-in form is the
+   whole screen, not a row among others. */
+.gate input:not([type="checkbox"]):not([type="radio"]), .gate .panel select {
+  height: var(--control-h-lg);
+  min-height: var(--control-h-lg);
+}
+.gate .panel .primary, .gate .panel .ghost:not(.tiny) { min-height: var(--control-h-lg); }
+.gate form > .primary { width: 100%; }
+.wizard-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--stroke);
+}
+.wizard-progress > span { display: block; height: 100%; background: var(--text); transition: width var(--dur) var(--ease); }
 .panel {
   position: relative;
-  width: min(var(--w-panel), 100%);
+  overflow: hidden;
+  width: 100%;
   background: var(--bg-elev);
   border: 1px solid var(--stroke);
   border-radius: var(--r-xl);
@@ -887,8 +914,6 @@ button.list-row-main:disabled { opacity: 1; cursor: default; }
   gap: var(--s-4);
   align-content: start;
 }
-/* .gate.wide must widen the panel: .panel sets `width`, so max-width alone did nothing. */
-.gate.wide .panel { width: min(var(--w-panel-wide), 100%); }
 .gate-corner {
   position: absolute;
   top: max(var(--s-3), env(safe-area-inset-top));
@@ -964,29 +989,6 @@ details[open] > summary::before { transform: rotate(0deg); }
 details summary:hover { color: var(--text); }
 details[open] summary { margin-bottom: var(--s-2); }
 details label { margin-top: var(--s-2); }
-
-.steps { display: flex; gap: var(--s-2); padding: 0; margin: 0; list-style: none; }
-.steps li { flex: 1; display: grid; gap: var(--s-1); min-width: 0; }
-.step-bar {
-  height: 3px;
-  border-radius: var(--r-full);
-  background: var(--stroke);
-  transition: background var(--dur) var(--ease);
-}
-.step-name {
-  font-size: var(--fs-xs);
-  color: var(--faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.steps li.done .step-bar { background: var(--stroke-strong); }
-.steps li.active .step-bar { background: var(--text); }
-.steps li.active .step-name { color: var(--text); }
-/* On a phone only the step you are on can afford a name. */
-@media (max-width: 640px) {
-  .steps li:not(.active) .step-name { display: none; }
-}
 
 .panel-heading { display: grid; gap: var(--s-1); min-width: 0; }
 .panel-heading .eyebrow { margin: 0; }
@@ -2414,20 +2416,20 @@ mark {
   padding: 12vh var(--s-4) var(--s-4);
 }
 .palette-overlay .thread-scrim { z-index: 0; }
+/* The search field is the panel's head, not a box inside the box: one hairline
+   under it, the list scrolling below, the key hints as the foot. */
 .palette-panel {
   position: relative;
   z-index: 1;
   width: min(var(--w-palette), 100%);
   max-height: min(var(--h-palette), 70vh);
-  overflow: auto;
-  display: grid;
-  gap: var(--s-2);
-  align-content: start;
-  padding: var(--s-2);
+  display: flex;
+  flex-direction: column;
   border-radius: var(--r-lg);
   border: 1px solid var(--stroke);
   background: var(--bg-elev);
-  box-shadow: var(--e-3);
+  box-shadow: var(--e-3), var(--hairline);
+  overflow: hidden;
   animation: rise var(--dur) var(--ease);
 }
 .palette-inline {
@@ -2438,8 +2440,30 @@ mark {
   width: auto;
   max-height: var(--h-palette-inline);
 }
-.palette-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
+.palette-search { flex: none; border-bottom: 1px solid var(--stroke); }
+.palette-search > svg { left: var(--s-4); width: var(--icon-md); height: var(--icon-md); }
+.palette-search input[type="search"] {
+  height: var(--control-h-lg);
+  min-height: var(--control-h-lg);
+  padding-left: calc(var(--s-4) + var(--icon-md) + var(--s-3));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--fs-chat);
+}
+.palette-search input[type="search"]:focus-visible { outline: none; }
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-05);
+  overflow: auto;
+  min-height: 0;
+}
 .palette-group { padding: var(--s-2) var(--s-2) var(--s-1); list-style: none; }
+.palette-group:first-child { padding-top: var(--s-1); }
 
 .confirm-overlay {
   position: fixed;
@@ -2478,19 +2502,34 @@ mark {
 .confirm-icon.destructive { background: var(--danger-bg); color: var(--danger); }
 .confirm-icon.archive, .confirm-icon.info { background: var(--surface-3); color: var(--text); }
 
-.palette-group + li .picker-item { margin-top: 0; }
-.palette-list .picker-item { min-height: var(--control-h); display: flex; align-items: center; gap: var(--s-2); }
-.palette-list .picker-item strong { font-weight: 500; }
-.palette-glyph { display: grid; place-items: center; flex: none; color: var(--faint); }
-.palette-glyph svg { width: var(--icon-sm); height: var(--icon-sm); }
-.palette-text { display: grid; gap: 0; min-width: 0; flex: 1; text-align: left; }
+.palette-list .picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--control-h);
+  padding: 0 var(--s-2);
+  border: 0;
+}
+.palette-list .picker-item.current::before { display: none; }
+.palette-glyph { display: grid; place-items: center; flex: none; width: var(--icon-md); color: var(--faint); }
+.palette-glyph svg { width: var(--icon-md); height: var(--icon-md); }
+.palette-list .picker-item.current .palette-glyph { color: var(--text); }
+.palette-label { flex: 0 1 auto; font-weight: 500; }
+.palette-list .picker-item .palette-hint {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--faint);
+  text-align: right;
+}
 .palette-empty { padding: var(--s-2) var(--s-3); font-size: var(--fs-sm); }
-.palette-search { margin-bottom: var(--s-1); }
 .palette-foot {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
-  gap: var(--s-3);
-  padding: var(--s-2) var(--s-2) var(--s-1);
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-4);
   border-top: 1px solid var(--stroke);
   font-size: var(--fs-xs);
 }
@@ -2529,7 +2568,8 @@ mark {
   animation: rise var(--dur) var(--ease);
 }
 .settings-dialog header, .settings-dialog footer {
-  padding: var(--s-3) var(--s-4);
+  min-height: var(--topbar-h);
+  padding: var(--s-2) var(--s-3) var(--s-2) var(--s-5);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2540,7 +2580,18 @@ mark {
 .settings-dialog footer { border-top: 1px solid var(--stroke); }
 .settings-dialog h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
 .settings-layout { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
-.settings-body { overflow: auto; padding: var(--s-4); display: grid; gap: var(--s-4); min-width: 0; align-content: start; }
+/* One 600px column centred in the pane, so the right side of the dialog is
+   not a 230px strip of nothing. */
+.settings-body {
+  overflow: auto;
+  padding: var(--s-4);
+  display: grid;
+  grid-template-columns: minmax(0, var(--w-measure));
+  justify-content: center;
+  gap: var(--s-4);
+  min-width: 0;
+  align-content: start;
+}
 .settings-tabs {
   display: grid;
   align-content: start;
@@ -2550,10 +2601,14 @@ mark {
 }
 .settings-tab-chevron { margin-left: auto; color: var(--faint); display: grid; place-items: center; }
 .settings-tab-chevron svg { width: var(--icon-sm); height: var(--icon-sm); }
-.settings-back { justify-self: start; }
-/* One pane at a time on a phone: the list, or the section you drilled into. */
+.settings-back { justify-self: start; border-color: transparent; padding-left: 0; color: var(--muted); }
+.settings-back:hover:not(:disabled) { background: transparent; color: var(--text); }
+/* One pane at a time on a phone: the list, or the section you drilled into.
+   While browsing nothing is "current" — no section is open yet. */
 .settings-layout.browsing .settings-body { display: none; }
 .settings-layout.drilled .settings-tabs { display: none; }
+.settings-layout.browsing .settings-tab, .settings-layout.browsing .settings-tab.current { background: transparent; color: var(--text); }
+.settings-layout.browsing .settings-tab.current svg { color: var(--muted); }
 .settings-tab {
   display: inline-flex;
   align-items: center;
@@ -2633,14 +2688,34 @@ mark {
   .settings-body { padding: var(--s-5); }
 }
 
-@media (min-width: 860px) {
-  .settings-section { max-width: var(--w-measure); }
-}
 
 /* Below the two-column breakpoint a setting row stacks, so a long label and a
    full-width control do not fight over one line. */
 @media (max-width: 640px) {
-  .setting-row { display: grid; gap: var(--s-2); }
+  .settings-overlay { padding: 0; place-items: stretch; }
+  .settings-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg);
+    padding-top: env(safe-area-inset-top);
+  }
+  .settings-dialog footer { padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
+  .settings-layout.browsing .settings-tabs {
+    align-self: start;
+    gap: 0;
+    margin: var(--s-4);
+    padding: 0;
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-lg);
+    background: var(--bg-elev);
+    overflow: hidden;
+  }
+  .settings-layout.browsing .settings-tab { min-height: var(--control-h-lg); border-radius: 0; padding: 0 var(--s-4); }
+  .settings-layout.browsing .settings-tab + .settings-tab { border-top: 1px solid var(--stroke); }
+  .setting-row { display: grid; gap: var(--s-2); justify-content: stretch; }
   .setting-control { justify-content: flex-start; }
   .setting-control > select,
   .setting-control > input:not([type="checkbox"]) { width: 100%; }
