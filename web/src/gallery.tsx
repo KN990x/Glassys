@@ -29,6 +29,8 @@ import { Settings } from "./pages/Settings";
 import { HostViews, type HostSource, type HostViewId } from "./pages/host/HostViews";
 import { Topbar, type TopbarSearch } from "./components/Topbar";
 import { Wizard } from "./pages/Wizard";
+import { Login } from "./pages/Login";
+import { Setup } from "./pages/Setup";
 import {
   IconClose,
   IconFolder,
@@ -466,6 +468,13 @@ function Gallery() {
         </div>
       </Row>
 
+      <Row title="Gates — sign-in and first password" note="The mark above the panel, 40px controls, the corner never over the panel.">
+        <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+          <Frame width={640} height={520}><Login locale="en" onLocale={() => {}} onDone={() => {}} /></Frame>
+          <Frame width={390} height={620}><Setup locale="en" onLocale={() => {}} onDone={() => {}} /></Frame>
+        </div>
+      </Row>
+
       <Row title="Tool rows" note="Every row ends at the same x, with or without a copy button.">
         <div style={{ width: "min(760px, 100%)", display: "grid", gap: "12px" }}>
           {tools.map((b) => <ToolCard key={b.id} block={b} shellLines={12} showDiff />)}
@@ -571,7 +580,19 @@ document.documentElement.style.colorScheme = document.documentElement.dataset.th
 const shot = new URLSearchParams(location.search).get("shot");
 
 createRoot(document.getElementById("root")!).render(
-  shot === "desktop" || shot === "phone" || shot === "host" || shot === "host-phone" ? (
+  shot === "login" ? (
+    <I18nProvider locale="en">
+      <div className="app">
+        <Login locale="en" onLocale={() => {}} onDone={() => {}} />
+      </div>
+    </I18nProvider>
+  ) : shot === "wizard" ? (
+    <I18nProvider locale="en">
+      <div className="app">
+        <Wizard config={config as never} onConfig={() => {}} onDone={() => {}} />
+      </div>
+    </I18nProvider>
+  ) : shot === "desktop" || shot === "phone" || shot === "host" || shot === "host-phone" ? (
     <I18nProvider locale="en">
       <div className="app">
         {shot === "desktop" ? (

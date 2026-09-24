@@ -441,7 +441,9 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                       <strong>{a.displayName}</strong>
                       {a.description ? <span className="muted">{a.description}</span> : null}
                       {!selectable && a.available && !a.available.ok && a.available.error ? (
-                        <span className="muted">{a.available.error}</span>
+                        <span className="muted adapter-error" title={a.available.error}>
+                          {a.available.error}
+                        </span>
                       ) : a.id === "acp" && selectable ? (
                         <span className="muted">{t("wizard.acp.needsCommand")}</span>
                       ) : null}
@@ -455,7 +457,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                         ) : null
                       ) : (
                         <StatusBadge tone="danger" dot>
-                          {t("wizard.adapter.unavailable")}
+                          {t("wizard.adapter.unavailableShort")}
                         </StatusBadge>
                       )}
                     </span>

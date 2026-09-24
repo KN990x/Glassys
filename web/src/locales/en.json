@@ -457,5 +457,6 @@
   "prompt.draft.diagnose": "Diagnose why {unit} is {state}. Read its status and recent logs first, and tell me what you find before changing anything.",
   "prompt.draft.restart": "Restart {unit} and confirm it came back healthy. Show its status and its last log lines afterwards.",
   "prompt.draft.explainLogs": "Explain these journal lines from {source} and tell me whether anything needs action:",
-  "prompt.draft.fileChange": "In {path}, "
+  "prompt.draft.fileChange": "In {path}, ",
+  "wizard.adapter.unavailableShort": "Unavailable"
 }

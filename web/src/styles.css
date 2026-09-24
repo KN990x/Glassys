@@ -871,17 +871,22 @@ button.list-row-main:disabled { opacity: 1; cursor: default; }
 /* ---------------------------------------------------------------------------
    Gates: boot, setup, login, wizard
    --------------------------------------------------------------------------- */
+/* One track that may shrink below its content: a grid item's min-width is its
+   longest word, and one adapter error — a path with no spaces — pushed the
+   setup panel past the right edge of the screen. The top padding clears the
+   language and theme corner, so a tall panel never starts underneath it. */
 .gate {
   position: relative;
   min-height: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   background: var(--bg);
-  padding: max(var(--s-6), env(safe-area-inset-top)) max(var(--s-6), env(safe-area-inset-right))
+  padding: max(calc(var(--s-6) + var(--control-h-sm)), env(safe-area-inset-top)) max(var(--s-6), env(safe-area-inset-right))
            max(var(--s-6), env(safe-area-inset-bottom)) max(var(--s-6), env(safe-area-inset-left));
   overflow: auto;
 }
-.gate-column { display: grid; justify-items: center; gap: var(--s-5); width: min(var(--w-panel), 100%); }
+.gate-column { display: grid; justify-items: center; gap: var(--s-5); width: min(var(--w-panel), 100%); min-width: 0; }
 .gate.wide .gate-column { width: min(var(--w-panel-wide), 100%); }
 .gate-brand { display: flex; align-items: center; gap: var(--s-2); color: var(--text); }
 .gate-brand strong { font-size: var(--fs-lg); font-weight: 600; letter-spacing: var(--track-tight); }
@@ -1038,7 +1043,14 @@ details label { margin-top: var(--s-2); }
 .adapter-card:hover:not(.disabled) { border-color: var(--stroke-strong); background: var(--hover-bg); }
 .adapter-card-body { display: grid; gap: var(--s-05); min-width: 0; }
 .adapter-card-body strong { font-weight: 600; }
-.adapter-card-body span { font-size: var(--fs-sm); }
+.adapter-card-body span { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+/* Why an adapter cannot be picked: two lines here, the whole text on hover. */
+.adapter-error {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 
 .wizard-nav { justify-content: space-between; }
 /* Secondary actions inside a gate panel should not span the card. */
