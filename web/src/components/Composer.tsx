@@ -250,7 +250,7 @@ export function Composer(props: ComposerProps) {
           <div className="composer-meta">
             <button
               type="button"
-              className="icon-btn sm composer-attach"
+              className="icon-btn composer-attach"
               aria-label={t("chat.attach")}
               title={t("chat.attach")}
               onClick={() => fileRef.current?.click()}
@@ -267,7 +267,7 @@ export function Composer(props: ComposerProps) {
             />
             <button
               type="button"
-              className="icon-btn sm"
+              className="icon-btn"
               aria-label={t("palette.title")}
               title={t("palette.title")}
               onClick={onPalette}
