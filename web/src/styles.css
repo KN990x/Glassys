@@ -489,6 +489,8 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 
 @media (pointer: coarse) {
   .tiny { min-height: var(--tap); padding: 0 var(--s-3); }
+  .icon-btn, .composer-send { width: var(--tap); height: var(--tap); min-height: var(--tap); min-width: var(--tap); }
+  .list-row-main, .rail-new, .primary, .ghost, .danger { min-height: var(--tap); }
   .settings-tab { min-height: var(--tap); }
   .icon-btn.sm { width: var(--tap); height: var(--tap); min-height: var(--tap); }
   /* iOS zooms the page when a text field under 16px takes focus, because the
@@ -507,8 +509,6 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .tabbar-glyph svg { width: var(--icon-lg); height: var(--icon-lg); }
 .settings-tab svg { width: var(--icon-md); height: var(--icon-md); }
 .tool-kind-glyph svg { width: var(--icon-md); height: var(--icon-md); }
-.tool-disclosure svg { width: var(--icon-sm); height: var(--icon-sm); }
-.hunk-head svg { width: var(--icon-xs); height: var(--icon-xs); }
 .search-field svg { width: var(--icon-sm); height: var(--icon-sm); }
 .alert-icon svg { width: var(--icon-md); height: var(--icon-md); }
 .host-glyph svg { width: var(--icon-sm); height: var(--icon-sm); }
@@ -1541,8 +1541,11 @@ button.host-copy:hover { color: var(--text); }
 /* ---------------------------------------------------------------------------
    Transcript
    --------------------------------------------------------------------------- */
+/* The last lines fade under the composer instead of being cut in half. */
 .transcript {
   position: relative;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--s-6)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--s-6)), transparent);
   overflow: auto;
   overscroll-behavior: contain;
   padding: var(--s-5) calc(var(--page-gutter) + env(safe-area-inset-right))
@@ -1583,51 +1586,73 @@ button.host-copy:hover { color: var(--text); }
   margin: var(--s-6) 0 var(--s-4);
   padding: var(--s-5) var(--s-4);
 }
-.empty h2 { margin: var(--s-2) 0 0; font-size: var(--fs-xl); font-weight: 600; color: var(--text); }
+/* A fresh thread sits in the middle of the space it has, at any height, so the
+   suggestions are never half under the composer. */
+.transcript-inner:has(> .empty-state) { min-height: 100%; align-content: safe center; }
+.empty-state { margin: 0; color: var(--text); }
+.empty-state > svg { color: var(--muted); margin-bottom: var(--s-2); }
+.empty h2 { margin: 0; font-size: var(--fs-2xl); font-weight: 600; color: var(--text); }
 .empty p { margin: 0; }
-.empty-host { font-size: var(--fs-xs); font-family: var(--mono); overflow-wrap: anywhere; color: var(--faint); }
-/* Flex, not auto-fit grid: with three cards at ~420px the grid left two on the
-   first row and an orphan below, with a hole beside it. Flex stretches the last
-   row for any number of saved prompts. */
+.empty-host { font-size: var(--fs-sm); font-family: var(--mono); overflow-wrap: anywhere; color: var(--faint); }
 .empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  width: 100%;
-  margin-top: var(--s-4);
+  display: grid;
+  gap: var(--s-1);
+  width: min(var(--w-panel), 100%);
+  margin-top: var(--s-5);
+  padding: var(--s-1);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
 }
-.empty-action { flex: 1 1 200px; }
 .empty-action {
   display: flex;
   align-items: center;
   gap: var(--s-3);
+  width: 100%;
+  min-height: var(--control-h-lg);
+  padding: 0 var(--s-3) 0 var(--s-1);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text);
   text-align: left;
-  padding: var(--s-3);
-  border-radius: var(--r-lg);
-  justify-content: flex-start;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
 }
-.empty-action:hover { transform: translateY(-1px); box-shadow: var(--e-1); }
+.empty-action:hover { background: var(--hover-bg); }
 .empty-action-glyph {
   display: grid;
   place-items: center;
   flex: none;
   width: var(--control-h);
   height: var(--control-h);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--surface-3);
   color: var(--text);
 }
 .empty-action-glyph svg { width: var(--icon-md); height: var(--icon-md); }
-.empty-action-text { display: grid; gap: var(--s-05); min-width: 0; }
-.empty-action strong { font-weight: 500; color: var(--text); }
-.empty-action-text span { font-size: var(--fs-xs); font-family: var(--mono); }
+.empty-action strong { flex: 1; font-weight: 500; }
+.empty-action-slash { flex: none; font-family: var(--mono); font-size: var(--fs-sm); color: var(--faint); }
 
 
+.bubble.user { margin-top: var(--s-6); }
+.transcript-inner > .bubble.user:first-child { margin-top: 0; }
+.transcript-inner { gap: var(--s-3); }
+.transcript-inner > .tool-group + .tool-group,
+.transcript-inner > .tool + .tool { margin-top: calc(var(--s-2) - var(--s-3)); }
+/* One search field: the rail filter, the transcript search and the palette all
+   put the glyph inside the control instead of above it. */
+.search-field { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
+.search-field > svg { position: absolute; left: var(--s-3); color: var(--faint); pointer-events: none; }
+.search-field input[type="search"] { width: 100%; padding-left: var(--s-7); }
+.search-field .icon-btn { position: absolute; right: var(--s-1); }
+.search-field .search-count { position: absolute; right: var(--s-7); }
+.chat-main > .alert-stack { align-self: center; }
+.bubble, .thinking, .tool, .banner, .empty { width: 100%; min-width: 0; }
 .bubble.user {
   justify-self: end;
   width: fit-content;
-  max-width: 85%;
+  max-width: 80%;
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-lg);
   border-bottom-right-radius: var(--r-sm);
@@ -1743,25 +1768,27 @@ mark {
    Tool rows. A step is a line, not a card: a run that touches a dozen files
    used to put a dozen 64px bordered blocks between the question and the answer.
    --------------------------------------------------------------------------- */
+/* One geometry for a row and a group head: 12px in from both edges, a 16px
+   glyph column, 8px to the title, and a tail that ends 12px from the right. */
 .tool {
   border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--bg-elev);
   transition: border-color var(--dur) var(--ease);
 }
-.tool.error, .tool.denied { border-color: color-mix(in srgb, var(--danger) 40%, var(--stroke)); }
 .tool-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  padding-right: var(--s-2);
+  padding-right: var(--s-3);
   min-height: var(--row-h);
 }
 .tool-head {
   flex: 1;
   display: grid;
-  grid-template-columns: var(--icon-sm) var(--icon-md) minmax(0, 1fr);
+  grid-template-columns: var(--icon-md) minmax(0, 1fr);
   gap: var(--s-2);
   align-items: center;
   background: transparent;
@@ -1772,21 +1799,44 @@ mark {
   min-width: 0;
   transition: background var(--dur) var(--ease);
 }
-.tool-head:hover { background: var(--hover-bg); }
+.tool-row:hover { background: var(--hover-bg); }
+.tool-glyph { position: relative; display: grid; place-items: center; width: var(--icon-md); height: var(--icon-md); }
+.tool-glyph > * { grid-area: 1 / 1; }
+.tool-kind-glyph { display: grid; place-items: center; color: var(--faint); transition: opacity var(--dur-fast) var(--ease); }
 .tool-chevron {
   display: grid;
   place-items: center;
-  color: var(--faint);
-  transition: transform var(--dur) var(--ease);
+  color: var(--muted);
+  transition: transform var(--dur) var(--ease), opacity var(--dur-fast) var(--ease);
 }
 .tool-chevron.open { transform: rotate(90deg); }
-.tool-kind-glyph { display: grid; place-items: center; color: var(--faint); }
+.tool-glyph .tool-chevron { opacity: 0; }
+.tool-head:hover .tool-glyph .tool-chevron,
+.tool-head:focus-visible .tool-glyph .tool-chevron { opacity: 1; }
+.tool-head:hover .tool-kind-glyph,
+.tool-head:focus-visible .tool-kind-glyph { opacity: 0; }
 .tool-tail { display: flex; align-items: center; gap: var(--s-2); flex: none; }
-.tool-action { display: grid; place-items: center; width: var(--control-h-sm); }
-.tool-copy { opacity: 0; transition: opacity var(--dur) var(--ease); }
-.tool:hover .tool-copy, .tool-copy:focus-visible, .tool-copy.failed { opacity: 1; }
+/* Copy covers the tail's last glyph on hover; a touch screen, with no hover,
+   keeps it beside the tail instead. */
+.tool-copy-slot {
+  position: absolute;
+  right: var(--s-2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  padding-left: var(--s-4);
+  background: linear-gradient(to right, transparent, var(--bg-elev) var(--s-3));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.tool-row:hover .tool-copy-slot,
+.tool-copy-slot:focus-within,
+.tool-copy-slot:has(.failed) { opacity: 1; pointer-events: auto; }
 .tool-copy.failed { color: var(--warn); }
-@media (hover: none) { .tool-copy { opacity: 1; } }
+@media (hover: none) {
+  .tool-copy-slot { position: static; transform: none; opacity: 1; pointer-events: auto; background: none; padding-left: 0; }
+}
 .title {
   min-width: 0;
   overflow: hidden;
@@ -1797,10 +1847,10 @@ mark {
 }
 .title, .title > span:first-child { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .title > span:first-child { font-weight: 500; flex: none; max-width: 100%; }
-.tool-path { font-size: var(--fs-xs); color: var(--faint); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-path { font-size: var(--fs-sm); color: var(--faint); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats {
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   flex: none;
@@ -1808,38 +1858,46 @@ mark {
 .stats .add { color: var(--diff-add); }
 .stats .del { color: var(--diff-del); }
 
-/* Done is the expected outcome, so it is a grey check, not a green badge on
-   every row. Only denied and error carry a colour and a word. */
+/* Done is the expected outcome, so it is a grey check. Denied and error carry
+   a colour and a word, but no pill: the glyph and the word already say it. */
 .tool-state {
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
   flex: none;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--faint);
   white-space: nowrap;
 }
-.tool-state svg { width: var(--icon-sm); height: var(--icon-sm); }
+.tool-state svg { width: var(--icon-md); height: var(--icon-md); }
 .tool-state.running { color: var(--accent); }
 .tool-state.running svg { animation: spin 1s linear infinite; }
-.tool-state.error, .tool-state.denied {
-  color: var(--danger);
-  padding: 0 var(--s-2);
-  min-height: var(--s-6);
-  border-radius: var(--r-full);
-  background: var(--danger-bg);
+.tool-state.error, .tool-state.denied { color: var(--danger); }
+/* The body starts under the title, not under the glyph, and keeps 12px on
+   the right like the row above it. */
+.tool-body {
+  padding: 0 var(--s-3) var(--s-3) calc(var(--s-3) + var(--icon-md) + var(--s-2));
+  display: grid;
+  gap: var(--s-2);
 }
-.tool-body { padding: 0 var(--s-3) var(--s-3) var(--s-7); display: grid; gap: var(--s-2); }
+.tool-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.tool-error svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); margin-top: var(--s-05); color: var(--danger); }
 
 .tool-group {
   border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--bg-elev);
   overflow: hidden;
 }
-.tool-group.failed { border-color: color-mix(in srgb, var(--danger) 40%, var(--stroke)); }
-.tool-group-row { padding-right: var(--s-2); }
 .tool-group-head {
   display: flex;
   align-items: center;
@@ -1854,28 +1912,28 @@ mark {
   font-size: var(--fs-sm);
   text-align: left;
   cursor: pointer;
-  transition: background var(--dur) var(--ease);
 }
-.tool-group-head:hover { background: var(--hover-bg); }
-.tool-group-head .tool-chevron { transition: transform var(--dur) var(--ease); }
+.tool-group-head .tool-chevron { width: var(--icon-md); }
 .tool-group.open .tool-group-head .tool-chevron { transform: rotate(90deg); }
 .tool-group-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Rows inside a group are flush with its edges, so every tail shares one x. */
-.tool-group-body { display: grid; gap: 0; padding-bottom: var(--s-1); }
+.tool-group-body { display: grid; gap: 0; padding-bottom: var(--s-1); border-top: 1px solid var(--stroke); }
 .tool-group-body .tool { border: 0; border-radius: 0; background: transparent; }
 /* A failed group only says so once it is folded; open, its rows speak. */
 .tool-group.open > .tool-group-row .tool-state.error { display: none; }
 
+/* Code blocks inside a tool are the second and last level of box: a row may
+   hold one, never a box inside that. Radii follow the rule: 12 outside, 8 in. */
 .shell-out, .preview {
   margin: 0;
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-code);
   line-height: var(--lh-code);
   overflow: auto;
   background: var(--code-bg);
   border: 1px solid var(--stroke);
   border-radius: var(--r-md);
-  padding: var(--s-3);
+  padding: var(--s-2) var(--s-3);
 }
 .preview { max-height: var(--code-max); }
 
@@ -1891,14 +1949,15 @@ mark {
   gap: var(--s-2);
   align-items: baseline;
   padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--stroke);
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-code);
   overflow-x: auto;
 }
-.term-prompt { color: var(--ok); flex: none; }
+.term-line + .shell-out { border-top: 1px solid var(--stroke); }
+.term-prompt { color: var(--faint); flex: none; }
 .term-line code { white-space: pre; }
 .term .shell-out { border: 0; border-radius: 0; background: transparent; max-height: var(--code-max); }
+.term .term-line + .shell-out { border-top: 1px solid var(--stroke); }
 
 .diff {
   border: 1px solid var(--stroke);
@@ -1906,52 +1965,55 @@ mark {
   overflow: hidden;
   background: var(--code-bg);
 }
-.diff-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--stroke);
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
-  color: var(--muted);
-}
 .hunk { display: grid; }
 .hunk + .hunk { border-top: 1px solid var(--stroke); }
 .hunk-head {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--s-1);
   width: 100%;
-  background: var(--bg-muted);
+  min-height: var(--control-h-sm);
+  background: transparent;
   border: 0;
   color: var(--faint);
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   cursor: pointer;
-  padding: var(--s-1) var(--s-2);
+  padding: 0 var(--s-2);
   text-align: left;
   transition: color var(--dur) var(--ease);
 }
 .hunk-head:hover { color: var(--text); }
+.hunk-head svg { width: var(--icon-sm); height: var(--icon-sm); }
 .diff-body {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-code);
   line-height: var(--lh-code);
   max-height: var(--code-max);
   overflow: auto;
 }
-/* A tinted row and a sign channel, so a changed line reads without comparing
-   two shades of text colour. */
-.diff-line { display: flex; gap: var(--s-2); padding-right: var(--s-2); }
+/* A tinted row, a sign channel and, when the hunk header allows it, the old
+   and new line numbers: a changed line reads without comparing two greys. */
+.diff-line { display: flex; gap: var(--s-2); padding-right: var(--s-3); min-width: max-content; }
+.diff-no {
+  flex: none;
+  width: 4ch;
+  padding-right: var(--s-1);
+  text-align: right;
+  color: var(--faint);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.diff-no + .diff-no { margin-left: calc(var(--s-2) * -1); }
 .diff-sign {
   flex: none;
-  width: var(--s-5);
+  width: var(--s-3);
   text-align: center;
   color: var(--faint);
   user-select: none;
 }
+.diff-body:not(.numbered) .diff-sign { margin-left: var(--s-1); }
 .diff-code { white-space: pre; overflow-wrap: normal; }
 .diff-line.add { background: var(--diff-add-bg); }
 .diff-line.add .diff-sign, .diff-line.add .diff-code { color: var(--diff-add); }
@@ -1967,7 +2029,7 @@ mark {
   justify-content: center;
   padding: var(--s-2) calc(var(--page-gutter) + env(safe-area-inset-right))
            calc(var(--s-3) + env(safe-area-inset-bottom)) calc(var(--page-gutter) + env(safe-area-inset-left));
-  background: linear-gradient(to top, var(--bg) 60%, transparent);
+  background: var(--bg);
 }
 .composer-inner {
   width: min(var(--content-max), 100%);
@@ -1976,19 +2038,41 @@ mark {
   min-width: 0;
 }
 
-/* The run strip sits on the card's top edge, the way a tab does. */
+/* One card, 16px radius and 8px in from every edge, so the 8px controls in its
+   toolbar sit on concentric corners. The run's strip and the queue are its
+   first rows. */
+.composer-box {
+  display: grid;
+  gap: var(--s-1);
+  padding: var(--s-2);
+  overflow: visible;
+  position: relative;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  background: var(--input-bg);
+  min-width: 0;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.composer-box:focus-within {
+  border-color: var(--stroke-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.composer.dragging .composer-box {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-bg);
+}
+
 .composer-status {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  justify-self: start;
-  max-width: 100%;
   min-width: 0;
-  padding: var(--s-1) var(--s-3);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
-  background: var(--bg-elev);
-  font-size: var(--fs-xs);
+  min-height: var(--control-h);
+  margin: calc(var(--s-2) * -1) calc(var(--s-2) * -1) 0;
+  padding: 0 var(--s-4);
+  border-bottom: 1px solid var(--stroke);
+  font-size: var(--fs-sm);
   color: var(--muted);
 }
 .composer-status .pulse { background: var(--accent); flex: none; justify-self: auto; }
@@ -2001,46 +2085,23 @@ mark {
   color: transparent;
   animation: shimmer 2s linear infinite;
 }
-.status-step { font-family: var(--mono); min-width: 0; }
-.status-esc { flex: none; display: none; }
+.status-step { font-family: var(--mono); min-width: 0; flex: 1; }
+.status-esc { flex: none; display: none; margin-left: auto; }
 @media (hover: hover) and (pointer: fine) { .status-esc { display: inline-flex; align-items: center; gap: var(--s-1); } }
 
 .queue-band {
   display: grid;
   gap: var(--s-1);
-  padding: var(--s-2);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
-  background: var(--bg-muted);
+  margin: calc(var(--s-2) * -1) calc(var(--s-2) * -1) 0;
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  border-bottom: 1px solid var(--stroke);
 }
+.composer-status + .queue-band { margin-top: 0; }
 .queue-band .eyebrow { margin: 0; }
 
-.composer-box {
-  display: grid;
-  gap: var(--s-1);
-  padding: var(--composer-pad);
-  overflow: visible;
-  position: relative;
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-xl);
-  background: var(--input-bg);
-  min-width: 0;
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-/* A bordered box that turns accent already reads as focused; the 2px outline
-   on top of it was a second ring. */
-.composer-box:focus-within {
-  border-color: var(--stroke-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-.composer.dragging .composer-box {
-  border-color: var(--accent);
-  border-style: dashed;
-  background: var(--accent-bg);
-}
 .composer-box textarea {
   resize: none;
-  min-height: var(--composer-btn);
+  min-height: var(--control-h);
   max-height: var(--composer-max);
   min-width: 0;
   width: 100%;
@@ -2054,21 +2115,28 @@ mark {
 }
 .composer-box textarea:focus, .composer-box textarea:focus-visible { outline: none; box-shadow: none; }
 
-/* The toolbar: attach, commands, model, permissions, then send. */
-/* Not a scroll container: the model and permission popovers open from inside
-   this bar, and an overflow scroller clipped them. The chips shrink instead. */
+/* The toolbar: attach, commands, model, permissions, then send, every one of
+   them 32px. Not a scroll container: the model and permission popovers open
+   from inside this bar, and an overflow scroller clipped them. */
 .composer-meta {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: var(--s-1);
-  padding: 0 var(--s-1) var(--s-05) var(--s-1);
   font-size: var(--fs-xs);
   color: var(--muted);
   min-width: 0;
 }
 .composer-meta > * { flex: none; }
 .composer-meta > .model-chip, .composer-meta > .pop-anchor { flex: 0 1 auto; min-width: 0; }
+/* Chips in the bar are borderless; hover gives them a surface. */
+.composer-meta .chip-btn {
+  min-height: var(--control-h);
+  padding: 0 var(--s-2);
+  border-color: transparent;
+  color: var(--muted);
+}
+.composer-meta .chip-btn:hover:not(:disabled) { color: var(--text); border-color: transparent; }
 .composer-spacer { flex: 1 1 auto; min-width: var(--s-2); }
 .composer-warn {
   display: inline-flex;
@@ -2085,13 +2153,9 @@ mark {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The shortcut line only exists where there is a keyboard. */
-.composer-shortcut { display: none; }
-@media (hover: hover) and (pointer: fine) {
-  .composer-shortcut { display: flex; align-items: center; gap: var(--s-1); padding: 0 var(--s-1); }
-}
 
-/* Send and stop are the same control in two states, not two controls. */
+/* Send and stop are one control in two states: an ink square on the card's
+   corner. Stop is not red — a run in progress is not an error. */
 .composer-send {
   display: grid;
   place-items: center;
@@ -2101,7 +2165,7 @@ mark {
   min-width: var(--control-h);
   padding: 0;
   border: 0;
-  border-radius: var(--r-full);
+  border-radius: var(--r-md);
   background: var(--btn);
   color: var(--btn-fg);
   cursor: pointer;
@@ -2111,8 +2175,8 @@ mark {
 .composer-send:hover:not(:disabled) { background: var(--btn-hover); }
 .composer-send:active:not(:disabled) { transform: scale(0.96); }
 .composer-send:disabled { background: var(--surface-3); color: var(--faint); opacity: 1; }
-.composer-send.stop { background: var(--danger); color: #fff; }
 .composer-send svg { width: var(--icon-md); height: var(--icon-md); }
+.composer-send.stop svg { width: var(--icon-sm); height: var(--icon-sm); }
 
 .thumbs { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .thumbs img, .thumb-remove img {
@@ -2153,16 +2217,14 @@ mark {
   white-space: nowrap;
 }
 
-.queue-list { display: grid; gap: var(--s-1); list-style: none; margin: 0; padding: 0; }
+.queue-list { display: grid; gap: var(--s-05); list-style: none; margin: 0; padding: 0; }
 .queue-list li {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--s-2);
+  min-height: var(--control-h-sm);
   font-size: var(--fs-sm);
-  padding: var(--s-05) var(--s-2);
-  border-radius: var(--r-sm);
-  background: var(--bg-elev);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2612,7 +2674,7 @@ mark {
   overflow-x: auto;
   margin: 0 0 var(--s-3);
   border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
 }
 .md table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); margin: 0; }
 .md th, .md td { padding: var(--s-2) var(--s-3); text-align: left; }
@@ -2621,16 +2683,15 @@ mark {
 .md th { background: var(--bg-muted); font-weight: 600; }
 .md :not(pre) > code {
   font-family: var(--mono);
-  font-size: 0.9em;
-  background: var(--code-bg);
-  border: 1px solid var(--stroke);
+  font-size: 0.87em;
+  background: var(--surface-3);
   border-radius: var(--r-sm);
   padding: 1px var(--s-1);
 }
 .md pre {
   margin: 0;
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-code);
   line-height: var(--lh-code);
   background: var(--code-bg);
   border: 1px solid var(--stroke);
@@ -2642,7 +2703,7 @@ mark {
 .code-wrap {
   margin: 0 0 var(--s-3);
   border: 1px solid var(--stroke);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--code-bg);
   overflow: hidden;
 }
@@ -2651,12 +2712,13 @@ mark {
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  padding: var(--s-05) var(--s-2) var(--s-05) var(--s-3);
+  min-height: var(--control-h);
+  padding: 0 var(--s-1) 0 var(--s-3);
   border-bottom: 1px solid var(--stroke);
 }
 .code-lang {
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--faint);
   text-transform: lowercase;
 }
@@ -2666,13 +2728,6 @@ mark {
    Responsive
    --------------------------------------------------------------------------- */
 @media (max-width: 1023px) {
-  /* Fade the trailing edge so a clipped chip reads as scrollable, not broken.
-     Only here: on a wide composer nothing overflows and the fade was dimming
-     the last chip for no reason. */
-  .composer-meta {
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--s-6)), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--s-6)), transparent);
-  }
   .composer {
     padding-bottom: calc(var(--s-3) + var(--tabbar-h) + env(safe-area-inset-bottom));
   }

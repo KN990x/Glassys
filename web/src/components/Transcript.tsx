@@ -140,21 +140,23 @@ export function Transcript({
         </div>
       )}
       {allBlocks.length === 0 && snapshotReady && !search.trim() && (
-        <div className="empty">
-          <GlassysMark size={28} />
+        <div className="empty empty-state">
+          <GlassysMark size={32} />
           <h2>{t("chat.emptyTitle")}</h2>
-          <p className="muted empty-host">{[hostLabel, cwd, adapterName].filter(Boolean).join(" · ")}</p>
+          <p className="empty-host">{[hostLabel, cwd, adapterName].filter(Boolean).join(" · ")}</p>
           {opsChips.length > 0 && (
+            /* A list, not a grid of cards: three suggestions in a two-column grid
+               always left an orphan, and a list reads the same at every width. */
             <div className="empty-actions" role="group" aria-label={t("chat.opsChips")}>
               {opsChips.map((tpl) => (
-                <button key={tpl.id} type="button" className="ghost empty-action" onClick={() => onTemplate(tpl.text)}>
+                <button key={tpl.id} type="button" className="empty-action" onClick={() => onTemplate(tpl.text)}>
                   <span className="empty-action-glyph" aria-hidden="true">
                     {CHIP_GLYPH[tpl.id] ?? CHIP_GLYPH[tpl.slash.replace(/^\//, "")] ?? <IconZap />}
                   </span>
-                  <span className="empty-action-text">
-                    <strong>{t(`prompt.${tpl.id}`) === `prompt.${tpl.id}` ? tpl.title : t(`prompt.${tpl.id}`)}</strong>
-                    <span className="muted">{tpl.slash.startsWith("/") ? tpl.slash : `/${tpl.slash}`}</span>
-                  </span>
+                  <strong className="truncate">
+                    {t(`prompt.${tpl.id}`) === `prompt.${tpl.id}` ? tpl.title : t(`prompt.${tpl.id}`)}
+                  </strong>
+                  <span className="empty-action-slash">{tpl.slash.startsWith("/") ? tpl.slash : `/${tpl.slash}`}</span>
                 </button>
               ))}
             </div>

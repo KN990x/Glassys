@@ -354,9 +354,6 @@
   "chat.code": "code",
   "tool.steps": "steps",
   "tool.files": "files",
-  "chat.hintSend": "to send",
-  "chat.hintNewline": "for a newline",
-  "chat.hintSlash": "for saved prompts",
   "nav.activity": "Activity",
   "chat.activityClose": "Close activity",
   "activity.commands": "Commands",
@@ -395,5 +392,6 @@
   "login.hide": "Hide the password",
   "nav.search": "Search threads and commands",
   "activity.tokens": "Tokens in / out",
-  "activity.duration": "Run time"
+  "activity.duration": "Run time",
+  "chat.placeholderHint": "Message the agent — / for saved prompts"
 }

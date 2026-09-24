@@ -319,7 +319,7 @@ function Gallery() {
       <Row title="Shell — desktop" note="Rail head and topbar title must share a baseline.">
         <Frame width="100%" height={520}><ChatShell /></Frame>
       </Row>
-      <Row title="Shell — empty transcript" note="Action cards must fill the last row at every width.">
+      <Row title="Shell — empty transcript" note="Centred in the space it has; the suggestions are never under the composer.">
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
           <Frame width={760} height={480}><ChatShell empty /></Frame>
           <Frame width={420} height={480}><ChatShell mobile empty /></Frame>

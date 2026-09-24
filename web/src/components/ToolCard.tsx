@@ -125,7 +125,6 @@ export function ToolGroup({
             status={running ? "running" : failed ? "error" : "done"}
             label={running ? t("tool.running") : failed ? t("tool.error") : t("tool.done")}
           />
-          <span className="tool-action" />
         </span>
       </div>
       {open && (
@@ -182,11 +181,14 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
     <article className={`tool ${block.status}`} id={`tool-${block.id}`}>
       <div className="tool-row">
         <button className="tool-head" type="button" aria-expanded={open} onClick={() => setUserOpen((v) => !(v ?? open))}>
-          <span className={`tool-chevron${open ? " open" : ""}`} aria-hidden="true">
-            <IconChevronRight />
-          </span>
-          <span className="tool-kind-glyph" title={label(block.toolKind, t)}>
-            {KIND_GLYPH[block.toolKind] ?? <IconTerminal />}
+          {/* One glyph column: the kind at rest, the chevron under the pointer
+              or the focus ring. Chevron and kind side by side were two icons
+              before every title. */}
+          <span className="tool-glyph" title={label(block.toolKind, t)}>
+            <span className="tool-kind-glyph">{KIND_GLYPH[block.toolKind] ?? <IconTerminal />}</span>
+            <span className={`tool-chevron${open ? " open" : ""}`} aria-hidden="true">
+              <IconChevronRight />
+            </span>
             <span className="visually-hidden kind">{label(block.toolKind, t)}</span>
           </span>
           <span className="title">
@@ -201,27 +203,26 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
             </span>
           )}
           <ToolState status={block.status} label={statusLabel} />
-          {/* The slot is always here, even with nothing in it: when the copy button
-              only rendered for shell calls, the status landed 38px further left on
-              those rows than on file reads. */}
-          <span className="tool-action">
-            {block.command && (
-              <button
-                type="button"
-                className={`icon-btn sm tool-copy${copyFailed ? " failed" : ""}`}
-                aria-label={t("tool.copyCommand")}
-                title={t("tool.copyCommand")}
-                onClick={(e) => void copyCommand(e)}
-              >
-                {copied ? <IconCheck /> : copyFailed ? <IconAlert /> : <IconCopy />}
-                {/* The label left the button face, so the outcome is announced instead. */}
-                <span className="visually-hidden" aria-live="polite">
-                  {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
-                </span>
-              </button>
-            )}
-          </span>
         </span>
+        {/* Copy lays over the state on hover instead of reserving a column: the
+            empty slot left every row's tail 30px short of the right edge. */}
+        {block.command && (
+          <span className="tool-copy-slot">
+            <button
+              type="button"
+              className={`icon-btn sm tool-copy${copyFailed ? " failed" : ""}`}
+              aria-label={t("tool.copyCommand")}
+              title={t("tool.copyCommand")}
+              onClick={(e) => void copyCommand(e)}
+            >
+              {copied ? <IconCheck /> : copyFailed ? <IconAlert /> : <IconCopy />}
+              {/* The label left the button face, so the outcome is announced instead. */}
+              <span className="visually-hidden" aria-live="polite">
+                {copied ? t("chat.copied") : copyFailed ? t("chat.copyFailed") : t("tool.copyCommand")}
+              </span>
+            </button>
+          </span>
+        )}
       </div>
       {open && (
         <div className="tool-body">
@@ -246,18 +247,15 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
             </button>
           )}
           {block.outputPreview && block.toolKind !== "shell" && <pre className="preview">{block.outputPreview}</pre>}
-          {block.error && <p className="error-text">{block.error}</p>}
+          {block.error && (
+            <p className="tool-error">
+              <IconError />
+              <span>{block.error}</span>
+            </p>
+          )}
           {block.truncated && <p className="warn">{t("tool.truncated")}</p>}
           {hunks.length > 0 && (
             <div className="diff">
-              <div className="diff-head">
-                <span className="truncate">{block.path || block.title}</span>
-                {block.stats && (
-                  <span className="stats">
-                    <span className="add">+{block.stats.add}</span> <span className="del">−{block.stats.del}</span>
-                  </span>
-                )}
-              </div>
               {hunks.map((hunk, i) => (
                 <Hunk key={i} hunk={hunk} emptyLabel={t("diff.hunks")} />
               ))}
@@ -286,6 +284,12 @@ function splitHunks(diff: string): string[] {
   return parts.length ? parts : [diff];
 }
 
+/** "@@ -12,6 +12,7 @@" gives the first old and new line of a hunk. */
+export function hunkStart(header: string): { old: number; new: number } | null {
+  const m = header.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+  return m ? { old: Number(m[1]), new: Number(m[2]) } : null;
+}
+
 export function Hunk({ hunk, emptyLabel }: { hunk: string; emptyLabel: string }) {
   const [open, setOpen] = useState(true);
   const lines = hunk.split("\n");
@@ -294,6 +298,25 @@ export function Hunk({ hunk, emptyLabel }: { hunk: string; emptyLabel: string })
   /* The header already sits in the toggle; repeating it inside the block made
      every hunk render its @@ line twice. */
   const body = hasHeader ? lines.slice(1) : lines;
+  // A diff that ends in a newline splits into a last empty "line" that is not one.
+  if (body.length > 1 && body[body.length - 1] === "") body.pop();
+  const start = hasHeader ? hunkStart(header) : null;
+  let oldNo = start?.old ?? 0;
+  let newNo = start?.new ?? 0;
+  const rows = body.map((line) => {
+    const added = line.startsWith("+") && !line.startsWith("+++");
+    const removed = line.startsWith("-") && !line.startsWith("---");
+    const row = {
+      line,
+      added,
+      removed,
+      oldNo: start && !added ? oldNo : null,
+      newNo: start && !removed ? newNo : null,
+    };
+    if (!added) oldNo++;
+    if (!removed) newNo++;
+    return row;
+  });
   return (
     <div className="hunk">
       <button type="button" className="hunk-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
@@ -303,21 +326,23 @@ export function Hunk({ hunk, emptyLabel }: { hunk: string; emptyLabel: string })
         {hasHeader ? header : emptyLabel}
       </button>
       {open && (
-        <div className="diff-body">
-          {body.map((line, i) => {
-            const added = line.startsWith("+") && !line.startsWith("+++");
-            const removed = line.startsWith("-") && !line.startsWith("---");
-            return (
-              <div key={i} className={`diff-line${added ? " add" : removed ? " del" : ""}`}>
-                <span className="diff-sign" aria-hidden="true">
-                  {added ? "+" : removed ? "−" : ""}
-                </span>
-                {/* Context lines carry a leading space in unified diff, the same column
-                    as the + and −; keeping it pushed them one character right. */}
-                <code className="diff-code">{added || removed || line.startsWith(" ") ? line.slice(1) : line}</code>
-              </div>
-            );
-          })}
+        <div className={`diff-body${start ? " numbered" : ""}`}>
+          {rows.map(({ line, added, removed, oldNo: o, newNo: n }, i) => (
+            <div key={i} className={`diff-line${added ? " add" : removed ? " del" : ""}`}>
+              {start ? (
+                <>
+                  <span className="diff-no" aria-hidden="true">{o ?? ""}</span>
+                  <span className="diff-no" aria-hidden="true">{n ?? ""}</span>
+                </>
+              ) : null}
+              <span className="diff-sign" aria-hidden="true">
+                {added ? "+" : removed ? "−" : ""}
+              </span>
+              {/* Context lines carry a leading space in unified diff, the same column
+                  as the + and −; keeping it pushed them one character right. */}
+              <code className="diff-code">{added || removed || line.startsWith(" ") ? line.slice(1) : line}</code>
+            </div>
+          ))}
         </div>
       )}
     </div>

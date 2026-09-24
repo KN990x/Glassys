@@ -354,9 +354,6 @@
   "chat.code": "código",
   "tool.steps": "pasos",
   "tool.files": "archivos",
-  "chat.hintSend": "para enviar",
-  "chat.hintNewline": "para salto de línea",
-  "chat.hintSlash": "para prompts guardados",
   "nav.activity": "Actividad",
   "chat.activityClose": "Cerrar actividad",
   "activity.commands": "Comandos",
@@ -395,5 +392,6 @@
   "login.hide": "Ocultar la contraseña",
   "nav.search": "Buscar hilos y comandos",
   "activity.tokens": "Tokens entrada / salida",
-  "activity.duration": "Duración"
+  "activity.duration": "Duración",
+  "chat.placeholderHint": "Mensaje al agente — / para prompts guardados"
 }

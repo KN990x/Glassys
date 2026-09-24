@@ -14,7 +14,6 @@ import { shouldSubmitOnEnter } from "../operatorError";
 import { CommandPalette, templatePaletteItems } from "./CommandPalette";
 import { ModelMenu } from "./ModelMenu";
 import { PermissionChip } from "./PermissionChip";
-import { Kbd } from "./Primitives";
 import {
   IconAlert,
   IconArrowUp,
@@ -152,36 +151,6 @@ export function Composer(props: ComposerProps) {
       }}
     >
       <div className="composer-inner">
-        {queue.length > 0 && (
-          <div className="queue-band">
-            <p className="eyebrow">
-              {t("chat.queueList")} · <span className="nums">{queue.length}</span>
-            </p>
-            <ul className="queue-list" aria-label={t("chat.queueList")}>
-              {queue.map((item) => (
-                <li key={item.id}>
-                  <span className="truncate">
-                    {item.source === "schedule" ? `${t("chat.queueSchedule")}: ` : ""}
-                    {item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}
-                  </span>
-                  <button
-                    type="button"
-                    className="icon-btn sm"
-                    aria-label={t("chat.queueRemove")}
-                    title={t("chat.queueRemove")}
-                    onClick={() => onQueueCancel(item.id)}
-                  >
-                    <IconClose />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* The run's own strip, tucked into the top edge of the card. */}
-        {status}
-
         {drafts.length > 0 && (
           <div className="thumbs draft-thumbs">
             {drafts.map((a) => (
@@ -208,11 +177,41 @@ export function Composer(props: ComposerProps) {
         )}
 
         <div className="composer-box">
+          {/* The run's strip and the queue are the card's first rows, divided by
+              a hairline, instead of a pill floating 8px above it. */}
+          {status}
+          {queue.length > 0 && (
+            <div className="queue-band">
+              <p className="eyebrow">
+                {t("chat.queueList")} · <span className="nums">{queue.length}</span>
+              </p>
+              <ul className="queue-list" aria-label={t("chat.queueList")}>
+                {queue.map((item) => (
+                  <li key={item.id}>
+                    <span className="truncate">
+                      {item.source === "schedule" ? `${t("chat.queueSchedule")}: ` : ""}
+                      {item.text || (item.hasAttachments ? t("chat.pendingAttach") : t("chat.pending"))}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn sm"
+                      aria-label={t("chat.queueRemove")}
+                      title={t("chat.queueRemove")}
+                      onClick={() => onQueueCancel(item.id)}
+                    >
+                      <IconClose />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <textarea
             ref={composerRef}
             rows={1}
             value={text}
-            placeholder={t("chat.placeholder")}
+            placeholder={t("chat.placeholderHint")}
             aria-label={t("chat.placeholder")}
             enterKeyHint="send"
             onChange={(e) => {
@@ -317,10 +316,6 @@ export function Composer(props: ComposerProps) {
             )}
           </div>
         </div>
-        <p className="muted composer-hint composer-shortcut">
-          <Kbd>⏎</Kbd> {t("chat.hintSend")} · <Kbd>⇧⏎</Kbd> {t("chat.hintNewline")} · <Kbd>/</Kbd>{" "}
-          {t("chat.hintSlash")}
-        </p>
       </div>
     </form>
   );
