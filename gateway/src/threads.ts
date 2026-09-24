@@ -179,13 +179,46 @@ export async function openEmptyThread(): Promise<ThreadMeta> {
   });
 }
 
-export async function startNewThread(agentId: string | null): Promise<ThreadMeta> {
-  return withThreads(async () => {
-    await ensureLiveThreadUnlocked();
-    await archiveLiveThreadUnlocked(agentId);
-    const cfg = await loadConfig();
-    return createEmptyThread(cfg.agent, null);
-  });
+/**
+ * Move off the live thread: archive it and open an empty one — unless it is
+ * still empty. An empty live thread is rebound to the current config and kept:
+ * archiving it produced a second, identical empty thread every time onboarding
+ * or a config change rotated before the first run, and since no session had
+ * started, the archived one even took the new cwd for its title.
+ *
+ * `previousAgent` is the config the live thread ran under, when the caller
+ * knows it; without it the archive falls back to the current config.
+ */
+async function rotateLiveThreadUnlocked(
+  agentId: string | null,
+  previousAgent?: AgentConfig,
+  fresh = false,
+): Promise<ThreadMeta> {
+  const id = await ensureLiveThreadUnlocked();
+  const cfg = await loadConfig();
+  const events = await readEvents(paths.threadTranscript(id));
+  if (events.length === 0 && !fresh) {
+    const prev = await loadMeta(id);
+    const meta: ThreadMeta = {
+      ...metaFromAgent(id, cfg.agent, null, prev?.createdAt),
+      ...(prev?.titleManual ? { title: prev.title, titleManual: true } : {}),
+    };
+    await writeMeta(meta);
+    currentThreadId = id;
+    await saveState({ profileId: PROFILE_ID, threadId: id, agentId: null });
+    return meta;
+  }
+  await archiveLiveThreadUnlocked(agentId, previousAgent);
+  return createEmptyThread(cfg.agent, null);
+}
+
+export async function rotateLiveThread(agentId: string | null, previousAgent?: AgentConfig): Promise<ThreadMeta> {
+  return withThreads(() => rotateLiveThreadUnlocked(agentId, previousAgent));
+}
+
+/** `fresh` always opens a new thread, for callers that remove the current one. */
+export async function startNewThread(agentId: string | null, opts?: { fresh?: boolean }): Promise<ThreadMeta> {
+  return withThreads(() => rotateLiveThreadUnlocked(agentId, undefined, opts?.fresh));
 }
 
 export async function listThreads(): Promise<ThreadSummary[]> {

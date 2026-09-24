@@ -37,12 +37,12 @@ import {
   listThreads,
   liveThreadId,
   loadThread,
-  openEmptyThread,
   rememberCwd,
   removeThread,
   renameThread,
   readThreadBundle,
   resetLiveThreadCache,
+  rotateLiveThread,
   startNewThread,
   addLiveUsage,
   setPinnedCwds,
@@ -88,6 +88,8 @@ let cancelGeneration = 0;
 let identityGeneration = 0;
 let emitChain: Promise<void> = Promise.resolve();
 let pendingIdentityReset = false;
+/** Config the live thread belonged to before the identity change now pending. */
+let resetFromAgent: import("@glassys/protocol").AgentConfig | null = null;
 let rotating = false;
 const withQueueLock = createMutex();
 
@@ -302,9 +304,11 @@ async function broadcastTranscriptSnapshot(): Promise<void> {
 }
 
 async function rotateToNewThread(previousAgentId: string | null): Promise<void> {
-  await ensureLiveThread();
-  await archiveLiveThread(previousAgentId, runtime.identityAgent ?? undefined);
-  await openEmptyThread();
+  // The agent the live thread ran under: the session's, or — when no run ever
+  // started a session — the config from before the change that caused this.
+  const previousAgent = runtime.identityAgent ?? resetFromAgent ?? undefined;
+  resetFromAgent = null;
+  await rotateLiveThread(previousAgentId, previousAgent);
   runtime.agentId = null;
   runtime.fingerprint = null;
   runtime.identityAgent = null;
@@ -797,6 +801,7 @@ export async function applyConfigPatch(
         const jobs = queue;
         queue = [];
         pendingIdentityReset = true;
+        resetFromAgent ??= before.agent;
         return jobs;
       });
       for (const job of dropped) {
@@ -844,13 +849,13 @@ export async function listLiveThreads() {
   return listThreads();
 }
 
-export async function startNewLiveThread(): Promise<void> {
+export async function startNewLiveThread(opts?: { fresh?: boolean }): Promise<void> {
   await beginIdleThreadOp();
   try {
     const previous = runtime.agentId;
     await disposeSession();
     runtime.fingerprint = null;
-    await startNewThread(previous);
+    await startNewThread(previous, opts);
     runtime.agentId = null;
     runtime.fingerprint = null;
     runtime.identityAgent = null;
@@ -902,7 +907,8 @@ export async function deleteLiveThread(id: string): Promise<void> {
   assertThreadId(id);
   await ensureLiveThread();
   const wasLive = liveThreadId() === id;
-  if (wasLive) await startNewLiveThread();
+  // A new thread even if the deleted one was empty: it cannot be kept live.
+  if (wasLive) await startNewLiveThread({ fresh: true });
   try {
     await removeThread(id);
   } catch (err) {
@@ -1001,6 +1007,7 @@ export async function shutdownRuntime(): Promise<void> {
     cancelGeneration += 1;
     identityGeneration += 1;
     pendingIdentityReset = false;
+    resetFromAgent = null;
     rotating = false;
     processing = false;
     runtime.busy = false;
