@@ -129,3 +129,11 @@ export function formatLogTime(ts: number, now = Date.now(), locale = "en"): stri
   const time = d.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   return sameDay ? time : `${d.toLocaleDateString(lang, { month: "short", day: "2-digit" })} ${time}`;
 }
+
+/** A run's age as the status strip shows it: "45s", then "1:12". */
+export function formatElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return m > 0 ? `${m}:${String(rem).padStart(2, "0")}` : `${s}s`;
+}

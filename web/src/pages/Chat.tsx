@@ -18,39 +18,25 @@ import { useT } from "../i18n";
 import { api, clearToken } from "../api";
 import { openSocket, type ConnState } from "../socket";
 import { reduceTranscript, replay, type Block } from "../transcript";
-import { Transcript } from "../components/Transcript";
 import { Composer } from "../components/Composer";
-import { Kbd } from "../components/Primitives";
 import { Settings } from "./Settings";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
-import { blockMatchesQuery, cwdBasename, slashQuery } from "../format";
+import { blockMatchesQuery, formatElapsed, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
-import { CommandPalette, templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
+import { CommandPalette } from "../components/CommandPalette";
+import { buildPaletteItems } from "./chatPalette";
 import { ActivityPanel } from "../components/ActivityPanel";
 import { HostViews, type HostViewId } from "./host/HostViews";
 import { type AppView } from "../components/ViewTabs";
 import { Topbar } from "../components/Topbar";
-import {
-  IconActivity,
-  IconArrowDown,
-  IconClock,
-  IconExport,
-  IconFolder,
-  IconMoon,
-  IconPlus,
-  IconRailClose,
-  IconRailOpen,
-  IconRefresh,
-  IconSearch,
-  IconSettings,
-  IconStop,
-  IconThreads,
-} from "../components/Icon";
-import { Sidebar, nextTheme } from "../components/Sidebar";
+import { Sidebar } from "../components/Sidebar";
 import { BottomNav, type NavTarget } from "../components/BottomNav";
 import { type HostInfo } from "../components/HostContext";
-import { AlertStack, type Alert } from "../components/AlertStack";
+import { type Alert } from "../components/AlertStack";
+import { AppShell } from "../components/AppShell";
+import { ChatMain } from "../components/ChatMain";
+import { RunStatus } from "../components/RunStatus";
 import { useConfirm } from "../components/ConfirmDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 
@@ -78,21 +64,6 @@ function popOverlay() {
   if (overlayState()) history.back();
 }
 
-export function formatElapsed(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  return m > 0 ? `${m}:${String(rem).padStart(2, "0")}` : `${s}s`;
-}
-
-function RunElapsedValue({ startedAt }: { startedAt: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return <span className="nums">{formatElapsed(now - startedAt)}</span>;
-}
 
 export function resizeComposer(el: HTMLTextAreaElement, maxPx = COMPOSER_MAX_PX): void {
   if (!el.value) {
@@ -744,91 +715,36 @@ export function Chat({
     });
   }
 
-  const paletteItems: PaletteItem[] = [
-    { id: "new", group: "product", label: t("palette.newThread"), glyph: <IconPlus />, kbd: "⌘⇧O", run: () => void onNewThread() },
-    { id: "cancel", group: "product", label: t("palette.cancel"), glyph: <IconStop />, kbd: "esc", run: cancelRun },
-    { id: "export", group: "product", label: t("palette.export"), glyph: <IconExport />, run: () => void onExport() },
-    {
-      id: "settings",
-      group: "product",
-      label: t("palette.settings"),
-      glyph: <IconSettings />,
-      run: () => openSettings(),
-    },
-    {
-      id: "activity",
-      group: "product",
-      label: t("nav.activity"),
-      glyph: <IconActivity />,
-      kbd: "⌘I",
-      run: () => toggleActivity(!activityOpen),
-    },
-    {
-      id: "rail",
-      group: "product",
-      label: t(railCollapsed ? "nav.expandRail" : "nav.collapseRail"),
-      glyph: railCollapsed ? <IconRailOpen /> : <IconRailClose />,
-      kbd: "⌘B",
-      run: () => collapseRail(!railCollapsed),
-    },
-    {
-      id: "theme",
-      group: "product",
-      label: t("settings.theme"),
-      glyph: <IconMoon />,
-      run: () => void changeTheme(nextTheme(config.space.theme)),
-    },
-    {
-      id: "search",
-      group: "product",
-      label: t("palette.search"),
-      glyph: <IconSearch />,
-      kbd: "⌘F",
-      run: () => {
+  const paletteItems = buildPaletteItems({
+    t,
+    theme: config.space.theme,
+    railCollapsed,
+    activityOpen,
+    draft: text,
+    threads,
+    currentThreadId,
+    workspaces: pins.concat(recents.filter((c) => !pins.includes(c))),
+    templates: config.prompts?.templates ?? [],
+    actions: {
+      newThread: () => void onNewThread(),
+      cancel: cancelRun,
+      exportThread: () => void onExport(),
+      openSettings,
+      toggleActivity,
+      collapseRail,
+      changeTheme: (next) => void changeTheme(next),
+      openSearch: () => {
+        showView("chat");
         setSearchOpen(true);
         queueMicrotask(() => searchRef.current?.focus());
       },
+      restart: () => void onRestart(),
+      switchThread: (id) => void onSwitchThread(id),
+      openCwd: (cwd) => void onOpenCwd(cwd),
+      insertTemplate,
+      showView,
     },
-    { id: "restart", group: "product", label: t("palette.restart"), glyph: <IconRefresh />, run: () => void onRestart() },
-    {
-      id: "upgrade",
-      group: "product",
-      label: t("palette.upgrade"),
-      glyph: <IconRefresh />,
-      run: () => openSettings("updates"),
-    },
-    {
-      id: "schedule",
-      group: "product",
-      label: t("palette.schedule"),
-      glyph: <IconClock />,
-      run: () => {
-        const body = text.trim();
-        if (!body) return;
-        openSettings("schedules", body);
-      },
-    },
-    // The rail lost its filter field; finding a thread by name happens here.
-    ...threads
-      .filter((th) => th.id !== currentThreadId)
-      .map((th) => ({
-        id: `thread:${th.id}`,
-        group: "thread" as const,
-        label: th.title || t("threads.untitled"),
-        hint: cwdBasename(th.cwd),
-        glyph: <IconThreads />,
-        run: () => void onSwitchThread(th.id),
-      })),
-    ...pins.concat(recents.filter((c) => !pins.includes(c))).map((cwd) => ({
-      id: `cwd:${cwd}`,
-      group: "workspace" as const,
-      label: cwdBasename(cwd),
-      hint: cwd,
-      glyph: <IconFolder />,
-      run: () => void onOpenCwd(cwd),
-    })),
-    ...templatePaletteItems(config.prompts?.templates ?? [], t, insertTemplate),
-  ];
+  });
 
   async function onAttach(files: FileList | File[] | null) {
     if (!files || !files.length) return;
@@ -1004,39 +920,64 @@ export function Chat({
   if (attachError) alerts.push({ id: "attach", tone: "error", text: attachError, onDismiss: () => setAttachError("") });
   if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
 
-  return (
-    <div
-      className={[
-        "app-shell",
-        isDesktop ? (railCollapsed ? "has-mini-rail" : "has-rail") : "",
-        activityOpen && hasInspectorColumn && view === "chat" ? "has-inspector" : "",
+  function navigate(target: NavTarget) {
+    if (target === "threads") {
+      if (threadOpen) closeThreads();
+      else openThreads();
+      return;
+    }
+    if (target === "settings") {
+      if (threadOpen) setThreadOpen(false);
+      openSettings();
+      return;
+    }
+    if (threadOpen) closeThreads();
+    if (settings) closeSettings();
+    if (target === "host") return showView(lastHostView);
+    if (target === "files") return showView("files");
+    showView("chat");
+    requestAnimationFrame(() => composer.current?.focus());
+  }
+
+  const notices: Alert[] = transcriptTruncated
+    ? [
+        {
+          id: "truncated",
+          tone: "warn",
+          text: t("chat.transcriptTruncated"),
+          action: { label: t("chat.export"), run: () => void onExport() },
+        },
       ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {isDesktop && (
-        <Sidebar
-          spaceName={spaceName}
-          statusClass={statusClass}
-          statusLabel={t(statusKey)}
-          host={hostInfo}
-          threads={threadListProps}
-          settingsRef={settingsBtn}
-          onNew={() => void onNewThread()}
-          onSearch={() => {
-            setSlashOpen(false);
-            setPaletteQuery("");
-            setPaletteOpen(true);
-          }}
-          onSettings={() => openSettings()}
-          onCopyFailed={onCopyFailed}
-          collapsed={railCollapsed}
-          onCollapse={collapseRail}
-          theme={config.space.theme}
-          onTheme={(next) => void changeTheme(next)}
-        />
-      )}
-      <div className="chat-shell">
+    : [];
+
+  return (
+    <AppShell
+      railMode={isDesktop ? (railCollapsed ? "mini" : "full") : "none"}
+      rail={
+        isDesktop ? (
+          <Sidebar
+            spaceName={spaceName}
+            statusClass={statusClass}
+            statusLabel={t(statusKey)}
+            host={hostInfo}
+            threads={threadListProps}
+            settingsRef={settingsBtn}
+            onNew={() => void onNewThread()}
+            onSearch={() => {
+              setSlashOpen(false);
+              setPaletteQuery("");
+              setPaletteOpen(true);
+            }}
+            onSettings={() => openSettings()}
+            onCopyFailed={onCopyFailed}
+            collapsed={railCollapsed}
+            onCollapse={collapseRail}
+            theme={config.space.theme}
+            onTheme={(next) => void changeTheme(next)}
+          />
+        ) : null
+      }
+      topbar={
         <Topbar
           view={view}
           onView={showView}
@@ -1070,180 +1011,9 @@ export function Chat({
           activityOpen={activityOpen}
           onActivity={toggleActivity}
         />
-        {view !== "chat" ? (
-          <HostViews
-            view={view}
-            onView={showView}
-            caps={hostCaps}
-            locale={config.space.locale}
-            cwd={config.agent.cwd}
-            narrow={!isDesktop}
-            onDraft={draftPrompt}
-            onMention={mentionInComposer}
-          />
-        ) : (
-          <>
-        <main className="chat-main">
-          <h1 className="visually-hidden">{t("app.name")}</h1>
-          <AlertStack alerts={alerts} />
-          {transcriptTruncated && (
-            <AlertStack
-              alerts={[
-                {
-                  id: "truncated",
-                  tone: "warn",
-                  text: t("chat.transcriptTruncated"),
-                  action: { label: t("chat.export"), run: () => void onExport() },
-                },
-              ]}
-            />
-          )}
-      <div
-        className="transcript"
-        ref={scroller}
-        onScroll={() => {
-          const el = scroller.current;
-          if (!el) return;
-          const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
-          pinToBottom.current = bottom;
-          setAtBottom(bottom);
-        }}
-      >
-        <div className="transcript-inner">
-          <Transcript
-            blocks={visibleBlocks}
-            allBlocks={blocks}
-            snapshotReady={snapshotReady}
-            connecting={conn !== "reconnecting"}
-            search={search}
-            queuedIds={queuedIds}
-            locale={config.space.locale}
-            thinkingDefault={config.display.thinkingDefault}
-            shellLines={config.display.shellLinesVisible}
-            showDiff={config.display.diffPreview}
-            opsChips={opsChips}
-            onTemplate={insertTemplate}
-            hostLabel={hostLabel}
-            cwd={config.agent.cwd}
-            adapterName={currentAdapter?.displayName || config.agent.adapter}
-            queue={queueItems}
-          />
-        </div>
-        {!atBottom && (
-          <button
-            type="button"
-            className="ghost jump-bottom"
-            aria-label={t("chat.jumpBottom")}
-            title={t("chat.jumpBottom")}
-            onClick={() => {
-              pinToBottom.current = true;
-              setAtBottom(true);
-              scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-            }}
-          >
-            <IconArrowDown />
-          </button>
-        )}
-        </div>
-      </main>
-      <Composer
-          config={config}
-          onConfig={onConfig}
-          caps={caps}
-          adapterName={currentAdapter?.displayName || config.agent.adapter}
-          models={models}
-          modelId={pickerModel}
-          modelParams={pickerParams}
-          onModel={(id, params) => void changeModel(id, params)}
-          fallbackCatalog={modelSource === "fallback"}
-          catalogError={catalogError}
-          text={text}
-          onText={setText}
-          drafts={drafts}
-          onRemoveDraft={(id) => setDrafts((cur) => cur.filter((d) => d.id !== id))}
-          onAttach={(files) => void onAttach(files)}
-          fileRef={fileRef}
-          composerRef={composer}
-          onSubmit={submit}
-          onResize={(el) => resizeComposer(el)}
-          canSend={canSend}
-          busy={busy}
-          waiting={waiting}
-          onCancel={cancelRun}
-          queue={queueItems}
-          onQueueCancel={(id) => {
-            if (!sendRef.current({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
-          }}
-          templates={config.prompts?.templates ?? []}
-          onTemplate={insertTemplate}
-          slashOpen={slashOpen}
-          setSlashOpen={(next) => {
-            setSlashOpen(next);
-            if (next) setPaletteQuery(slashQuery(text) ?? "");
-          }}
-          paletteOpen={paletteOpen}
-          onPalette={() => {
-            setSlashOpen(false);
-            setPaletteQuery("");
-            setPaletteOpen(true);
-          }}
-          status={
-            busy ? (
-              <div className="composer-status" aria-live="polite">
-                <span className="pulse" aria-hidden />
-                <span className="status-shimmer">{t("status.running")}</span>
-                {runStartedAt ? (
-                  <span className="muted">
-                    <RunElapsedValue startedAt={runStartedAt} />
-                  </span>
-                ) : null}
-                {lastTool && lastTool.kind === "tool" ? (
-                  <span className="muted truncate status-step">{lastTool.title}</span>
-                ) : null}
-                {caps?.cancel !== false ? (
-                  <span className="muted status-esc">
-                    <Kbd>Esc</Kbd> {t("chat.cancel")}
-                  </span>
-                ) : null}
-              </div>
-            ) : null
-          }
-        />
-          </>
-        )}
-      </div>
-      {!isDesktop && (
-        <BottomNav
-          active={navTarget}
-          onSelect={(target: NavTarget) => {
-            if (target === "threads") {
-              if (threadOpen) closeThreads();
-              else openThreads();
-              return;
-            }
-            if (target === "settings") {
-              if (threadOpen) setThreadOpen(false);
-              openSettings();
-              return;
-            }
-            if (threadOpen) closeThreads();
-            if (settings) closeSettings();
-            if (target === "host") {
-              showView(lastHostView);
-              return;
-            }
-            if (target === "files") {
-              showView("files");
-              return;
-            }
-            showView("chat");
-            requestAnimationFrame(() => composer.current?.focus());
-          }}
-        />
-      )}
-      {activityOpen &&
-        view === "chat" &&
-        (hasInspectorColumn ? (
+      }
+      inspector={
+        activityOpen && view === "chat" ? (
           <ActivityPanel
             blocks={blocks}
             locale={config.space.locale}
@@ -1251,41 +1021,141 @@ export function Chat({
             duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
             usage={liveUsage}
           />
-        ) : (
-          <div className="inspector-sheet" role="dialog" aria-modal="true" aria-label={t("nav.activity")}>
-            <div className="thread-scrim" onClick={() => toggleActivity(false)} aria-hidden="true" />
-            <ActivityPanel
-              blocks={blocks}
-              locale={config.space.locale}
-              onClose={() => toggleActivity(false)}
-              duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
-              usage={liveUsage}
+        ) : null
+      }
+      inspectorAsColumn={hasInspectorColumn}
+      onCloseInspector={() => toggleActivity(false)}
+      bottomNav={!isDesktop ? <BottomNav active={navTarget} onSelect={navigate} /> : null}
+      overlays={
+        <>
+          {threadOpen && !isDesktop && (
+            <ThreadDrawer {...threadListProps} onNew={() => void onNewThread()} onClose={closeThreads} />
+          )}
+          {settings && (
+            <Settings
+              config={config}
+              onClose={closeSettings}
+              onConfig={onConfig}
+              onLogout={onLogout}
+              currentThreadId={currentThreadId}
+              focusSection={settingsFocus}
+              schedulePrefill={schedulePrefill}
             />
-          </div>
-        ))}
-      {threadOpen && !isDesktop && (
-        <ThreadDrawer {...threadListProps} onNew={() => void onNewThread()} onClose={closeThreads} />
-      )}
-      {settings && (
-        <Settings
-          config={config}
-          onClose={closeSettings}
-          onConfig={onConfig}
-          onLogout={onLogout}
-          currentThreadId={currentThreadId}
-          focusSection={settingsFocus}
-          schedulePrefill={schedulePrefill}
+          )}
+          <CommandPalette
+            open={paletteOpen}
+            query={paletteQuery}
+            items={paletteItems}
+            onClose={() => setPaletteOpen(false)}
+            onQuery={setPaletteQuery}
+          />
+          {confirmDialog}
+        </>
+      }
+    >
+      {view !== "chat" ? (
+        <HostViews
+          view={view}
+          onView={showView}
+          caps={hostCaps}
+          locale={config.space.locale}
+          cwd={config.agent.cwd}
+          narrow={!isDesktop}
+          onDraft={draftPrompt}
+          onMention={mentionInComposer}
         />
+      ) : (
+        <>
+          <ChatMain
+            alerts={alerts}
+            notices={notices}
+            scrollerRef={scroller}
+            onScroll={() => {
+              const el = scroller.current;
+              if (!el) return;
+              const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+              pinToBottom.current = bottom;
+              setAtBottom(bottom);
+            }}
+            atBottom={atBottom}
+            onJumpBottom={() => {
+              pinToBottom.current = true;
+              setAtBottom(true);
+              scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+            }}
+            transcript={{
+              blocks: visibleBlocks,
+              allBlocks: blocks,
+              snapshotReady,
+              connecting: conn !== "reconnecting",
+              search,
+              queuedIds,
+              locale: config.space.locale,
+              thinkingDefault: config.display.thinkingDefault,
+              shellLines: config.display.shellLinesVisible,
+              showDiff: config.display.diffPreview,
+              opsChips,
+              onTemplate: insertTemplate,
+              hostLabel,
+              cwd: config.agent.cwd,
+              adapterName: currentAdapter?.displayName || config.agent.adapter,
+              queue: queueItems,
+            }}
+          />
+          <Composer
+            config={config}
+            onConfig={onConfig}
+            caps={caps}
+            adapterName={currentAdapter?.displayName || config.agent.adapter}
+            models={models}
+            modelId={pickerModel}
+            modelParams={pickerParams}
+            onModel={(id, params) => void changeModel(id, params)}
+            fallbackCatalog={modelSource === "fallback"}
+            catalogError={catalogError}
+            text={text}
+            onText={setText}
+            drafts={drafts}
+            onRemoveDraft={(id) => setDrafts((cur) => cur.filter((d) => d.id !== id))}
+            onAttach={(files) => void onAttach(files)}
+            fileRef={fileRef}
+            composerRef={composer}
+            onSubmit={submit}
+            onResize={(el) => resizeComposer(el)}
+            canSend={canSend}
+            busy={busy}
+            waiting={waiting}
+            onCancel={cancelRun}
+            queue={queueItems}
+            onQueueCancel={(id) => {
+              if (!sendRef.current({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
+            }}
+            templates={config.prompts?.templates ?? []}
+            onTemplate={insertTemplate}
+            slashOpen={slashOpen}
+            setSlashOpen={(next) => {
+              setSlashOpen(next);
+              if (next) setPaletteQuery(slashQuery(text) ?? "");
+            }}
+            paletteOpen={paletteOpen}
+            onPalette={() => {
+              setSlashOpen(false);
+              setPaletteQuery("");
+              setPaletteOpen(true);
+            }}
+            status={
+              busy ? (
+                <RunStatus
+                  startedAt={runStartedAt}
+                  step={lastTool && lastTool.kind === "tool" ? lastTool.title : undefined}
+                  canCancel={caps?.cancel !== false}
+                />
+              ) : null
+            }
+          />
+        </>
       )}
-      <CommandPalette
-        open={paletteOpen}
-        query={paletteQuery}
-        items={paletteItems}
-        onClose={() => setPaletteOpen(false)}
-        onQuery={setPaletteQuery}
-      />
-      {confirmDialog}
-    </div>
+    </AppShell>
   );
 }
 
