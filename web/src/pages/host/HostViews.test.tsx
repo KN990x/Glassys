@@ -101,7 +101,7 @@ describe("LogsView", () => {
   const line = (i: number, priority = 6): LogEntry => ({ ts: 1_700_000_000_000 + i * 1000, priority, unit: "caddy.service", message: `line ${i}` });
 
   function logSource(pages: Array<{ entries: LogEntry[]; cursor?: string }>) {
-    const hostLogs = vi.fn(async () => pages.shift() ?? { entries: [], cursor: "end" });
+    const hostLogs = vi.fn(async (_query: Parameters<HostSource["hostLogs"]>[0]) => pages.shift() ?? { entries: [], cursor: "end" });
     const src: HostSource = { ...source, hostLogs };
     return { src, hostLogs };
   }
