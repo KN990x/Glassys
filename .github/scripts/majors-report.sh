@@ -27,8 +27,9 @@ held_rows=""
 
 for dir in $PNPM_DIRS; do
   # `pnpm outdated` exits 1 whenever something is outdated, which is the normal case here.
+  # It also prints warnings (engines, …) on stdout ahead of the JSON, hence the sed.
   # An empty or non-JSON answer is a real failure and must not produce an empty report.
-  out="$(cd "$dir" && pnpm outdated --recursive --format json 2>/dev/null)" || true
+  out="$(cd "$dir" && pnpm outdated --recursive --format json 2>/dev/null | sed -n '/^{/,$p')" || true
   [ -n "$out" ] || out="{}"
   echo "$out" | jq -e 'type == "object"' >/dev/null
 
