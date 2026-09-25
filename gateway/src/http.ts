@@ -15,10 +15,10 @@ import {
   requestIsSecure,
 } from "./auth.js";
 import { hashPassword, loadSecrets, operatorPasswordError, patchSecrets, secretsFlags } from "./secrets.js";
-import { setCors, setupOriginAllowed } from "./cors.js";
+import { originAllowed, setCors, setupOriginAllowed } from "./cors.js";
 import { UnknownAdapterError } from "./adapters.js";
 import { requestRestart } from "./restart.js";
-import { HttpError } from "./errors.js";
+import { HttpError, publicErrorMessage } from "./errors.js";
 import {
   applyConfigPatch,
   adapterAuthStatus,
@@ -157,6 +157,14 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   if (method === "OPTIONS") {
     res.writeHead(204);
     res.end();
+    return true;
+  }
+
+  // CORS only stops a foreign page from reading responses. A form or text/plain POST still reaches
+  // the handler with the SameSite=Lax cookie from any same-site page (another localhost port, a
+  // sibling subdomain), so state-changing requests must carry an allowed Origin or none at all.
+  if (method !== "GET" && method !== "HEAD" && !(await originAllowed(req.headers.origin, req.headers.host))) {
+    send(res, 403, { error: "origin not allowed" });
     return true;
   }
 
@@ -313,7 +321,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
         send(res, 400, { error: err.message });
         return true;
       }
-      send(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      send(res, 500, { error: publicErrorMessage(err, "adapter discovery failed") });
     }
     return true;
   }
@@ -324,7 +332,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     try {
       send(res, 200, await adapterAuthStatus(adapter));
     } catch (err) {
-      send(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      send(res, 400, { error: publicErrorMessage(err, "adapter status failed") });
     }
     return true;
   }
@@ -340,7 +348,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
         send(res, 400, { error: err.message });
         return true;
       }
-      send(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      send(res, 500, { error: publicErrorMessage(err, "adapter login failed") });
     }
     return true;
   }
@@ -366,7 +374,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       const result = await cursorLogin();
       send(res, 200, { ok: true, configured: true, url: result.url });
     } catch (err) {
-      send(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      send(res, 500, { error: publicErrorMessage(err, "cursor login failed") });
     }
     return true;
   }

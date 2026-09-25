@@ -71,6 +71,7 @@ describe("websocket handshake", () => {
   let origin: string;
   let token: string;
   let wss: ReturnType<typeof attachWs>;
+  const prevPort = process.env.GLASSYS_PORT;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "glassys-ws-"));
@@ -92,6 +93,8 @@ describe("websocket handshake", () => {
     wss = attachWs(server, 25);
     const addr = await listen(server);
     url = addr.url;
+    // The gateway only trusts its own loopback port, so tell it which one it is listening on.
+    process.env.GLASSYS_PORT = String(addr.port);
     origin = url;
     const login = await fetch(`${url}/api/auth/login`, {
       method: "POST",
@@ -103,6 +106,8 @@ describe("websocket handshake", () => {
   });
 
   afterEach(async () => {
+    if (prevPort === undefined) delete process.env.GLASSYS_PORT;
+    else process.env.GLASSYS_PORT = prevPort;
     await shutdownRuntime();
     await closeWs(wss);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));

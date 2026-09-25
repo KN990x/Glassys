@@ -29,10 +29,41 @@ describe("resolveAllowedOrigin", () => {
     requestHost: undefined as string | undefined,
   };
 
-  it("allows localhost any port when allowlist is empty", () => {
+  it("allows the gateway's own loopback origins", () => {
+    for (const origin of ["http://127.0.0.1:8787", "http://localhost:8787"]) {
+      expect(resolveAllowedOrigin({ ...base, origin, bind: "127.0.0.1" })).toBe(origin);
+    }
+  });
+
+  it("rejects other loopback ports when the allowlist is empty", () => {
+    for (const origin of ["http://localhost:3000", "http://127.0.0.1:5173", "https://localhost:8787", "http://localhost"]) {
+      expect(resolveAllowedOrigin({ ...base, origin, bind: "127.0.0.1" })).toBeNull();
+      expect(resolveAllowedOrigin({ ...base, origin, bind: "0.0.0.0", requestHost: "127.0.0.1:8787" })).toBeNull();
+    }
+  });
+
+  it("allows the Vite dev port only in dev", () => {
+    for (const origin of ["http://127.0.0.1:5173", "http://localhost:5173"]) {
+      expect(resolveAllowedOrigin({ ...base, origin, bind: "127.0.0.1", dev: true })).toBe(origin);
+      expect(resolveAllowedOrigin({ ...base, origin, bind: "127.0.0.1", dev: false })).toBeNull();
+    }
+    expect(resolveAllowedOrigin({ ...base, origin: "http://localhost:3000", bind: "127.0.0.1", dev: true })).toBeNull();
+  });
+
+  it("never reflects the opaque null origin", () => {
+    expect(resolveAllowedOrigin({ ...base, origin: "null", bind: "127.0.0.1" })).toBeNull();
+    expect(resolveAllowedOrigin({ ...base, origin: "null", bind: "0.0.0.0", requestHost: "null" })).toBeNull();
+  });
+
+  it("ignores a Host match on a loopback bind (DNS rebinding)", () => {
     expect(
-      resolveAllowedOrigin({ ...base, origin: "http://127.0.0.1:5173", bind: "127.0.0.1" }),
-    ).toBe("http://127.0.0.1:5173");
+      resolveAllowedOrigin({
+        ...base,
+        origin: "http://rebind.example:8787",
+        requestHost: "rebind.example:8787",
+        bind: "127.0.0.1",
+      }),
+    ).toBeNull();
   });
 
   it("allows LAN origin when bind is 0.0.0.0 and Host matches", () => {
