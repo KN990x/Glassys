@@ -31,13 +31,13 @@ updates:
     groups:
       # Security fixes get their own group with no version filter, so a security major is
       # never held back by the ignore above.
-      security:
+      npm-security:
         applies-to: security-updates
         patterns:
           - "*"
       # Routine updates stay on minor and patch: a major here means a breaking change that
       # deserves a human reading the changelog.
-      dependencies:
+      npm:
         applies-to: version-updates
         patterns:
           - "*"
