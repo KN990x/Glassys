@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { listenBind, listenPort, resolveAllowedOrigin, setupOriginAllowed, CORS_ALLOW_METHODS } from "./cors.js";
+import {
+  allowlistedOrigin,
+  listenBind,
+  listenPort,
+  resolveAllowedOrigin,
+  setupOriginAllowed,
+  CORS_ALLOW_METHODS,
+} from "./cors.js";
 
 describe("listen address", () => {
   const prevBind = process.env.GLASSYS_BIND;
@@ -75,6 +82,13 @@ describe("resolveAllowedOrigin", () => {
         bind: "0.0.0.0",
       }),
     ).toBe("http://192.168.1.10:8787");
+  });
+
+  it("sends no CORS header for the same-origin Host match", () => {
+    const opts = { ...base, origin: "http://192.168.1.10:8787", requestHost: "192.168.1.10:8787", bind: "0.0.0.0" };
+    expect(resolveAllowedOrigin(opts)).toBe("http://192.168.1.10:8787");
+    expect(allowlistedOrigin(opts)).toBeNull();
+    expect(allowlistedOrigin({ ...opts, allowedOrigins: ["http://192.168.1.10:8787"] })).toBe("http://192.168.1.10:8787");
   });
 
   it("rejects LAN origin when bind is localhost-only", () => {

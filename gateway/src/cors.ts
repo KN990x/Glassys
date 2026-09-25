@@ -24,7 +24,7 @@ export function originMatchesRequestHost(origin: string, hostHeader: string | un
   }
 }
 
-export function resolveAllowedOrigin(opts: {
+type OriginPolicy = {
   origin: string | undefined;
   requestHost?: string;
   bind: string;
@@ -32,9 +32,11 @@ export function resolveAllowedOrigin(opts: {
   publicUrl: string;
   allowedOrigins: string[];
   dev?: boolean;
-}): string | null {
-  const origin = opts.origin;
-  if (!origin) return null;
+};
+
+/** The allowlist entry equal to `origin`. The value comes from config, never from the request. */
+export function allowlistedOrigin(opts: OriginPolicy): string | null {
+  if (!opts.origin) return null;
   const allowed = new Set(opts.allowedOrigins.filter(Boolean));
   if (opts.publicUrl) {
     try {
@@ -54,21 +56,32 @@ export function resolveAllowedOrigin(opts: {
     allowed.add(`http://127.0.0.1:${VITE_DEV_PORT}`);
     allowed.add(`http://localhost:${VITE_DEV_PORT}`);
   }
-  if (allowed.has(origin)) return origin;
-
-  if (
-    opts.allowedOrigins.length === 0 &&
-    (opts.bind === "0.0.0.0" || opts.bind === "::") &&
-    originMatchesRequestHost(origin, opts.requestHost)
-  ) {
-    return origin;
+  for (const entry of allowed) {
+    if (entry === opts.origin) return entry;
   }
   return null;
 }
 
-export async function allowOrigin(origin: string | undefined, requestHost?: string): Promise<string | null> {
+/** Whether a browser request from `origin` may talk to the gateway (HTTP mutations, WebSocket). */
+export function resolveAllowedOrigin(opts: OriginPolicy): string | null {
+  const listed = allowlistedOrigin(opts);
+  if (listed) return listed;
+  // 0.0.0.0 bind with no allowlist: an Origin equal to the Host header is the PWA this gateway
+  // served itself. Accepted, but same-origin, so it never needs a CORS header.
+  if (
+    opts.origin &&
+    opts.allowedOrigins.length === 0 &&
+    (opts.bind === "0.0.0.0" || opts.bind === "::") &&
+    originMatchesRequestHost(opts.origin, opts.requestHost)
+  ) {
+    return opts.origin;
+  }
+  return null;
+}
+
+async function originPolicy(origin: string | undefined, requestHost?: string): Promise<OriginPolicy> {
   const cfg = await loadConfig();
-  return resolveAllowedOrigin({
+  return {
     origin,
     requestHost,
     bind: listenBind(cfg),
@@ -76,16 +89,20 @@ export async function allowOrigin(origin: string | undefined, requestHost?: stri
     publicUrl: cfg.network.publicUrl,
     allowedOrigins: cfg.network.allowedOrigins,
     dev: RUNNING_FROM_SOURCE,
-  });
+  };
+}
+
+export async function allowOrigin(origin: string | undefined, requestHost?: string): Promise<string | null> {
+  return resolveAllowedOrigin(await originPolicy(origin, requestHost));
 }
 
 export async function setCors(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const origin = await allowOrigin(req.headers.origin, req.headers.host);
+  const origin = allowlistedOrigin(await originPolicy(req.headers.origin, req.headers.host));
   if (origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Vary", "Origin");
   }
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", CORS_ALLOW_METHODS);
 }
