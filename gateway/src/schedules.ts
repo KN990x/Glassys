@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
@@ -65,9 +66,7 @@ async function readJobs(): Promise<ScheduleJob[]> {
 
 async function writeJobs(jobs: ScheduleJob[]): Promise<void> {
   await mkdir(dirname(paths.schedules()), { recursive: true });
-  const tmp = `${paths.schedules()}.tmp`;
-  await writeFile(tmp, JSON.stringify({ jobs }, null, 2), "utf8");
-  await rename(tmp, paths.schedules());
+  await writeFileAtomic(paths.schedules(), JSON.stringify({ jobs }, null, 2));
 }
 
 export function bindScheduleRuntime(next: ScheduleHooks | null): void {

@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import { randomBytes } from "node:crypto";
 import YAML from "yaml";
@@ -133,7 +134,6 @@ export async function loadConfig(): Promise<GlassysConfig> {
 
 export async function saveConfig(cfg: GlassysConfig): Promise<void> {
   await mkdir(dirname(paths.config()), { recursive: true });
-  const tmp = `${paths.config()}.tmp`;
   const toWrite: GlassysConfig = {
     ...cfg,
     agent: {
@@ -144,8 +144,7 @@ export async function saveConfig(cfg: GlassysConfig): Promise<void> {
       options: cfg.agent.options ?? {},
     },
   };
-  await writeFile(tmp, YAML.stringify(toWrite), "utf8");
-  await rename(tmp, paths.config());
+  await writeFileAtomic(paths.config(), YAML.stringify(toWrite));
 }
 
 export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysConfig; restart: boolean }> {

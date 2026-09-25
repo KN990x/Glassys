@@ -1,4 +1,5 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { writeFileAtomic } from "./atomic.js";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentConfig, ModelParam, ThreadSummary, TranscriptEvent } from "@glassys/protocol";
@@ -61,9 +62,7 @@ async function readJson<T>(path: string): Promise<T | null> {
 
 async function writeMeta(meta: ThreadMeta): Promise<void> {
   await mkdir(paths.threadDir(meta.id), { recursive: true });
-  const tmp = `${paths.threadMeta(meta.id)}.tmp`;
-  await writeFile(tmp, JSON.stringify(meta, null, 2), "utf8");
-  await rename(tmp, paths.threadMeta(meta.id));
+  await writeFileAtomic(paths.threadMeta(meta.id), JSON.stringify(meta, null, 2));
 }
 
 async function loadMeta(id: string): Promise<ThreadMeta | null> {

@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { writeFileAtomic } from "./atomic.js";
 import { PROFILE_ID } from "@glassys/protocol";
 import { paths } from "./paths.js";
 import { createMutex } from "./lock.js";
@@ -61,9 +62,7 @@ export async function saveState(patch: Partial<PersistedState>): Promise<void> {
   return withStateLock(async () => {
     const next = { ...empty(), ...(await readUnlocked()), ...patch };
     await mkdir(paths.data(), { recursive: true });
-    const tmp = `${paths.state()}.tmp`;
-    await writeFile(tmp, JSON.stringify(next, null, 2), "utf8");
-    await rename(tmp, paths.state());
+    await writeFileAtomic(paths.state(), JSON.stringify(next, null, 2));
   });
 }
 
@@ -91,9 +90,7 @@ export async function addUsageTotals(
     };
     const next = { ...cur, usage };
     await mkdir(paths.data(), { recursive: true });
-    const tmp = `${paths.state()}.tmp`;
-    await writeFile(tmp, JSON.stringify(next, null, 2), "utf8");
-    await rename(tmp, paths.state());
+    await writeFileAtomic(paths.state(), JSON.stringify(next, null, 2));
     return usage;
   });
 }

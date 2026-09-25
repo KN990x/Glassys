@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
@@ -78,7 +79,6 @@ export function clearBlankCredentialEnv(): void {
 
 async function writeSecrets(next: SecretsFile): Promise<void> {
   await mkdir(dirname(paths.secrets()), { recursive: true });
-  const tmp = `${paths.secrets()}.tmp`;
   const disk: SecretsFile = {
     jwtSecret: next.jwtSecret,
     operatorPasswordHash: next.operatorPasswordHash,
@@ -86,8 +86,7 @@ async function writeSecrets(next: SecretsFile): Promise<void> {
     adapters: next.adapters,
     ...(next.vapid ? { vapid: next.vapid } : {}),
   };
-  await writeFile(tmp, JSON.stringify(disk, null, 2), { mode: 0o600 });
-  await rename(tmp, paths.secrets());
+  await writeFileAtomic(paths.secrets(), JSON.stringify(disk, null, 2), { mode: 0o600 });
   cache = { path: paths.secrets(), file: next };
 }
 

@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import webpush from "web-push";
 import type { ServerMessage } from "@glassys/protocol";
@@ -59,9 +60,7 @@ async function readSubs(): Promise<PushSubscriptionRecord[]> {
 
 async function writeSubs(subscriptions: PushSubscriptionRecord[]): Promise<void> {
   await mkdir(dirname(paths.pushSubscriptions()), { recursive: true });
-  const tmp = `${paths.pushSubscriptions()}.tmp`;
-  await writeFile(tmp, JSON.stringify({ subscriptions }, null, 2), "utf8");
-  await rename(tmp, paths.pushSubscriptions());
+  await writeFileAtomic(paths.pushSubscriptions(), JSON.stringify({ subscriptions }, null, 2));
 }
 
 export async function listPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
