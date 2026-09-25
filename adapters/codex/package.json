@@ -16,7 +16,7 @@
   "dependencies": {
     "@glassys/adapter-contract": "workspace:*",
     "@glassys/protocol": "workspace:*",
-    "@openai/codex-sdk": "^0.153.0"
+    "@openai/codex-sdk": "^0.155.0"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
