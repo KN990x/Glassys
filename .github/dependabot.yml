@@ -1,3 +1,10 @@
+# Few PRs, none of them surprising:
+#   - Version updates run monthly, one grouped PR per ecosystem, minor and patch only.
+#   - Security updates open as soon as an advisory lands, but grouped into one PR per
+#     ecosystem: `open-pull-requests-limit` does not apply to them, and without a group
+#     each advisory opens its own.
+#   - Majors never arrive as a routine PR. The monthly `Security audit` workflow keeps
+#     them listed in the "Pending major updates" issue, to be planned as migrations.
 version: 2
 updates:
   # "npm" also covers pnpm: it reads the workspace root's pnpm-lock.yaml, so one entry
@@ -5,14 +12,15 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
     # `^` ranges: only touch a package.json when its range no longer admits the version.
     versioning-strategy: increase-if-necessary
     # Same window as `minimumReleaseAge` in pnpm-workspace.yaml: a version published hours
-    # ago is exactly the one a malicious publish is caught in.
+    # ago is exactly the one a malicious publish is caught in. Not applied to security
+    # updates.
     cooldown:
       default-days: 7
     # Version majors stay a human decision (TypeScript 7, vite 8, Vitest 5, …). This ignore
@@ -37,13 +45,24 @@ updates:
           - "minor"
           - "patch"
 
+  # Actions are pinned by SHA; Dependabot moves the SHA and its version comment together.
+  # Majors stay in the group: CI exercises every action it uses, and actionlint checks the
+  # inputs of the rest.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     groups:
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
       actions:
+        applies-to: version-updates
         patterns:
           - "*"
