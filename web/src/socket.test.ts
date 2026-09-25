@@ -25,8 +25,12 @@ describe("socket keepalive clamp", () => {
         this.readyState = 3;
       }
     }
+    // A function, not an arrow: the socket is created with `new`, and since Vitest 4 a
+    // mock built from an arrow function cannot be constructed, just like the arrow itself.
     const WS = Object.assign(
-      vi.fn(() => new FakeSocket()),
+      vi.fn(function () {
+        return new FakeSocket();
+      }),
       { OPEN: 1, CONNECTING: 0, CLOSING: 2, CLOSED: 3 },
     );
     vi.stubGlobal("WebSocket", WS);

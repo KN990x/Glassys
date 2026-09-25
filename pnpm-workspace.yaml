@@ -13,3 +13,12 @@ allowBuilds:
 # `cooldown: default-days: 7` in .github/dependabot.yml.
 # It does not affect --frozen-lockfile, so CI stays deterministic.
 minimumReleaseAge: 10080
+
+# @cursor/sdk (1.0.32, the latest) still depends on @connectrpc/connect-node 1.x, which pins
+# undici to ^5.28.4 — and no 5.x release carries the fixes for the WebSocket, CRLF and
+# response-smuggling advisories. connect-node only requires undici to polyfill `Headers` on
+# Node < 18 (node-headers-polyfill.js), and Glassys requires Node >= 22.13, so the
+# vulnerable code never runs. This floor closes the advisories without waiting on either
+# parent; undici 6 still exports `Headers`, and 6 rather than 7 moves the least.
+overrides:
+  undici: '^6.28.1'
