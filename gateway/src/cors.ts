@@ -35,8 +35,8 @@ type OriginPolicy = {
 };
 
 /** The allowlist entry equal to `origin`. The value comes from config, never from the request. */
-export function allowlistedOrigin(opts: OriginPolicy): string | null {
-  if (!opts.origin) return null;
+export function allowlistedOrigin(opts: OriginPolicy): string | undefined {
+  if (!opts.origin) return undefined;
   const allowed = new Set(opts.allowedOrigins.filter(Boolean));
   if (opts.publicUrl) {
     try {
@@ -59,13 +59,13 @@ export function allowlistedOrigin(opts: OriginPolicy): string | null {
   for (const entry of allowed) {
     if (entry === opts.origin) return entry;
   }
-  return null;
+  return undefined;
 }
 
 /** Whether a browser request from `origin` may talk to the gateway (HTTP mutations, WebSocket). */
 export function resolveAllowedOrigin(opts: OriginPolicy): string | null {
   const listed = allowlistedOrigin(opts);
-  if (listed) return listed;
+  if (listed !== undefined) return listed;
   // 0.0.0.0 bind with no allowlist: an Origin equal to the Host header is the PWA this gateway
   // served itself. Accepted, but same-origin, so it never needs a CORS header.
   if (
@@ -98,7 +98,7 @@ export async function allowOrigin(origin: string | undefined, requestHost?: stri
 
 export async function setCors(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = allowlistedOrigin(await originPolicy(req.headers.origin, req.headers.host));
-  if (origin) {
+  if (origin !== undefined) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
