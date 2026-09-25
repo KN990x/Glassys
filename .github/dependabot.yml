@@ -1,5 +1,7 @@
 version: 2
 updates:
+  # "npm" also covers pnpm: it reads the workspace root's pnpm-lock.yaml, so one entry
+  # updates every package under protocol/, adapters/*, gateway/ and web/.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -7,13 +9,33 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
+    # `^` ranges: only touch a package.json when its range no longer admits the version.
+    versioning-strategy: increase-if-necessary
+    # Same window as `minimumReleaseAge` in pnpm-workspace.yaml: a version published hours
+    # ago is exactly the one a malicious publish is caught in.
+    cooldown:
+      default-days: 7
+    # Version majors stay a human decision (TypeScript 7, vite 8, Vitest 5, …). This ignore
+    # applies only to version updates — Dependabot security updates still open even for majors.
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
-      dependencies:
+      # Security fixes get their own group with no version filter, so a security major is
+      # never held back by the ignore above.
+      security:
+        applies-to: security-updates
         patterns:
           - "*"
+      # Routine updates stay on minor and patch: a major here means a breaking change that
+      # deserves a human reading the changelog.
+      dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -21,7 +43,6 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 5
     groups:
       actions:
         patterns:
