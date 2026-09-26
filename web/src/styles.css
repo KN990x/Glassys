@@ -52,6 +52,18 @@
 /* ---------------------------------------------------------------------------
    Glassys design tokens.
    Every rule below consumes these; no loose rem/px literals in component CSS.
+
+   Five rules the components keep to:
+   1. A 56px header band (rail, topbar, inspector, settings, palette search) is
+      one line, titled at --fs-base 600, so the three heads share a baseline.
+   2. A page section is titled in sentence case (.section-title, a settings
+      group's h4). The uppercase .eyebrow is for menus, the palette and the queue.
+   3. Colour is for exceptions. What is normal — a bar under its threshold, a
+      running unit, a connected socket, a step that worked — stays ink.
+   4. A row's label never repeats its button: the row says what it is about,
+      the button what it does.
+   5. Mono comes in two sizes: --fs-code for commands and code, --fs-mono-sm
+      for paths and figures beside prose. Nothing in mono is set below 12px.
    --------------------------------------------------------------------------- */
 :root {
   color-scheme: dark;
@@ -138,6 +150,8 @@
   /* Monospace runs a size smaller than the prose around it and never below
      12px: an 11px path was the least legible text in the product. */
   --fs-code: 13px;
+  /* The second mono size, for paths, hints and figures beside prose. */
+  --fs-mono-sm: 12px;
   --lh-tight: 1.3;
   --lh-ui: 1.4;
   --lh-body: 1.6;
@@ -645,7 +659,7 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
   font-weight: 500;
   white-space: nowrap;
 }
-.badge.mono { font-family: var(--mono); }
+.badge.mono { font-family: var(--mono); font-size: var(--fs-mono-sm); }
 .badge-dot { width: var(--dot-sm); height: var(--dot-sm); border-radius: var(--r-full); background: currentColor; flex: none; }
 .badge.tone-ok { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
 .badge.tone-warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
@@ -863,7 +877,7 @@ button.list-row-main:disabled { opacity: 1; cursor: default; }
   background: var(--bg-muted);
   color: var(--muted);
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-mono-sm);
   line-height: var(--lh-body);
 }
 
@@ -969,7 +983,7 @@ button.list-row-main:disabled { opacity: 1; cursor: default; }
 .login-url code {
   display: block;
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   overflow-wrap: anywhere;
   background: var(--code-bg);
   border: 1px solid var(--stroke);
@@ -1226,7 +1240,7 @@ details label { margin-top: var(--s-2); }
 .ws-open:disabled { cursor: default; opacity: 1; }
 .ws-line { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .ws-name { font-size: var(--fs-base); font-weight: 500; color: var(--text); }
-.ws-path { font-size: var(--fs-sm); color: var(--faint); font-family: var(--mono); }
+.ws-path { font-size: var(--fs-mono-sm); color: var(--faint); font-family: var(--mono); }
 .ws-branch {
   display: inline-flex;
   align-items: center;
@@ -1238,7 +1252,7 @@ details label { margin-top: var(--s-2); }
   background: var(--surface-3);
   color: var(--muted);
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1571,7 +1585,7 @@ button.host-copy {
 button.host-copy:hover { color: var(--text); }
 /* On the desktop topbar the subtitle is the thread's path and branch, in the
    face paths are set in everywhere else. */
-.host-path { font-family: var(--mono); font-size: var(--fs-sm); }
+.host-path { font-family: var(--mono); font-size: var(--fs-mono-sm); }
 /* The same amber dot as the rail's branch chip. */
 .host-branch.dirty::after {
   content: "";
@@ -1640,7 +1654,7 @@ button.host-copy:hover { color: var(--text); }
 .empty-state > svg { color: var(--muted); margin-bottom: var(--s-2); }
 .empty h2 { margin: 0; font-size: var(--fs-2xl); font-weight: 600; color: var(--text); }
 .empty p { margin: 0; }
-.empty-host { font-size: var(--fs-sm); font-family: var(--mono); overflow-wrap: anywhere; color: var(--faint); }
+.empty-host { font-size: var(--fs-mono-sm); font-family: var(--mono); overflow-wrap: anywhere; color: var(--faint); }
 .empty-actions {
   display: grid;
   gap: var(--s-1);
@@ -1679,7 +1693,7 @@ button.host-copy:hover { color: var(--text); }
 .empty-action:hover .empty-action-glyph { color: var(--text); }
 .empty-action-glyph svg { width: var(--icon-md); height: var(--icon-md); }
 .empty-action strong { flex: 1; font-weight: 500; }
-.empty-action-slash { flex: none; font-family: var(--mono); font-size: var(--fs-sm); color: var(--faint); }
+.empty-action-slash { flex: none; font-family: var(--mono); font-size: var(--fs-mono-sm); color: var(--faint); }
 
 .bubble.user {
   justify-self: end;
@@ -1880,10 +1894,10 @@ mark {
 .title, .title > span:first-child { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .title > span:first-child { font-weight: 500; flex: none; max-width: 100%; }
 .title.command > span:first-child { font-family: var(--mono); font-size: var(--fs-code); }
-.tool-path { font-size: var(--fs-sm); color: var(--faint); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-path { font-size: var(--fs-mono-sm); color: var(--faint); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   flex: none;
@@ -2006,7 +2020,7 @@ mark {
   border: 0;
   color: var(--faint);
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   cursor: pointer;
   padding: 0 var(--s-2);
   text-align: left;
@@ -2561,7 +2575,7 @@ mark {
   flex: 1 1 0;
   min-width: 0;
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   color: var(--faint);
   text-align: right;
 }
@@ -2708,7 +2722,7 @@ mark {
 .prompt-summary { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .prompt-summary code {
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-mono-sm);
   padding: 0 var(--s-1);
   border-radius: var(--r-sm);
   background: var(--bg-muted);
@@ -2956,7 +2970,7 @@ mark {
   border-radius: var(--r-lg);
   background: var(--code-bg);
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   line-height: var(--lh-code);
 }
 /* The browser skips laying out and painting lines outside the list's view, and
@@ -3161,7 +3175,7 @@ mark {
 }
 .code-lang {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-mono-sm);
   color: var(--faint);
   text-transform: lowercase;
 }
