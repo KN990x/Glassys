@@ -229,8 +229,8 @@
   "settings.updateVersion": "Installed",
   "settings.updateService": "Service",
   "settings.updateCheck": "Check for updates",
-  "settings.updateBehind": "commits behind",
-  "settings.updateNow": "Upgrade now",
+  "settings.updateBehind": "Commits behind",
+  "settings.updateNow": "Upgrade",
   "settings.updateNeedService": "Upgrade from the PWA needs the user service. Use pnpm run service:upgrade in the clone.",
   "settings.updating": "Upgrading…",
   "settings.updateFailed": "Upgrade failed.",
@@ -289,7 +289,7 @@
   "settings.archiveConfirm": "Changing adapter, workspace, or agent options archives this chat and starts a new thread. Continue?",
   "settings.saved": "Saved",
   "settings.restartRequired": "Bind or port changed. Restart the gateway to apply.",
-  "settings.restart": "Restart now",
+  "settings.restart": "Restart",
   "settings.cred.fromEnv": "This adapter’s API key comes from the environment. Rotating the stored key will not override it until that env var is unset.",
   "settings.newThread": "Changing adapter, workspace, or any agent option (sandbox, auto-run, rule sources, permission mode, ACP command) archives this chat and starts a new thread. The old transcript stays in the thread list. Changing model applies on the next message.",
   "settings.appearance": "Appearance",
@@ -458,5 +458,8 @@
   "prompt.draft.restart": "Restart {unit} and confirm it came back healthy. Show its status and its last log lines afterwards.",
   "prompt.draft.explainLogs": "Explain these journal lines from {source} and tell me whether anything needs action:",
   "prompt.draft.fileChange": "In {path}, ",
-  "wizard.adapter.unavailableShort": "Unavailable"
+  "wizard.adapter.unavailableShort": "Unavailable",
+  "settings.upgradeRow": "Upgrade Glassys",
+  "settings.upgradeHint": "Pulls, rebuilds and restarts the gateway.",
+  "settings.restartRow": "Gateway process"
 }

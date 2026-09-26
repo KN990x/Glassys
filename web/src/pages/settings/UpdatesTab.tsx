@@ -38,7 +38,7 @@ export function UpdatesTab({
       <SettingGroup title={t("settings.updateVersionGroup")}>
         <SettingRow label={t("settings.updateVersion")}>
           <div className="row wrap">
-            <StatusBadge mono>{update?.version ?? "—"}</StatusBadge>
+            {update?.version ? <StatusBadge mono>{update.version}</StatusBadge> : <span className="muted">—</span>}
             {update?.git && (
               <StatusBadge mono tone={update.git.dirty ? "warn" : "neutral"}>
                 {update.git.branch}@{update.git.sha.slice(0, 7)}
@@ -48,14 +48,19 @@ export function UpdatesTab({
           </div>
         </SettingRow>
         <SettingRow label={t("settings.updateService")} hint={update?.service === "none" ? t("settings.updateNeedService") : undefined}>
-          <StatusBadge tone={update?.service === "none" ? "warn" : "ok"} dot>
-            {update?.service ?? "—"}
-          </StatusBadge>
+          {/* A missing figure is a dash in ink, not an empty pill. */}
+          {update?.service ? (
+            <StatusBadge tone={update.service === "none" ? "warn" : "neutral"} dot={update.service === "none"}>
+              {update.service}
+            </StatusBadge>
+          ) : (
+            <span className="muted">—</span>
+          )}
         </SettingRow>
         <SettingRow label={t("settings.updateBehind")}>
           <div className="row wrap">
             {behind !== null && (
-              <StatusBadge tone={behind > 0 ? "accent" : "ok"}>
+              <StatusBadge tone={behind > 0 ? "accent" : "neutral"}>
                 <span className="nums">{behind}</span>
               </StatusBadge>
             )}
@@ -84,7 +89,7 @@ export function UpdatesTab({
       )}
 
       <SettingGroup title={t("settings.updateActions")}>
-        <SettingRow label={t("settings.updateNow")} hint={update?.git?.dirty ? t("settings.updateDirty") : undefined}>
+        <SettingRow label={t("settings.upgradeRow")} hint={update?.git?.dirty ? t("settings.updateDirty") : t("settings.upgradeHint")}>
           <button
             type="button"
             className="primary"
@@ -108,7 +113,7 @@ export function UpdatesTab({
             {t("settings.updateNow")}
           </button>
         </SettingRow>
-        <SettingRow label={t("settings.restart")} hint={restartNote || t("settings.restartHint")}>
+        <SettingRow label={t("settings.restartRow")} hint={restartNote || t("settings.restartHint")}>
           <button
             type="button"
             className="danger"

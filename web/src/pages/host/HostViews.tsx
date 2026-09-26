@@ -22,6 +22,7 @@ import {
   IconArrowUp,
   IconCheck,
   IconChevronLeft,
+  IconClock,
   IconCopy,
   IconCpu,
   IconDisk,
@@ -36,6 +37,7 @@ import {
   IconRestart,
   IconSearch,
   IconServices,
+  IconSwap,
   IconZap,
 } from "../../components/Icon";
 
@@ -130,7 +132,9 @@ function StatCard({
         <span>{label}</span>
       </div>
       <strong className="stat-card-value nums">{value}</strong>
-      {meter ? <Meter value={meter.value} max={meter.max} label={label} /> : null}
+      {/* A card without a bar keeps the bar's row, so every detail line sits
+          at the same height across the grid. */}
+      {meter ? <Meter value={meter.value} max={meter.max} label={label} /> : <span className="meter-slot" aria-hidden="true" />}
       {detail ? <span className="stat-card-detail nums">{detail}</span> : null}
     </div>
   );
@@ -189,7 +193,7 @@ export function OverviewView({
       {o ? (
         <>
           <div className="stat-grid">
-            <StatCard glyph={<IconGauge />} label={t("host.uptime")} value={formatUptime(o.uptimeSec)} detail={`${o.cpus} ${t("host.cores")}`} />
+            <StatCard glyph={<IconClock />} label={t("host.uptime")} value={formatUptime(o.uptimeSec)} detail={`${o.cpus} ${t("host.cores")}`} />
             <StatCard
               glyph={<IconCpu />}
               label={t("host.load")}
@@ -206,7 +210,7 @@ export function OverviewView({
             />
             {o.swap ? (
               <StatCard
-                glyph={<IconMemory />}
+                glyph={<IconSwap />}
                 label={t("host.swap")}
                 value={`${Math.round((o.swap.used / o.swap.total) * 100)}%`}
                 detail={`${formatBytes(o.swap.used, locale)} / ${formatBytes(o.swap.total, locale)}`}
@@ -691,7 +695,7 @@ export function FilesView({
               title={path}
               tail={
                 <>
-                  {e.type !== "dir" ? <span>{formatBytes(e.size, locale)}</span> : null}
+                  <span className="files-size">{e.type !== "dir" ? formatBytes(e.size, locale) : ""}</span>
                   <span className="files-mtime">{e.mtime ? formatRelativeShort(new Date(e.mtime).toISOString(), Date.now(), locale) : ""}</span>
                 </>
               }

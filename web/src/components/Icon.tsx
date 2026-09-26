@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Archive,
   ArrowDown,
+  ArrowDownUp,
   ArrowUp,
   AtSign,
   BarChart3,
@@ -143,6 +144,7 @@ export const IconFiles = icon(FolderTree);
 export const IconGauge = icon(Gauge);
 export const IconOverview = icon(LayoutDashboard);
 export const IconMemory = icon(MemoryStick);
+export const IconSwap = icon(ArrowDownUp);
 export const IconPause = icon(Pause);
 export const IconPlay = icon(Play);
 export const IconRestart = icon(RotateCcw);

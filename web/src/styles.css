@@ -1486,7 +1486,11 @@ details label { margin-top: var(--s-2); }
 }
 .chat-main .transcript { flex: 1; min-height: 0; }
 
+/* Its own layer above the transcript: the transcript's fade mask makes it a
+   stacking context later in the DOM, and the ⋯ menu opened underneath it. */
 .topbar {
+  position: relative;
+  z-index: var(--z-sticky);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1649,21 +1653,6 @@ button.host-copy:hover { color: var(--text); }
 .empty-action strong { flex: 1; font-weight: 500; }
 .empty-action-slash { flex: none; font-family: var(--mono); font-size: var(--fs-sm); color: var(--faint); }
 
-
-.bubble.user { margin-top: var(--s-6); }
-.transcript-inner > .bubble.user:first-child { margin-top: 0; }
-.transcript-inner { gap: var(--s-3); }
-.transcript-inner > .tool-group + .tool-group,
-.transcript-inner > .tool + .tool { margin-top: calc(var(--s-2) - var(--s-3)); }
-/* One search field: the rail filter, the transcript search and the palette all
-   put the glyph inside the control instead of above it. */
-.search-field { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
-.search-field > svg { position: absolute; left: var(--s-3); color: var(--faint); pointer-events: none; }
-.search-field input[type="search"] { width: 100%; padding-left: var(--s-7); }
-.search-field .icon-btn { position: absolute; right: var(--s-1); }
-.search-field .search-count { position: absolute; right: var(--s-7); }
-.chat-main > .alert-stack { align-self: center; }
-.bubble, .thinking, .tool, .banner, .empty { width: 100%; min-width: 0; }
 .bubble.user {
   justify-self: end;
   width: fit-content;
@@ -2536,6 +2525,8 @@ mark {
   color: var(--faint);
   text-align: right;
 }
+/* The shortcut ends the row whether or not a hint sits before it. */
+.palette-list .picker-item .kbd { flex: none; margin-left: auto; }
 .palette-empty { padding: var(--s-2) var(--s-3); font-size: var(--fs-sm); }
 .palette-foot {
   display: flex;
@@ -2834,6 +2825,7 @@ mark {
 .stat-card-glyph svg { width: var(--icon-sm); height: var(--icon-sm); }
 .stat-card-value { font-size: var(--fs-2xl); font-weight: 600; line-height: var(--lh-tight); letter-spacing: var(--track-tight); }
 .stat-card-detail { font-size: var(--fs-sm); color: var(--muted); }
+.meter-slot { display: block; height: var(--s-1); }
 
 .disk-row {
   display: grid;
@@ -2976,7 +2968,10 @@ mark {
 }
 .files-scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--s-1); }
 .files-scroll .list-row { --row-surface: var(--bg-elev); }
-.files-mtime { min-width: var(--s-7); text-align: right; }
+/* Two fixed columns, size then age, so every figure ends at the same x;
+   a directory keeps an empty size cell rather than shifting its age left. */
+.files-size { width: 8ch; text-align: right; }
+.files-mtime { width: 7ch; text-align: right; }
 .crumbs { display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: var(--fs-code); white-space: nowrap; }
 .crumbs button {
   padding: var(--s-05) var(--s-1);

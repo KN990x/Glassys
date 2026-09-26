@@ -229,8 +229,8 @@
   "settings.updateVersion": "Instalado",
   "settings.updateService": "Servicio",
   "settings.updateCheck": "Buscar actualizaciones",
-  "settings.updateBehind": "commits por detrás",
-  "settings.updateNow": "Actualizar ahora",
+  "settings.updateBehind": "Commits por detrás",
+  "settings.updateNow": "Actualizar",
   "settings.updateNeedService": "Actualizar desde la PWA requiere el servicio de usuario. Usa pnpm run service:upgrade en el clone.",
   "settings.updating": "Actualizando…",
   "settings.updateFailed": "La actualización falló.",
@@ -289,7 +289,7 @@
   "settings.archiveConfirm": "Cambiar adaptador, workspace u opciones del agente archiva este chat y abre un hilo nuevo. ¿Continuar?",
   "settings.saved": "Guardado",
   "settings.restartRequired": "Cambió bind o puerto. Reinicia el gateway para aplicar.",
-  "settings.restart": "Reiniciar ahora",
+  "settings.restart": "Reiniciar",
   "settings.cred.fromEnv": "La API key de este adaptador viene del entorno. Rotar la clave guardada no la sustituye mientras esa variable exista.",
   "settings.newThread": "Cambiar adaptador, workspace o cualquier opción del agente (sandbox, auto-run, fuentes de reglas, modo de permisos, comando ACP) archiva este chat y abre un hilo nuevo. El transcript viejo sigue en la lista. Cambiar el modelo se aplica en el siguiente mensaje.",
   "settings.appearance": "Apariencia",
@@ -458,5 +458,8 @@
   "prompt.draft.restart": "Reinicia {unit} y confirma que vuelve a estar sano. Muestra después su estado y sus últimas líneas de log.",
   "prompt.draft.explainLogs": "Explica estas líneas del journal de {source} y dime si algo requiere acción:",
   "prompt.draft.fileChange": "En {path}, ",
-  "wizard.adapter.unavailableShort": "No disponible"
+  "wizard.adapter.unavailableShort": "No disponible",
+  "settings.upgradeRow": "Actualizar Glassys",
+  "settings.upgradeHint": "Descarga, reconstruye y reinicia el gateway.",
+  "settings.restartRow": "Proceso del gateway"
 }
