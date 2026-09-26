@@ -242,11 +242,18 @@ function Row({ title, note, children }: { title: string; note?: string; children
   );
 }
 
-function Frame({ width, height, children }: { width: number | string; height: number; children: ReactNode }) {
+/* A phone specimen reserves the tab bar's height under the composer and the
+   host page, the way the phone media query does in a real narrow window;
+   without it the gallery showed the composer half under the tab bar. */
+const phoneFrameCss = `.gallery-phone .composer { padding-bottom: calc(var(--s-3) + var(--tabbar-h)); }
+.gallery-phone .host-main { padding-bottom: var(--tabbar-h); }`;
+
+function Frame({ width, height, children, phone }: { width: number | string; height: number; children: ReactNode; phone?: boolean }) {
   return (
     /* `contain: paint` makes the frame a containing block, so the phone's fixed
        tab bar stays inside its specimen instead of pinning to the gallery. */
-    <div style={{ width, height, border: "1px solid var(--stroke)", borderRadius: "14px", overflow: "hidden", position: "relative", contain: "paint" }}>
+    <div className={phone ? "gallery-phone" : undefined} style={{ width, height, border: "1px solid var(--stroke)", borderRadius: "14px", overflow: "hidden", position: "relative", contain: "paint" }}>
+      {phone ? <style>{phoneFrameCss}</style> : null}
       {children}
     </div>
   );
@@ -441,11 +448,11 @@ function Gallery() {
       <Row title="Shell — empty transcript" note="Centred in the space it has; the suggestions are never under the composer.">
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
           <Frame width={760} height={480}><ChatShell empty /></Frame>
-          <Frame width={420} height={480}><ChatShell mobile empty /></Frame>
+          <Frame width={420} height={480} phone><ChatShell mobile empty /></Frame>
         </div>
       </Row>
       <Row title="Shell — phone">
-        <Frame width={390} height={720}><ChatShell mobile /></Frame>
+        <Frame width={390} height={720} phone><ChatShell mobile /></Frame>
       </Row>
       <Row title="Shell — collapsed rail" note="A 56px strip keeps the two controls the operator reaches for.">
         <Frame width="100%" height={420}><ChatShell mini /></Frame>
@@ -463,8 +470,8 @@ function Gallery() {
       </Row>
       <Row title="Host — phone">
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-          <Frame width={390} height={760}><HostShell view="overview" mobile /></Frame>
-          <Frame width={390} height={760}><HostShell view="services" mobile /></Frame>
+          <Frame width={390} height={760} phone><HostShell view="overview" mobile /></Frame>
+          <Frame width={390} height={760} phone><HostShell view="services" mobile /></Frame>
         </div>
       </Row>
 
@@ -554,7 +561,7 @@ function Gallery() {
       )}
       {overlay === "confirm" && (
         <ConfirmDialog
-          request={{ message: "Delete this thread and its transcript? This cannot be undone.", confirmLabel: "Delete", destructive: true }}
+          request={{ title: "Delete this thread?", message: "Its transcript goes with it. This cannot be undone.", confirmLabel: "Delete", destructive: true }}
           onResolve={() => setOverlay("")}
         />
       )}

@@ -139,7 +139,7 @@ export function Settings({
       });
 
   async function requestClose() {
-    if (dirty && !(await confirm({ message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
+    if (dirty && !(await confirm({ title: t("confirm.titleDiscard"), message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
       return;
     revertPreview();
     onCloseRef.current();
@@ -311,7 +311,7 @@ export function Settings({
     }
     if (
       archivesLiveThread(config.agent, draft.agent) &&
-      !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" }))
+      !(await confirm({ title: t("confirm.titleArchive"), message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" }))
     ) {
       return;
     }

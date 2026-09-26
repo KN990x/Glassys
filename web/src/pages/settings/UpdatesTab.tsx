@@ -99,7 +99,7 @@ export function UpdatesTab({
                   setError(t("settings.updateDirty"));
                   return;
                 }
-                if (!(await confirm({ message: t("settings.updateConfirm"), confirmLabel: t("confirm.update") }))) return;
+                if (!(await confirm({ title: t("confirm.titleUpdate"), message: t("settings.updateConfirm"), confirmLabel: t("confirm.update") }))) return;
                 try {
                   await api.upgrade();
                   setUpdate(await api.adminUpdate());

@@ -540,7 +540,7 @@ export function Chat({
       setSendError(t("threads.busy"));
       return;
     }
-    if (!(await confirm({ message: t("threads.deleteConfirm"), confirmLabel: t("confirm.delete"), destructive: true })))
+    if (!(await confirm({ title: t("confirm.titleDelete"), message: t("threads.deleteConfirm"), confirmLabel: t("confirm.delete"), destructive: true })))
       return;
     try {
       applyThreadList(await api.deleteThread(id));
@@ -610,7 +610,7 @@ export function Chat({
   }
 
   async function onRestart() {
-    if (!(await confirm({ message: t("settings.restartConfirm"), confirmLabel: t("confirm.restart"), destructive: true })))
+    if (!(await confirm({ title: t("confirm.titleRestart"), message: t("settings.restartConfirm"), confirmLabel: t("confirm.restart"), destructive: true })))
       return;
     try {
       setRestartNote(t("settings.restarting"));
@@ -647,7 +647,7 @@ export function Chat({
       return;
     }
     const hasThread = threads.some((th) => th.cwd === cwd);
-    if (!hasThread && !(await confirm({ message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" })))
+    if (!hasThread && !(await confirm({ title: t("confirm.titleArchive"), message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" })))
       return;
     const prevBlocks = blocks;
     try {

@@ -86,7 +86,7 @@ export function ConfirmDialog({
           <button
             ref={confirmRef}
             type="button"
-            className={request.destructive ? "danger" : "primary"}
+            className={request.destructive ? "danger solid" : "primary"}
             onClick={() => onResolve(true)}
           >
             {request.confirmLabel || t("confirm.ok")}

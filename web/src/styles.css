@@ -465,6 +465,10 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .ghost:hover:not(:disabled) { background: var(--ghost-hover); border-color: var(--stroke-strong); }
 .danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 .danger:hover:not(:disabled) { background: var(--danger-bg); }
+/* The confirming button of a destructive dialog: filled, because it is the
+   one action on the panel and the panel exists to make it deliberate. */
+.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 86%, #000); }
 
 .tiny {
   min-height: var(--control-h-sm);
@@ -2426,6 +2430,9 @@ mark {
   border-left: 1px solid var(--stroke);
 }
 .thread-row { position: relative; min-width: 0; }
+/* The current thread's marker lies on the workspace's guide line and stands
+   in for it on that row, instead of running 5px beside it. */
+.thread-list .list-row.current::before { left: calc(-1 * (var(--s-1) + 2px)); }
 .thread-meta { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .thread-live { width: var(--dot-sm); height: var(--dot-sm); flex: none; background: var(--accent); }
 .thread-adapter { color: var(--faint); }
@@ -2458,7 +2465,8 @@ mark {
   max-height: min(var(--h-palette), 70vh);
   display: flex;
   flex-direction: column;
-  border-radius: var(--r-lg);
+  /* A modal, like the dialogs: 16. Popovers anchored to a control keep 12. */
+  border-radius: var(--r-xl);
   border: 1px solid var(--stroke);
   background: var(--bg-elev);
   box-shadow: var(--e-3), var(--hairline);
@@ -2472,6 +2480,7 @@ mark {
   bottom: calc(100% + var(--s-2));
   width: auto;
   max-height: var(--h-palette-inline);
+  border-radius: var(--r-lg);
 }
 .palette-search { flex: none; border-bottom: 1px solid var(--stroke); }
 .palette-search > svg { left: var(--s-4); width: var(--icon-md); height: var(--icon-md); }
