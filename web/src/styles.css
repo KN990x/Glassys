@@ -328,6 +328,9 @@ body {
 button, input, textarea, select { font: inherit; color: inherit; }
 button { touch-action: manipulation; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+/* A white button at 45% is a muddy grey slab; a disabled primary is the send
+   button's disabled well instead. */
+.primary:disabled { opacity: 1; background: var(--surface-3); color: var(--faint); }
 
 /* An outline composites over whatever surface the element sits on and follows
    its own radius. The previous box-shadow ring had to name a backdrop colour,
@@ -1648,7 +1651,7 @@ button.host-copy:hover { color: var(--text); }
   gap: var(--s-3);
   width: 100%;
   min-height: var(--control-h-lg);
-  padding: 0 var(--s-3) 0 var(--s-1);
+  padding: 0 var(--s-3);
   border: 0;
   border-radius: var(--r-md);
   background: transparent;
@@ -1658,16 +1661,16 @@ button.host-copy:hover { color: var(--text); }
   transition: background var(--dur-fast) var(--ease);
 }
 .empty-action:hover { background: var(--hover-bg); }
+/* A bare glyph in a 16px column, as in every other list: this was the one
+   list whose icons sat in filled tiles. */
 .empty-action-glyph {
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--control-h);
-  height: var(--control-h);
-  border-radius: var(--r-sm);
-  background: var(--surface-3);
-  color: var(--text);
+  width: var(--icon-md);
+  color: var(--faint);
 }
+.empty-action:hover .empty-action-glyph { color: var(--text); }
 .empty-action-glyph svg { width: var(--icon-md); height: var(--icon-md); }
 .empty-action strong { flex: 1; font-weight: 500; }
 .empty-action-slash { flex: none; font-family: var(--mono); font-size: var(--fs-sm); color: var(--faint); }
@@ -1870,6 +1873,7 @@ mark {
 }
 .title, .title > span:first-child { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .title > span:first-child { font-weight: 500; flex: none; max-width: 100%; }
+.title.command > span:first-child { font-family: var(--mono); font-size: var(--fs-code); }
 .tool-path { font-size: var(--fs-sm); color: var(--faint); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats {
   font-family: var(--mono);
@@ -1905,15 +1909,11 @@ mark {
   gap: var(--s-2);
 }
 .tool-error {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s-2);
   margin: 0;
   font-size: var(--fs-sm);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.tool-error svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); margin-top: var(--s-05); color: var(--danger); }
 
 .tool-group {
   border: 1px solid var(--stroke);
@@ -3096,6 +3096,9 @@ mark {
 }
 .md table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); margin: 0; }
 .md th, .md td { padding: var(--s-2) var(--s-3); text-align: left; }
+/* Figures in a column share their digit widths; a column the table aligns
+   right arrives as an inline style and wins over the left above. */
+.md td { font-variant-numeric: tabular-nums; }
 .md tr + tr th, .md tr + tr td { border-top: 1px solid var(--stroke); }
 .md thead tr { border-bottom: 1px solid var(--stroke); }
 .md th { background: var(--bg-muted); font-weight: 600; }

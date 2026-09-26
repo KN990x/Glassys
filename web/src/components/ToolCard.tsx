@@ -91,6 +91,10 @@ export function ToolGroup({
   const { files, add, del } = useMemo(() => toolGroupSummary(blocks), [blocks]);
   const running = blocks.some((b) => b.status === "running");
   const failed = blocks.some((b) => b.status === "error" || b.status === "denied");
+  /* Open, a group whose changes all sit in one row would print that row's
+     totals twice; the head keeps them when folded or when they add up. */
+  const statRows = blocks.filter((b) => b.stats).length;
+  const showTotals = Boolean(add || del) && (!open || statRows > 1);
 
   if (blocks.length === 1) {
     return <ToolCard block={blocks[0]!} shellLines={shellLines} showDiff={showDiff} />;
@@ -116,7 +120,7 @@ export function ToolGroup({
           </span>
         </button>
         <span className="tool-tail">
-          {add || del ? (
+          {showTotals ? (
             <span className="stats">
               <span className="add">+{add}</span> <span className="del">−{del}</span>
             </span>
@@ -191,7 +195,9 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
             </span>
             <span className="visually-hidden kind">{label(block.toolKind, t)}</span>
           </span>
-          <span className="title">
+          {/* A command is set in the face it runs in, as it is in the output
+              under it and in the Activity panel. */}
+          <span className={`title${block.toolKind === "shell" ? " command" : ""}`}>
             <span>{block.title}</span>
             {block.path && block.path !== block.title ? <span className="tool-path">{block.path}</span> : null}
           </span>
@@ -247,12 +253,9 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
             </button>
           )}
           {block.outputPreview && block.toolKind !== "shell" && <pre className="preview">{block.outputPreview}</pre>}
-          {block.error && (
-            <p className="tool-error">
-              <IconError />
-              <span>{block.error}</span>
-            </p>
-          )}
+          {/* The head already says denied or error, in red with its glyph; the
+              reason reads in grey under it rather than saying so again. */}
+          {block.error && <p className="tool-error">{block.error}</p>}
           {block.truncated && <p className="warn">{t("tool.truncated")}</p>}
           {hunks.length > 0 && (
             <div className="diff">
