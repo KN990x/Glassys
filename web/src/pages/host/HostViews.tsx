@@ -15,7 +15,7 @@ import { api } from "../../api";
 import { useT } from "../../i18n";
 import { formatBytes, formatLogTime, formatRelativeShort, formatUptime } from "../../format";
 import { operatorError } from "../../operatorError";
-import { Callout, ListRow, Meter, Skeleton, StatusBadge, meterTone, type Tone } from "../../components/Primitives";
+import { Callout, ListRow, Meter, Skeleton, meterTone, type Tone } from "../../components/Primitives";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { Switch } from "../../components/Switch";
 import {
@@ -138,6 +138,12 @@ function StatCard({
       {detail ? <span className="stat-card-detail nums">{detail}</span> : null}
     </div>
   );
+}
+
+/* The dot and one word: a pill beside a dot of the same colour said it twice.
+   Only trouble is coloured; a running unit is the normal case. */
+function UnitState({ unit }: { unit: ServiceUnit }) {
+  return <span className={`unit-state tone-${unitTone(unit)}`}>{unit.sub || unit.active}</span>;
 }
 
 function unitTone(u: ServiceUnit): Tone {
@@ -266,7 +272,7 @@ export function OverviewView({
               <ListRow
                 key={u.name}
                 glyph={<span className={`unit-dot tone-${unitTone(u)}`} />}
-                tail={<StatusBadge tone="danger">{u.sub || u.active}</StatusBadge>}
+                tail={<UnitState unit={u} />}
                 onClick={() => onDraft(fill(t("prompt.draft.diagnose"), { unit: u.name, state: u.sub || u.active }))}
                 title={t("services.diagnose")}
               >
@@ -329,7 +335,9 @@ export function ServicesView({
               {failedCount ? (
                 <>
                   {" · "}
-                  <span className="danger-text nums">{failedCount}</span> {t("services.failedCount")}
+                  <span className="danger-text">
+                    <span className="nums">{failedCount}</span> {t("services.failedCount")}
+                  </span>
                 </>
               ) : null}
             </>
@@ -381,7 +389,7 @@ export function ServicesView({
               <ListRow
                 className="unit-row"
                 glyph={<span className={`unit-dot tone-${unitTone(u)}`} />}
-                tail={<StatusBadge tone={unitTone(u)}>{u.sub || u.active}</StatusBadge>}
+                tail={<UnitState unit={u} />}
                 title={u.description || u.name}
                 current={openUnit === u.name}
                 onClick={() => setOpenUnit((cur) => (cur === u.name ? null : u.name))}

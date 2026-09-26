@@ -837,7 +837,9 @@ button.list-row-main:disabled { opacity: 1; cursor: default; }
   background: var(--surface-3);
   overflow: hidden;
 }
-.meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--ok); transition: width var(--dur) var(--ease); }
+/* A bar under its threshold is ink, not green: only a figure that needs
+   attention takes a colour. */
+.meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--muted); transition: width var(--dur) var(--ease); }
 .meter.tone-warn .meter-fill { background: var(--warn); }
 .meter.tone-danger .meter-fill { background: var(--danger); }
 
@@ -2263,13 +2265,11 @@ mark {
 .chip-btn.risk-warn svg { color: var(--warn); }
 .chip-btn.risk-danger svg { color: var(--danger); }
 .model-chip { display: flex; min-width: 0; }
-/* A phone has room for the model's name and the shield, not for the effort
-   and the word beside the shield; both stay in the tooltip and the menu. */
+/* A phone has room for the model's name, not for its effort, which stays in
+   the tooltip and the menu. The shield keeps its word: a red glyph alone did
+   not say what it was warning about. */
 @media (max-width: 640px) {
   .chip-variant { display: none; }
-  .chip-btn.risk-ok .chip-label,
-  .chip-btn.risk-warn .chip-label,
-  .chip-btn.risk-danger .chip-label { display: none; }
 }
 .pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
 .picker-check { position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--text); }
@@ -2426,6 +2426,7 @@ mark {
 .thread-row { position: relative; min-width: 0; }
 .thread-meta { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .thread-live { width: var(--dot-sm); height: var(--dot-sm); flex: none; background: var(--accent); }
+.thread-adapter { color: var(--faint); }
 .thread-rename { display: flex; gap: var(--s-1); min-width: 0; }
 .thread-rename input { min-width: 0; flex: 1; }
 .thread-filter { margin: 0; }
@@ -2904,11 +2905,17 @@ mark {
   .disk-figures { display: none; }
 }
 
-.unit-dot { width: var(--dot); height: var(--dot); border-radius: var(--r-full); background: var(--faint); }
-.unit-dot.tone-ok { background: var(--ok); }
+/* Running is a filled grey dot, stopped an empty ring; only a unit in
+   trouble or in transition takes a colour. */
+.unit-dot { width: var(--dot); height: var(--dot); border-radius: var(--r-full); border: 1px solid var(--faint); background: transparent; }
+.unit-dot.tone-ok { background: var(--muted); border-color: var(--muted); }
+.unit-dot.tone-warn, .unit-dot.tone-danger { border-color: transparent; }
 .unit-dot.tone-warn { background: var(--warn); }
 .unit-dot.tone-danger { background: var(--danger); }
 .unit-name { font-family: var(--mono); font-size: var(--fs-code); }
+.unit-state { font-size: var(--fs-xs); color: var(--faint); }
+.unit-state.tone-warn { color: var(--warn); }
+.unit-state.tone-danger { color: var(--danger); font-weight: 500; }
 .unit-desc { margin-left: var(--s-3); font-size: var(--fs-sm); color: var(--muted); font-weight: 400; }
 .host-card.list .list-row { --row-surface: var(--bg-elev); }
 .unit-item { display: grid; gap: var(--s-05); min-width: 0; }

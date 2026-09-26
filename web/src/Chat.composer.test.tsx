@@ -299,8 +299,8 @@ describe("Chat composer and layout", () => {
     const rail = host.querySelector(".sidebar") as HTMLElement;
     expect(rail.querySelectorAll(".ws-path")).toHaveLength(1);
     expect(rail.querySelector(".ws-path")?.textContent).toContain("/tmp/ws");
-    const badges = [...rail.querySelectorAll(".thread-meta .badge")].map((el) => el.textContent);
-    expect(badges).toEqual(["claude"]);
+    const others = [...rail.querySelectorAll(".thread-meta .thread-adapter")].map((el) => el.textContent);
+    expect(others).toEqual(["claude"]);
   });
 
   it("shows the host user and hostname in the topbar", async () => {

@@ -3,7 +3,7 @@ import type { ThreadSummary } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { cwdBasename, formatRelativeShort, groupThreadsByCwd, truncateMiddle } from "../format";
 import { IconChevronRight, IconPin, IconPinOff, IconRename, IconSearch, IconTrash } from "./Icon";
-import { ListRow, StatusBadge } from "./Primitives";
+import { ListRow } from "./Primitives";
 
 export type ThreadListProps = {
   threads: ThreadSummary[];
@@ -17,6 +17,8 @@ export type ThreadListProps = {
   git?: { branch: string; dirty: boolean };
   currentCwd?: string;
   currentAdapter?: string;
+  /** Adapter ids to the names the product shows, "claude" → "Claude". */
+  adapterNames?: Record<string, string>;
   pins?: string[];
   recents?: string[];
   onOpenCwd?: (cwd: string) => void;
@@ -81,6 +83,7 @@ export function ThreadList({
   git,
   currentCwd,
   currentAdapter,
+  adapterNames,
   pins,
   recents,
   onOpenCwd,
@@ -215,8 +218,10 @@ export function ThreadList({
                           title={th.title}
                           tail={
                             <span className="thread-meta">
+                              {/* Another agent's thread says so in the tail's own grey,
+                                  the way its age does: a fact, not an alert. */}
                               {th.adapter && th.adapter !== currentAdapter ? (
-                                <StatusBadge>{th.adapter}</StatusBadge>
+                                <span className="thread-adapter">{adapterNames?.[th.adapter] ?? th.adapter}</span>
                               ) : null}
                               {th.id === currentId && busy ? (
                                 <span className="pulse thread-live" aria-label={t("status.running")} />

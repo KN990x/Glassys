@@ -198,7 +198,7 @@ const transcriptBlocks = [
 const threadProps = {
   threads: threads as never, currentId: "t1", locale: "en", busy: false, waiting: false,
   onSwitch: () => {}, onDelete: () => {}, onRename: async () => {},
-  git: host.git, currentCwd: "/srv/www", currentAdapter: "cursor", pins: ["/srv/www"], recents: ["/etc/systemd/system"],
+  git: host.git, currentCwd: "/srv/www", currentAdapter: "cursor", adapterNames: { cursor: "Cursor", claude: "Claude" }, pins: ["/srv/www"], recents: ["/etc/systemd/system"],
   onOpenCwd: () => {}, onPin: () => {}, onUnpin: () => {},
 };
 

@@ -852,6 +852,7 @@ export function Chat({
     git,
     currentCwd: config.agent.cwd,
     currentAdapter: config.agent.adapter,
+    adapterNames: Object.fromEntries(adapters.map((a) => [a.id, a.displayName])),
     pins,
     recents,
     onOpenCwd: (cwd: string) => void onOpenCwd(cwd),
