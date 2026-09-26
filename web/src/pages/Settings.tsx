@@ -439,17 +439,17 @@ export function Settings({
   const keyConfigured =
     draft.secrets.adapters?.[draft.agent.adapter]?.apiKey.configured ||
     (draft.agent.adapter === "cursor" && draft.secrets.cursorApiKey.configured);
-  /* The strip needs one word per tab; the panel heading keeps the longer,
-     descriptive string. */
-  const tabs: Array<{ id: SettingsTab; label: string; heading: string; glyph: ReactNode }> = [
-    { id: "appearance", label: t("settings.tab.appearance"), heading: t("settings.appearance"), glyph: <IconPalette /> },
-    { id: "agent", label: t("settings.tab.agent"), heading: t("settings.agent"), glyph: <IconTerminal /> },
-    { id: "session", label: t("settings.tab.session"), heading: t("settings.session"), glyph: <IconServer /> },
-    { id: "prompts", label: t("settings.tab.prompts"), heading: t("settings.prompts"), glyph: <IconZap /> },
-    { id: "schedules", label: t("settings.tab.schedules"), heading: t("settings.schedules"), glyph: <IconClock /> },
-    { id: "updates", label: t("settings.tab.updates"), heading: t("settings.update"), glyph: <IconRefresh /> },
-    { id: "phone", label: t("settings.tab.phone"), heading: t("settings.phone"), glyph: <IconPhone /> },
-    { id: "usage", label: t("settings.tab.usage"), heading: t("settings.usage"), glyph: <IconChart /> },
+  /* The panel heading is the tab's own word: a longer title under a short tab
+     read as a different place from the one just clicked. */
+  const tabs: Array<{ id: SettingsTab; label: string; glyph: ReactNode }> = [
+    { id: "appearance", label: t("settings.tab.appearance"), glyph: <IconPalette /> },
+    { id: "agent", label: t("settings.tab.agent"), glyph: <IconTerminal /> },
+    { id: "session", label: t("settings.tab.session"), glyph: <IconServer /> },
+    { id: "prompts", label: t("settings.tab.prompts"), glyph: <IconZap /> },
+    { id: "schedules", label: t("settings.tab.schedules"), glyph: <IconClock /> },
+    { id: "updates", label: t("settings.tab.updates"), glyph: <IconRefresh /> },
+    { id: "phone", label: t("settings.tab.phone"), glyph: <IconPhone /> },
+    { id: "usage", label: t("settings.tab.usage"), glyph: <IconChart /> },
   ];
 
   return (
@@ -528,7 +528,7 @@ export function Settings({
                     {t("settings.title")}
                   </button>
                 )}
-                <h3>{tabs.find((item) => item.id === tab)?.heading}</h3>
+                <h3>{tabs.find((item) => item.id === tab)?.label}</h3>
               </div>
               {tab === "appearance" && <AppearanceTab draft={draft} setDraft={previewSpace} />}
               {tab === "agent" && (

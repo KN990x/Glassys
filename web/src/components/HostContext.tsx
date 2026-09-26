@@ -13,8 +13,7 @@ export type HostInfo = {
 /**
  * Which machine this is. The rail's foot names the machine and the agent in one
  * row — the workspace path belongs to the thread and lives in the topbar, where
- * it used to be repeated. The phone topbar keeps the single clipped line, and
- * both line forms copy the cwd on click.
+ * it used to be repeated. The topbar's form copies the cwd on click.
  */
 export function HostContext({
   info,
@@ -22,7 +21,7 @@ export function HostContext({
   onCopyFailed,
 }: {
   info: HostInfo;
-  variant: "rail" | "inline" | "path";
+  variant: "rail" | "path";
   onCopyFailed: () => void;
 }) {
   const t = useT();
@@ -39,8 +38,6 @@ export function HostContext({
     );
   }
 
-  const branch = info.git ? `${info.git.branch}${info.git.dirty ? ` (${t("chat.gitDirty")})` : ""}` : "";
-
   if (variant === "rail") {
     return (
       <div className="host-context host-rail" title={[info.hostLabel, info.adapter].filter(Boolean).join(" · ")}>
@@ -55,13 +52,10 @@ export function HostContext({
     );
   }
 
-  const parts =
-    variant === "path"
-      ? [truncateMiddle(info.cwd, 56), branch]
-      : [info.hostLabel, info.cwd, branch, info.adapter];
-
+  // The thread's path and branch, in the face paths are set in everywhere
+  // else. A dirty tree is the rail's amber dot, not a word in brackets.
   return (
-    <span className={`host-context muted${variant === "path" ? " host-path" : ""}`}>
+    <span className="host-context muted host-path">
       <button
         type="button"
         className="host-copy"
@@ -69,7 +63,16 @@ export function HostContext({
         aria-label={t("chat.copyCwd")}
         onClick={copy}
       >
-        {parts.filter(Boolean).join(" · ")}
+        {truncateMiddle(info.cwd, 56)}
+        {info.git ? (
+          <>
+            {" · "}
+            <span className={`host-branch${info.git.dirty ? " dirty" : ""}`}>
+              {info.git.branch}
+              {info.git.dirty ? <span className="visually-hidden"> ({t("chat.gitDirty")})</span> : null}
+            </span>
+          </>
+        ) : null}
         {copied ? ` · ${t("chat.copied")}` : ""}
       </button>
     </span>

@@ -1308,6 +1308,12 @@ details label { margin-top: var(--s-2); }
 
 .topbar-title { display: grid; gap: 0; min-width: 0; flex: 1; }
 .topbar-title strong { font-size: var(--fs-base); font-weight: 600; }
+/* The desktop head is one line: the title, then the path and branch after
+   it on the same baseline. The path gives way first; the title keeps at
+   least its first words. */
+.topbar-title.one-line { display: flex; align-items: baseline; gap: var(--s-3); }
+.topbar-title.one-line .topbar-heading { flex: 0 1 auto; max-width: 60%; }
+.topbar-title.one-line .host-context { flex: 1 1 0; }
 .topbar-heading {
   display: flex;
   align-items: center;
@@ -1555,6 +1561,17 @@ button.host-copy:hover { color: var(--text); }
 /* On the desktop topbar the subtitle is the thread's path and branch, in the
    face paths are set in everywhere else. */
 .host-path { font-family: var(--mono); font-size: var(--fs-sm); }
+/* The same amber dot as the rail's branch chip. */
+.host-branch.dirty::after {
+  content: "";
+  display: inline-block;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  margin-left: var(--s-1);
+  vertical-align: middle;
+  border-radius: var(--r-full);
+  background: var(--warn);
+}
 .top-actions { display: flex; gap: var(--s-2); align-items: center; min-width: 0; }
 
 /* ---------------------------------------------------------------------------
@@ -2582,7 +2599,9 @@ mark {
 }
 .settings-dialog header { border-bottom: 1px solid var(--stroke); }
 .settings-dialog footer { border-top: 1px solid var(--stroke); }
-.settings-dialog h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
+/* A 56px header band: one line in the chrome's own title size, so the
+   section below it is the larger heading. */
+.settings-dialog h2 { margin: 0; font-size: var(--fs-base); font-weight: 600; }
 .settings-layout { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
 /* One 600px column centred in the pane, so the right side of the dialog is
    not a 230px strip of nothing. */
@@ -2790,6 +2809,8 @@ mark {
 .host-head-actions { display: flex; align-items: center; gap: var(--s-2); flex: none; }
 .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
 .host-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.host-toolbar-end { margin-left: auto; }
+.host-toolbar .switch-label { font-size: var(--fs-sm); color: var(--muted); }
 .host-search { flex: 1 1 var(--w-control); }
 .host-select { width: auto; max-width: var(--w-control); flex: 0 1 var(--w-control); }
 .host-section { display: grid; gap: var(--s-2); min-width: 0; }

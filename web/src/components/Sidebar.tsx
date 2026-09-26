@@ -106,7 +106,7 @@ export function Sidebar({
           </button>
         </div>
         <div className="sidebar-foot mini-foot">
-          <span className={`status dot-only ${statusClass}`} aria-live="polite" title={statusLabel}>
+          <span className={`status dot-only ${statusClass}${connected ? " quiet" : ""}`} aria-live="polite" title={statusLabel}>
             <span className="visually-hidden">{statusLabel}</span>
           </span>
           <button

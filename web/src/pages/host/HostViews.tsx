@@ -171,8 +171,8 @@ export function OverviewView({
   return (
     <div className="host-page">
       <HostHead
-        title={o?.hostname ?? t("nav.overview")}
-        sub={o ? [o.os, o.kernel, o.arch].filter(Boolean).join(" · ") : undefined}
+        title={t("nav.overview")}
+        sub={o ? [o.hostname, o.os, o.kernel, o.arch].filter(Boolean).join(" · ") : undefined}
       >
         <RefreshButton
           busy={overview.loading}
@@ -526,8 +526,10 @@ export function LogsView({
 
   return (
     <div className="host-page host-page-fill">
-      <HostHead title={t("nav.logs")} sub={unit || t("logs.allUnits")}>
-        <Switch checked={follow} onChange={setFollow} label={t("logs.follow")} />
+      <HostHead
+        title={t("nav.logs")}
+        sub={entries ? <><span className="nums">{entries.length}</span> {t("logs.lines")}</> : undefined}
+      >
         <RefreshButton busy={loading} onClick={() => void load()} />
       </HostHead>
 
@@ -551,6 +553,10 @@ export function LogsView({
             { value: "err", label: t("logs.errors") },
           ]}
         />
+        {/* Follow filters nothing, so it ends the row instead of heading the page. */}
+        <span className="host-toolbar-end">
+          <Switch checked={follow} onChange={setFollow} label={t("logs.follow")} />
+        </span>
       </div>
 
       {error ? <Callout tone="danger">{error}</Callout> : null}

@@ -71,8 +71,9 @@ export function Topbar({
     setRenaming(true);
   }
 
-  // On a phone the rail is gone, so the connection dot rides on the title.
-  const dot = !isDesktop ? (
+  // On a phone the rail is gone, so the connection dot rides on the title —
+  // and, as in the rail, only when something is wrong: connected is normal.
+  const dot = !isDesktop && statusClass !== "connected" ? (
     <span className={`status dot-only ${statusClass}`} aria-live="polite" title={statusLabel}>
       <span className="visually-hidden">{statusLabel}</span>
     </span>
@@ -112,15 +113,15 @@ export function Topbar({
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <div className="topbar-title">
+        {/* One line on the desktop, so the title shares its baseline with the
+            rail's and the inspector's heads; a phone has room for two. A host
+            view names the machine: the tab already says which view it is. */}
+        <div className={`topbar-title${isDesktop ? " one-line" : ""}`}>
           {view !== "chat" ? (
-            <>
-              <span className="topbar-heading">
-                {dot}
-                <strong className="truncate">{t(`nav.${view}`)}</strong>
-              </span>
-              <span className="host-context muted host-path truncate">{hostLabel}</span>
-            </>
+            <span className="topbar-heading">
+              {dot}
+              <strong className="truncate">{hostLabel || t("host.machine")}</strong>
+            </span>
           ) : renaming ? (
             <form
               className="thread-rename"
@@ -153,7 +154,7 @@ export function Topbar({
                 {dot}
                 <strong className="truncate">{threadTitle.shown}</strong>
               </button>
-              <HostContext info={hostInfo} variant={isDesktop ? "path" : "inline"} onCopyFailed={onCopyFailed} />
+              <HostContext info={hostInfo} variant="path" onCopyFailed={onCopyFailed} />
             </>
           )}
         </div>
