@@ -185,7 +185,7 @@ export function Topbar({
               >
                 <IconMore />
               </button>
-              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} label={t("chat.more")} side="bottom" align="end">
+              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} label={t("chat.more")} side="bottom" align="end" className="pop-menu">
                 <button
                   type="button"
                   className="ghost picker-item"
@@ -210,9 +210,10 @@ export function Topbar({
                   <IconExport />
                   <strong>{t("chat.export")}</strong>
                 </button>
+                <div className="pop-divider" role="separator" />
                 <button
                   type="button"
-                  className="ghost picker-item danger-hover"
+                  className="ghost picker-item danger-item"
                   disabled={!threadId}
                   onClick={() => {
                     setMenuOpen(false);

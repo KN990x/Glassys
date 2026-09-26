@@ -20,6 +20,7 @@ export function Popover({
   align = "start",
   id,
   wide,
+  className,
 }: {
   open: boolean;
   onClose: () => void;
@@ -29,6 +30,8 @@ export function Popover({
   align?: PopoverAlign;
   id?: string;
   wide?: boolean;
+  /** `pop-menu` for a list of commands: tighter rows, no section padding. */
+  className?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -58,7 +61,7 @@ export function Popover({
     <div
       ref={panel}
       id={id}
-      className={`pop pop-${side} pop-${align}${wide ? " pop-wide" : ""}`}
+      className={`pop pop-${side} pop-${align}${wide ? " pop-wide" : ""}${className ? ` ${className}` : ""}`}
       role="dialog"
       aria-label={label}
     >

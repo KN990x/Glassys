@@ -2334,8 +2334,19 @@ mark {
   font-size: var(--fs-base);
 }
 .picker-item > * { max-width: 100%; }
-.pop .picker-item { display: flex; align-items: center; gap: var(--s-2); min-height: var(--control-h); }
+.pop .picker-item { display: flex; align-items: center; gap: var(--s-2); min-height: var(--control-h); padding: 0 var(--s-3); }
+/* A segmented control in a popover spans it, instead of leaving half its well empty. */
+.pop .segmented { display: flex; }
+.pop .segmented .segment { flex: 1; }
 .pop .picker-item svg { width: var(--icon-md); height: var(--icon-md); color: var(--muted); }
+/* A menu of commands: 32px rows 4px inside the panel, like the palette's. */
+.pop.pop-menu { gap: var(--s-05); padding: var(--s-1); }
+.pop-menu .picker-item { padding: 0 var(--s-2); }
+.pop-menu .pop-divider { margin: var(--s-05) var(--s-1); }
+.picker-item.danger-item, .picker-item.danger-item svg { color: var(--danger); }
+.picker-item.danger-item:hover:not(:disabled) { background: var(--danger-bg); }
+/* In a popover the check says which one; the list row's marker would say it twice. */
+.pop .picker-item.current::before { display: none; }
 .picker-item span { font-size: var(--fs-xs); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-item strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* One selected recipe for every list row, tab and card: accent wash, accent
@@ -2752,15 +2763,27 @@ mark {
    --------------------------------------------------------------------------- */
 .mono { font-family: var(--mono); }
 .danger-text { color: var(--danger); }
-.view-tabs { display: flex; align-items: center; gap: var(--s-05); flex: none; }
+/* The views are one track, like a segmented control: 28px tabs two pixels
+   inside a 32px well, so the current one is a raised segment and never looks
+   like the pressed Activity toggle beside it. */
+.view-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--s-05);
+  flex: none;
+  padding: var(--s-05);
+  border-radius: var(--r-md);
+  background: var(--bg-muted);
+}
 .view-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--s-2);
-  height: var(--control-h);
+  height: var(--control-h-sm);
   padding: 0 var(--s-3);
   border: 0;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
   font-size: var(--fs-sm);
@@ -2769,16 +2792,23 @@ mark {
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .view-tab svg { width: var(--icon-sm); height: var(--icon-sm); }
-.view-tab:hover { background: var(--hover-bg); color: var(--text); }
-.view-tab.current { background: var(--selected-bg); color: var(--text); }
+.view-tab:hover:not(.current) { color: var(--text); }
+.view-tab.current { background: var(--segment-bg); color: var(--text); box-shadow: var(--e-1); }
 .view-tab.missing:not(.current) { opacity: 0.5; }
-/* Below 1280, or with the inspector taking a column, the tabs keep their
-   glyphs and let the labels go (each keeps its name as a tooltip). */
-.has-inspector .view-tab span { display: none; }
-.has-inspector .view-tab { width: var(--control-h); padding: 0; justify-content: center; }
-@media (max-width: 1279px) {
+/* The thread's own actions sit apart from the views, past a hairline. */
+.view-tabs + .top-actions { padding-left: var(--s-3); border-left: 1px solid var(--stroke); }
+/* The column, not the window, decides when the labels go: the rail, the
+   inspector or a narrow window can each leave too little room, and each
+   tab keeps its name as a tooltip. */
+.chat-shell { container-type: inline-size; }
+@container (max-width: 880px) {
   .view-tab span { display: none; }
-  .view-tab { width: var(--control-h); padding: 0; justify-content: center; }
+  .view-tab { width: var(--control-h-sm); padding: 0; }
+}
+/* Narrower still, the path goes and the title keeps the room. */
+@container (max-width: 560px) {
+  .topbar-title.one-line .host-context { display: none; }
+  .topbar-title.one-line .topbar-heading { max-width: 100%; }
 }
 
 .host-main {

@@ -8,8 +8,10 @@ export type AppView = "chat" | HostViewId;
 
 /**
  * The desktop topbar's views, the way CloudCLI puts Files and Git beside its
- * chat: the conversation, then the machine it is about. A view this host
- * cannot fill stays visible but dimmed, and explains itself when opened.
+ * chat: the conversation, then the machine it is about. They sit in one track,
+ * so they read as where you are rather than as five more buttons beside the
+ * thread's actions. A view this host cannot fill stays visible but dimmed, and
+ * explains itself when opened.
  */
 export function ViewTabs({
   value,
