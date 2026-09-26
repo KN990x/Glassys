@@ -22,6 +22,7 @@ import {
   IconArrowUp,
   IconCheck,
   IconChevronLeft,
+  IconChevronRight,
   IconClock,
   IconCopy,
   IconCpu,
@@ -228,7 +229,7 @@ export function OverviewView({
           </div>
 
           <section className="host-section">
-            <h3 className="eyebrow">{t("host.disks")}</h3>
+            <h3 className="section-title">{t("host.disks")}</h3>
             <div className="host-card">
               {o.disks.length === 0 ? <p className="muted host-empty">{t("host.noDisks")}</p> : null}
               {o.disks.map((d) => {
@@ -255,8 +256,8 @@ export function OverviewView({
       {caps?.services ? (
         <section className="host-section">
           <div className="host-section-head">
-            <h3 className="eyebrow">{t("host.failedUnits")}</h3>
-            <button type="button" className="ghost tiny" onClick={() => onView("services")}>
+            <h3 className="section-title">{t("host.failedUnits")}</h3>
+            <button type="button" className="ghost tiny text-btn" onClick={() => onView("services")}>
               {t("host.seeAll")}
             </button>
           </div>
@@ -358,6 +359,13 @@ export function ServicesView({
             { value: "failed", label: t("services.failed") },
           ]}
         />
+        <label className="search-field host-search">
+          <span className="visually-hidden">{t("services.filter")}</span>
+          <IconSearch />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("services.filter")} />
+        </label>
+        {/* Scope ends the row: beside the state filter the two read as one
+            five-way switch. */}
         {caps?.services === "systemd" ? (
           <SegmentedControl
             label={t("services.scope")}
@@ -369,11 +377,6 @@ export function ServicesView({
             ]}
           />
         ) : null}
-        <label className="search-field host-search">
-          <span className="visually-hidden">{t("services.filter")}</span>
-          <IconSearch />
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("services.filter")} />
-        </label>
       </div>
 
       {services.error ? <Callout tone="danger">{services.error}</Callout> : null}
@@ -637,7 +640,11 @@ function Crumbs({ path, onOpen }: { path: string; onOpen: (p: string) => void })
         const to = `/${parts.slice(0, i + 1).join("/")}`;
         return (
           <span key={to} className="crumb">
-            {i > 0 ? <span className="crumb-sep">/</span> : null}
+            {/* A chevron between segments: a slash beside the root's own slash
+                read as one path with spaces in it. */}
+            <span className="crumb-sep" aria-hidden="true">
+              <IconChevronRight />
+            </span>
             <button type="button" onClick={() => onOpen(to)} aria-current={i === parts.length - 1 ? "page" : undefined}>
               {part}
             </button>

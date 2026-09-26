@@ -2846,7 +2846,12 @@ mark {
 .host-select { width: auto; max-width: var(--w-control); flex: 0 1 var(--w-control); }
 .host-section { display: grid; gap: var(--s-2); min-width: 0; }
 .host-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-.host-section .eyebrow { margin: 0; }
+/* A page section is titled in sentence case, like a settings group; the
+   uppercase eyebrow is for menus and the palette. */
+.section-title { margin: 0; font-size: var(--fs-base); font-weight: 600; color: var(--text); }
+/* A section's own action is a word, not a boxed button. */
+.ghost.text-btn { border-color: transparent; color: var(--muted); }
+.ghost.text-btn:hover:not(:disabled) { border-color: transparent; color: var(--text); }
 .host-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -3043,7 +3048,8 @@ mark {
 .crumbs button:hover { background: var(--hover-bg); color: var(--text); }
 .crumbs button[aria-current="page"] { color: var(--text); font-weight: 500; }
 .crumb { display: inline-flex; align-items: center; }
-.crumb-sep { color: var(--faint); }
+.crumb-sep { display: grid; place-items: center; color: var(--faint); }
+.crumb-sep svg { width: var(--icon-xs); height: var(--icon-xs); }
 .preview-path { flex: 1; font-size: var(--fs-code); color: var(--muted); padding: 0 var(--s-1); }
 .preview-pane .files-pane-head .ghost.tiny { border-color: transparent; }
 .file-preview {
@@ -3065,6 +3071,11 @@ mark {
   .host-main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
   .host-page { padding-top: var(--s-4); }
   .host-head { flex-wrap: wrap; }
+}
+/* On a phone the page's one call to action takes the row, and refresh ends it. */
+@media (max-width: 640px) {
+  .host-head-actions:has(> .primary) { width: 100%; }
+  .host-head-actions > .primary { flex: 1; order: -1; }
 }
 
 /* ---------------------------------------------------------------------------
