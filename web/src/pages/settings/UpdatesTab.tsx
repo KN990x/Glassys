@@ -66,7 +66,7 @@ export function UpdatesTab({
             )}
             <button
               type="button"
-              className="ghost tiny"
+              className="ghost"
               onClick={() => {
                 void api
                   .adminUpdateCheck()

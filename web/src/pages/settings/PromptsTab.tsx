@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { PromptTemplate } from "@glassys/protocol";
 import { useT } from "../../i18n";
-import { Disclosure, SettingGroup, SettingRow } from "../../components/Primitives";
-import { IconPlus, IconTrash } from "../../components/Icon";
+import { Disclosure, EmptyRow, SettingGroup, SettingRow } from "../../components/Primitives";
+import { IconPlus, IconTrash, IconZap } from "../../components/Icon";
 
 /**
  * A list of saved operations, not a stack of forms: every template used to
@@ -24,6 +24,21 @@ export function PromptsTab({
     next[i] = { ...templates[i]!, ...over };
     setTemplates(next);
   }
+
+  const addButton = (
+    <button
+      type="button"
+      className="ghost"
+      onClick={() => {
+        const id = `tpl-${templates.length + 1}`;
+        setTemplates([...templates, { id, slash: "", title: "", text: "" }]);
+        setEditing(id);
+      }}
+    >
+      <IconPlus />
+      {t("settings.promptAdd")}
+    </button>
+  );
 
   return (
     <SettingGroup hint={t("settings.promptsHint")}>
@@ -70,20 +85,13 @@ export function PromptsTab({
           </Disclosure>
         </SettingRow>
       ))}
-      <SettingRow>
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => {
-            const id = `tpl-${templates.length + 1}`;
-            setTemplates([...templates, { id, slash: "", title: "", text: "" }]);
-            setEditing(id);
-          }}
-        >
-          <IconPlus />
-          {t("settings.promptAdd")}
-        </button>
-      </SettingRow>
+      {templates.length === 0 ? (
+        <EmptyRow glyph={<IconZap />} action={addButton}>
+          {t("settings.promptsEmpty")}
+        </EmptyRow>
+      ) : (
+        <SettingRow>{addButton}</SettingRow>
+      )}
     </SettingGroup>
   );
 }

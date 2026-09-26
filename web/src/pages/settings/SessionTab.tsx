@@ -74,7 +74,7 @@ export function SessionTab({
             onChange={(e) => setPassword(e.target.value)}
           />
         </SettingRow>
-        <SettingRow label={t("settings.logout")} hint={t("settings.logoutHint")}>
+        <SettingRow label={t("settings.logoutRow")} hint={t("settings.logoutHint")}>
           <button type="button" className="ghost" onClick={onLogout}>
             {t("settings.logout")}
           </button>

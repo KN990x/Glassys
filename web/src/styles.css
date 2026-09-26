@@ -210,7 +210,6 @@
   --w-host: 960px;
   --w-chip-max: 12rem;
   --w-hint-max: 18rem;
-  --w-number: 7rem;
   --code-max: 22rem;
   --composer-max: 160px;
   --qr-size: 9rem;
@@ -742,6 +741,9 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .setting-text { display: grid; gap: var(--s-05); min-width: 0; }
 .setting-label { font-size: var(--fs-base); color: var(--text); }
 .setting-hint { font-size: var(--fs-sm); color: var(--muted); }
+.empty-row-text { display: flex; align-items: center; gap: var(--s-3); min-width: 0; font-size: var(--fs-sm); color: var(--muted); }
+.empty-row-glyph { display: grid; place-items: center; flex: none; color: var(--faint); }
+.empty-row-glyph svg { width: var(--icon-md); height: var(--icon-md); }
 .setting-control { display: flex; align-items: center; gap: var(--s-2); flex: none; min-width: 0; max-width: 100%; }
 .setting-row.stack-row .setting-control { flex: 1; }
 .setting-control > label { display: contents; }
@@ -2666,6 +2668,7 @@ mark {
 
 
 .settings-section > p { margin: 0; font-size: var(--fs-sm); }
+.settings-note { margin: 0; font-size: var(--fs-sm); }
 .settings-section > button,
 .settings-section .stack > button,
 .settings-section > .row { justify-self: start; }
@@ -2708,8 +2711,7 @@ mark {
 .reach-body { display: grid; gap: var(--s-3); flex: 1; min-width: 0; }
 .reach-body > button { justify-self: start; }
 
-/* Number fields should not span the control column. */
-.settings-section input[type="number"] { max-width: var(--w-number); }
+
 
 @media (min-width: 860px) {
   .settings-layout { grid-template-columns: var(--rail-w-sm) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }

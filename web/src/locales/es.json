@@ -455,5 +455,8 @@
   "settings.upgradeRow": "Actualizar Glassys",
   "settings.upgradeHint": "Descarga, reconstruye y reinicia el gateway.",
   "settings.restartRow": "Proceso del gateway",
-  "logs.lines": "líneas"
+  "logs.lines": "líneas",
+  "settings.logoutRow": "Este navegador",
+  "settings.newThreadShort": "Estos cambios abren un hilo nuevo",
+  "settings.promptsEmpty": "Todavía no hay plantillas."
 }

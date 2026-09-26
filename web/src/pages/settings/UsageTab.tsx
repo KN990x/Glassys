@@ -1,5 +1,7 @@
 import { useT } from "../../i18n";
 import { formatTokens } from "../../format";
+import { EmptyRow, SettingGroup } from "../../components/Primitives";
+import { IconChart } from "../../components/Icon";
 
 export function UsageTab({
   usage,
@@ -15,7 +17,13 @@ export function UsageTab({
   locale: string;
 }) {
   const t = useT();
-  if (!usage && !threadUsage) return <p className="muted">{t("settings.usageEmpty")}</p>;
+  if (!usage && !threadUsage) {
+    return (
+      <SettingGroup>
+        <EmptyRow glyph={<IconChart />}>{t("settings.usageEmpty")}</EmptyRow>
+      </SettingGroup>
+    );
+  }
   const rows: Array<{ key: string; label: string; input: number; output: number }> = [];
   if (threadUsage) {
     rows.push({ key: "thread", label: t("settings.usageThread"), input: threadUsage.inputTokens, output: threadUsage.outputTokens });

@@ -4,10 +4,10 @@ import { api } from "../../api";
 import { useT } from "../../i18n";
 import { operatorError } from "../../operatorError";
 import { formatRelativeShort } from "../../format";
-import { Callout, SettingGroup, SettingRow, StatusBadge } from "../../components/Primitives";
+import { Callout, EmptyRow, SettingGroup, SettingRow, StatusBadge } from "../../components/Primitives";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { Switch } from "../../components/Switch";
-import { IconTrash } from "../../components/Icon";
+import { IconClock, IconTrash } from "../../components/Icon";
 
 export type ScheduleJob = {
   id: string;
@@ -68,7 +68,6 @@ export function SchedulesTab({
         </SettingRow>
         <SettingRow label={t("settings.scheduleWhen")}>
           <SegmentedControl
-            size="sm"
             label={t("settings.scheduleWhen")}
             value={kind}
             onChange={(next) => {
@@ -137,7 +136,7 @@ export function SchedulesTab({
       </SettingGroup>
 
       <SettingGroup title={t("settings.scheduleList")}>
-        {schedules.length === 0 && <SettingRow hint={t("settings.scheduleEmpty")}>{null}</SettingRow>}
+        {schedules.length === 0 && <EmptyRow glyph={<IconClock />}>{t("settings.scheduleEmpty")}</EmptyRow>}
         {schedules.map((job) => (
           <SettingRow
             key={job.id}

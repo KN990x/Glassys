@@ -455,5 +455,8 @@
   "settings.upgradeRow": "Upgrade Glassys",
   "settings.upgradeHint": "Pulls, rebuilds and restarts the gateway.",
   "settings.restartRow": "Gateway process",
-  "logs.lines": "lines"
+  "logs.lines": "lines",
+  "settings.logoutRow": "This browser",
+  "settings.newThreadShort": "Changes here start a new thread",
+  "settings.promptsEmpty": "No templates yet."
 }

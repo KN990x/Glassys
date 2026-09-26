@@ -147,19 +147,42 @@ export function SettingRow({
 }) {
   return (
     <div className={`setting-row${stack ? " stack-row" : ""}`}>
-      {label ? (
+      {/* A row with only a hint still shows it: "No scheduled prompts" and the
+          cron catch-up note were rendered as empty boxes. */}
+      {label || hint ? (
         <span className="setting-text">
-          {htmlFor ? (
-            <label className="setting-label" htmlFor={htmlFor}>
-              {label}
-            </label>
-          ) : (
-            <span className="setting-label">{label}</span>
-          )}
+          {label ? (
+            htmlFor ? (
+              <label className="setting-label" htmlFor={htmlFor}>
+                {label}
+              </label>
+            ) : (
+              <span className="setting-label">{label}</span>
+            )
+          ) : null}
           {hint ? <span className="setting-hint">{hint}</span> : null}
         </span>
       ) : null}
       <div className="setting-control">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * The one empty state inside a group of setting rows: a faint glyph, one
+ * sentence and, when there is one, the action that fills it. Templates,
+ * schedules and usage each used to be empty in their own way.
+ */
+export function EmptyRow({ glyph, children, action }: { glyph: ReactNode; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="setting-row empty-row">
+      <span className="empty-row-text">
+        <span className="empty-row-glyph" aria-hidden="true">
+          {glyph}
+        </span>
+        <span>{children}</span>
+      </span>
+      {action ? <div className="setting-control">{action}</div> : null}
     </div>
   );
 }

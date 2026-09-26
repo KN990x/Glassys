@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -13,7 +14,7 @@ import { ModelPicker } from "../../components/ModelPicker";
 import { CatalogFallbackNotice } from "../../components/CatalogFallback";
 import { SdkLoginControls } from "../../components/SdkLogin";
 import { WorkspacePicker } from "../../components/WorkspacePicker";
-import { Callout, SettingGroup, SettingRow, Skeleton, StatusBadge } from "../../components/Primitives";
+import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } from "../../components/Primitives";
 import { Switch } from "../../components/Switch";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
@@ -67,6 +68,7 @@ export function AgentTab({
   toggleSource: (source: SettingSource, on: boolean) => void;
 }) {
   const t = useT();
+  const [newThreadOpen, setNewThreadOpen] = useState(false);
   const caps = currentAdapter?.capabilities;
   const autoRun = optionBool(draft.agent.options, "autoRun", true);
   const sandbox = optionBool(draft.agent.options, "sandbox", false);
@@ -75,39 +77,39 @@ export function AgentTab({
   return (
     <>
       {/* A note, not an alarm: saving a change that archives the thread still
-          asks first, so this only has to say what will happen. */}
-      <Callout>{t("settings.newThread")}</Callout>
+          asks first. One line says so; the full list is there when wanted,
+          instead of a five-line paragraph heading the tab. */}
+      <Disclosure
+        open={newThreadOpen}
+        onToggle={() => setNewThreadOpen((v) => !v)}
+        summary={<span>{t("settings.newThreadShort")}</span>}
+      >
+        <p className="muted settings-note">{t("settings.newThread")}</p>
+      </Disclosure>
 
-      <SettingGroup title={t("wizard.step.adapter")} hint={currentAdapter?.description}>
-        <SettingRow label={t("wizard.step.adapter")} htmlFor="set-adapter">
-          {/* An empty select read as "no adapters"; until the list arrives it is
-              a placeholder the same size as the control. */}
-          {adapters.length === 0 && !adaptersError ? (
-            <Skeleton rows={1} label={t("wizard.adapters.loading")} />
-          ) : (
-            <select id="set-adapter" value={draft.agent.adapter} onChange={(e) => pickAdapter(e.target.value)}>
-              {adapters.map((a) => (
-                <option key={a.id} value={a.id} disabled={!adapterSelectable(a) && a.id !== draft.agent.adapter}>
-                  {a.displayName}
-                </option>
-              ))}
-            </select>
-          )}
-        </SettingRow>
-      </SettingGroup>
-
-      {currentAdapter && !adapterSelectable(currentAdapter) && currentAdapter.available && !currentAdapter.available.ok && (
-        <Callout tone="danger">
-          {t("wizard.adapter.unavailable")} {currentAdapter.available.error}
-        </Callout>
-      )}
-      {adaptersError && (
-        <Callout
-          tone="danger"
-          action={
+      {/* The row names the adapter, so the group needs no title repeating it.
+          Why it cannot load, or cannot run, is the row's own hint in red, with
+          retry where the select would be — not a callout between two cards. */}
+      <SettingGroup>
+        <SettingRow
+          label={t("wizard.step.adapter")}
+          htmlFor="set-adapter"
+          hint={
+            adaptersError ? (
+              <span className="danger-text">{adaptersError}</span>
+            ) : currentAdapter && !adapterSelectable(currentAdapter) && currentAdapter.available && !currentAdapter.available.ok ? (
+              <span className="danger-text">
+                {t("wizard.adapter.unavailable")} {currentAdapter.available.error}
+              </span>
+            ) : (
+              currentAdapter?.description
+            )
+          }
+        >
+          {adaptersError ? (
             <button
               type="button"
-              className="ghost tiny"
+              className="ghost"
               onClick={() => {
                 setAdaptersError("");
                 api
@@ -121,11 +123,21 @@ export function AgentTab({
             >
               {t("wizard.adapters.retry")}
             </button>
-          }
-        >
-          {adaptersError}
-        </Callout>
-      )}
+          ) : adapters.length === 0 ? (
+            /* An empty select read as "no adapters"; until the list arrives it
+               is a placeholder the same size as the control. */
+            <Skeleton rows={1} label={t("wizard.adapters.loading")} />
+          ) : (
+            <select id="set-adapter" value={draft.agent.adapter} onChange={(e) => pickAdapter(e.target.value)}>
+              {adapters.map((a) => (
+                <option key={a.id} value={a.id} disabled={!adapterSelectable(a) && a.id !== draft.agent.adapter}>
+                  {a.displayName}
+                </option>
+              ))}
+            </select>
+          )}
+        </SettingRow>
+      </SettingGroup>
 
       <SettingGroup title={t("wizard.step.workspace")} hint={t("settings.workspaceHint")}>
         <SettingRow stack>
