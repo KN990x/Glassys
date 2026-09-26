@@ -324,7 +324,7 @@
   "confirm.title": "¿Seguro?",
   "confirm.cancel": "Cancelar",
   "confirm.ok": "Continuar",
-  "confirm.delete": "Eliminar",
+  "confirm.delete": "Borrar",
   "confirm.archive": "Archivar y continuar",
   "confirm.restart": "Reiniciar",
   "confirm.discard": "Descartar cambios",
@@ -463,5 +463,6 @@
   "confirm.titleRestart": "¿Reiniciar el gateway?",
   "confirm.titleUpdate": "¿Actualizar Glassys?",
   "confirm.titleDiscard": "¿Descartar los cambios?",
-  "confirm.titleArchive": "¿Abrir un hilo nuevo?"
+  "confirm.titleArchive": "¿Abrir un hilo nuevo?",
+  "wizard.workspace.browseToggle": "Explorar carpetas"
 }

@@ -631,8 +631,17 @@ function joinPath(dir: string, name: string): string {
 
 function Crumbs({ path, onOpen }: { path: string; onOpen: (p: string) => void }) {
   const parts = path.split("/").filter(Boolean);
+  /* A deep path keeps its end in view: the folder you are in matters more
+     than the root, and clipping the tail hid exactly that folder. */
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = nav.current;
+    if (!el) return;
+    el.scrollLeft = el.scrollWidth;
+    el.classList.toggle("clipped", el.scrollWidth > el.clientWidth);
+  }, [path]);
   return (
-    <nav className="crumbs mono" aria-label={path}>
+    <nav className="crumbs mono" aria-label={path} ref={nav}>
       <button type="button" onClick={() => onOpen("/")}>
         /
       </button>

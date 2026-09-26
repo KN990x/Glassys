@@ -463,5 +463,6 @@
   "confirm.titleRestart": "Restart the gateway?",
   "confirm.titleUpdate": "Upgrade Glassys?",
   "confirm.titleDiscard": "Discard your changes?",
-  "confirm.titleArchive": "Start a new thread?"
+  "confirm.titleArchive": "Start a new thread?",
+  "wizard.workspace.browseToggle": "Browse folders"
 }

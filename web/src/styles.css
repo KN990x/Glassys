@@ -420,6 +420,9 @@ label > input, label > select, label > textarea { color: var(--text); font-size:
 .stack { display: grid; gap: var(--s-4); }
 .row { display: flex; gap: var(--s-2); justify-content: flex-end; align-items: center; }
 .row.wrap { flex-wrap: wrap; justify-content: flex-start; }
+/* A row of badges with none to show still took a gap either side of it in a
+   stack: the wizard's sign-in step had a 32px hole under its first line. */
+.stack > .row:empty { display: none; }
 .muted { color: var(--muted); }
 .error-text { color: var(--danger); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .ok { color: var(--ok); overflow-wrap: break-word; font-size: var(--fs-sm); }
@@ -2285,11 +2288,14 @@ mark {
 .chip-btn.risk-warn svg { color: var(--warn); }
 .chip-btn.risk-danger svg { color: var(--danger); }
 .model-chip { display: flex; min-width: 0; }
-/* A phone has room for the model's name, not for its effort, which stays in
-   the tooltip and the menu. The shield keeps its word: a red glyph alone did
-   not say what it was warning about. */
+/* A phone has room for the model's name and the shield, not for the effort
+   and the word beside the shield; both stay in the tooltip and the menu. At
+   360px the word pushed the send button off the bar. */
 @media (max-width: 640px) {
   .chip-variant { display: none; }
+  .chip-btn.risk-ok .chip-label,
+  .chip-btn.risk-warn .chip-label,
+  .chip-btn.risk-danger .chip-label { display: none; }
 }
 .pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-05); }
 .picker-check { position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--text); }
@@ -2333,7 +2339,11 @@ mark {
 .picker-list { display: grid; gap: var(--s-1); }
 .picker-list .eyebrow { margin: 0 0 var(--s-05); }
 .picker-list .picker-item { grid-template-columns: var(--icon-md) minmax(0, 1fr); column-gap: var(--s-2); align-items: center; }
-.picker-list .picker-item svg { grid-row: 1 / -1; color: var(--faint); width: var(--icon-sm); height: var(--icon-sm); }
+.picker-list .picker-item svg { grid-row: 1 / span 2; color: var(--faint); width: var(--icon-sm); height: var(--icon-sm); }
+/* Name and path both sit in the text column. With only one explicit row the
+   glyph spanned just the first, and the path fell into the 16px glyph column
+   and printed as "/…". */
+.picker-list .picker-item > strong, .picker-list .picker-item > span { grid-column: 2; }
 .input-group { display: flex; gap: var(--s-2); align-items: center; min-width: 0; }
 .input-group input { flex: 1; min-width: 0; }
 .input-group > button { flex: none; }
@@ -2888,7 +2898,8 @@ mark {
 .host-card.list { gap: var(--s-05); padding: var(--s-1); }
 .host-empty { margin: 0; padding: var(--s-3) var(--s-3); font-size: var(--fs-sm); }
 .ok-line { display: flex; align-items: center; gap: var(--s-2); color: var(--muted); }
-.ok-line svg { width: var(--icon-md); height: var(--icon-md); color: var(--ok); }
+/* Nothing failed is the normal case: a grey check, like a step that worked. */
+.ok-line svg { width: var(--icon-md); height: var(--icon-md); color: var(--muted); }
 
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
 @media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -3060,7 +3071,14 @@ mark {
    a directory keeps an empty size cell rather than shifting its age left. */
 .files-size { width: 8ch; text-align: right; }
 .files-mtime { width: 7ch; text-align: right; }
-.crumbs { display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: var(--fs-code); white-space: nowrap; }
+.crumbs { display: flex; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; font-size: var(--fs-code); white-space: nowrap; }
+.crumbs::-webkit-scrollbar { display: none; }
+/* The clipped start fades out rather than cutting a segment in half. */
+.crumbs.clipped {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--s-6));
+  mask-image: linear-gradient(to right, transparent, #000 var(--s-6));
+}
+.crumbs > *, .crumb > * { flex: none; }
 .crumbs button {
   padding: var(--s-05) var(--s-1);
   border: 0;

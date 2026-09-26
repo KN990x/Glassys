@@ -64,7 +64,7 @@ export function WorkspacePicker({
       {/* Scanning for folders is the second way in, so it waits behind one
           line instead of a second input stacked under the path. It opens by
           itself when there is no path yet. */}
-      <Disclosure open={browsing} onToggle={() => setBrowseOpen(!browsing)} summary={<span>{t("wizard.workspace.browse")}</span>}>
+      <Disclosure open={browsing} onToggle={() => setBrowseOpen(!browsing)} summary={<span>{t("wizard.workspace.browseToggle")}</span>}>
         <div className="stack">
           {/* Field and action on one line: they are one gesture. */}
           <div className="input-group">

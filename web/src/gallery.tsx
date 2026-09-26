@@ -246,7 +246,8 @@ function Row({ title, note, children }: { title: string; note?: string; children
    host page, the way the phone media query does in a real narrow window;
    without it the gallery showed the composer half under the tab bar. */
 const phoneFrameCss = `.gallery-phone .composer { padding-bottom: calc(var(--s-3) + var(--tabbar-h)); }
-.gallery-phone .host-main { padding-bottom: var(--tabbar-h); }`;
+.gallery-phone .host-main { padding-bottom: var(--tabbar-h); }
+.gallery-phone .chip-variant, .gallery-phone .chip-btn[class*="risk-"] .chip-label { display: none; }`;
 
 function Frame({ width, height, children, phone }: { width: number | string; height: number; children: ReactNode; phone?: boolean }) {
   return (
