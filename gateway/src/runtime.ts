@@ -91,7 +91,42 @@ let pendingIdentityReset = false;
 /** Config the live thread belonged to before the identity change now pending. */
 let resetFromAgent: import("@glassys/protocol").AgentConfig | null = null;
 let rotating = false;
+let shuttingDown = false;
+/** Aborts the run that is still in ensureSession/send, before `currentRun` exists to cancel. */
+let startAbort: AbortController | null = null;
+/** One ensureSession at a time: a run abandoned mid-startup must not race the next one into a second session. */
+let sessionInFlight: Promise<AdapterSession> | null = null;
+const waitErrors = new WeakMap<AdapterRun, unknown>();
 const withQueueLock = createMutex();
+
+class RunAborted extends Error {
+  constructor() {
+    super("run aborted before it started");
+    this.name = "RunAborted";
+  }
+}
+
+function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new RunAborted());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new RunAborted());
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
+function abortStartingRun(): void {
+  startAbort?.abort();
+}
 
 export const MAX_QUEUE = 32;
 export { MAX_ATTACHMENTS };
@@ -331,6 +366,8 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
   await disposeSession();
 
   if (identityChanged) {
+    /* A config patch already owns this rotation; rotating here too archives twice and starts an extra agent. */
+    if (await withQueueLock(async () => pendingIdentityReset)) throw new RunAborted();
     await rotateToNewThread(previousAgentId);
     await restoreQueuedUserMessages(current);
   }
@@ -394,10 +431,22 @@ async function finishIdentityResetIfIdle(): Promise<void> {
   await performIdentityReset();
 }
 
+function ensureSessionShared(current?: QueueJob): Promise<AdapterSession> {
+  if (!sessionInFlight) {
+    const pending = ensureSession(current).finally(() => {
+      if (sessionInFlight === pending) sessionInFlight = null;
+    });
+    pending.catch(() => undefined);
+    sessionInFlight = pending;
+  }
+  return sessionInFlight;
+}
+
 async function waitRun(run: AdapterRun): Promise<"finished" | "error" | "cancelled"> {
   try {
     return await run.wait();
-  } catch {
+  } catch (err) {
+    waitErrors.set(run, err);
     return "error";
   }
 }
@@ -461,6 +510,7 @@ async function processQueue(): Promise<void> {
     for (;;) {
       while (true) {
         const item = await withQueueLock(async () => {
+          if (shuttingDown) return { kind: "empty" as const };
           if (pendingIdentityReset) return { kind: "reset" as const };
           const idx = queue.findIndex((j) => j.generation === identityGeneration);
           if (idx < 0) {
@@ -481,12 +531,21 @@ async function processQueue(): Promise<void> {
 
         const stillCurrent = await withQueueLock(async () => {
           if (pendingIdentityReset || item.job.generation !== identityGeneration) {
-            if (item.job.generation === identityGeneration) queue.unshift(item.job);
-            return false;
+            currentJobId = null;
+            if (item.job.generation === identityGeneration) {
+              queue.unshift(item.job);
+              return "requeued" as const;
+            }
+            return "dropped" as const;
           }
-          return true;
+          return "current" as const;
         });
-        if (!stillCurrent) continue;
+        if (stillCurrent === "dropped") {
+          /* The patch that dropped the queue already retracted what was still in it; this one had left it. */
+          await emit({ type: "user.retracted", id: item.job.id });
+          await broadcastQueue();
+        }
+        if (stillCurrent !== "current") continue;
 
         try {
           const gen = await withQueueLock(async () => {
@@ -548,11 +607,19 @@ async function processQueue(): Promise<void> {
 
 async function runOnce(job: QueueJob, gen: number): Promise<void> {
   let stallTimer: ReturnType<typeof setInterval> | undefined;
+  let eventsClosed = false;
+  const starting = new AbortController();
+  startAbort = starting;
+  if (cancelGeneration !== gen) starting.abort();
   try {
     let handle: AdapterSession;
     try {
-      handle = await ensureSession(job);
+      handle = await abortable(ensureSessionShared(job), starting.signal);
     } catch (err) {
+      if (err instanceof RunAborted || cancelGeneration !== gen) {
+        await emit({ type: "run.cancelled" });
+        return;
+      }
       await emit({ type: "run.error", message: err instanceof Error ? err.message : String(err), phase: "startup" });
       return;
     }
@@ -567,7 +634,12 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
     let thinkingStarted = 0;
     let lastEventAt = nowFn();
     let stalledEmitted = false;
-    const onEvent = (event: ServerMessage) => {
+    const onEvent = (raw: ServerMessage) => {
+      /* A run started late by an abandoned send() must not paint into the transcript after run.cancelled. */
+      if (eventsClosed) return;
+      /* Tools cut short by the operator's cancel end "cancelled" too; that is not Auto-review denying them. */
+      const event =
+        raw.type === "tool.end" && raw.denied && cancelGeneration !== gen ? { ...raw, denied: undefined } : raw;
       lastEventAt = nowFn();
       if (event.type === "run.error") sawRunError = true;
       if (event.type === "thinking.delta" && !thinkingOpen) {
@@ -630,15 +702,23 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
     };
 
     try {
-      let run: AdapterRun;
-      try {
-        run = await handle.send(job.text, onEvent, sendOpts);
-      } catch (err) {
-        if (isActiveRunError(err)) {
-          run = await handle.send(job.text, onEvent, { ...sendOpts, force: true });
-        } else {
+      const sending = (async () => {
+        try {
+          return await handle.send(job.text, onEvent, sendOpts);
+        } catch (err) {
+          if (isActiveRunError(err)) return handle.send(job.text, onEvent, { ...sendOpts, force: true });
           throw err;
         }
+      })();
+      let run: AdapterRun;
+      try {
+        run = await abortable(sending, starting.signal);
+      } catch (err) {
+        if (err instanceof RunAborted) {
+          /* send() may still start the run after we stopped waiting; stop it as soon as it does. */
+          void sending.then((late) => late.cancel()).catch(() => undefined);
+        }
+        throw err;
       }
       currentRun = run;
       if (cancelGeneration !== gen) {
@@ -656,7 +736,14 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       await closeThinkingIfOpen();
       if (cancelGeneration !== gen || status === "cancelled") await emit({ type: "run.cancelled" });
       else if (status === "error") {
-        if (!sawRunError) await emit({ type: "run.error", message: "Run failed", phase: "run" });
+        if (!sawRunError) {
+          const failure = waitErrors.get(run);
+          await emit({
+            type: "run.error",
+            message: failure instanceof Error && failure.message ? failure.message : "Run failed",
+            phase: failure instanceof AdapterError ? failure.phase : "run",
+          });
+        }
       } else await emit({ type: "run.done" });
     } catch (err) {
       if (cancelGeneration !== gen) {
@@ -675,7 +762,9 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       }
     }
   } finally {
+    eventsClosed = true;
     if (stallTimer) clearInterval(stallTimer);
+    if (startAbort === starting) startAbort = null;
     currentRun = null;
     currentJobId = null;
   }
@@ -701,6 +790,7 @@ export async function enqueueMessage(
 
   for (let attempt = 0; attempt < enqueueRotatingRetries; attempt++) {
     const prepared = await withQueueLock(async () => {
+      if (shuttingDown) return { kind: "skip" as const };
       if (rotating) return { kind: "retry" as const };
       const id = isMessageId(clientId) ? clientId : randomUUID();
       if (currentJobId === id || queue.some((j) => j.id === id)) return { kind: "skip" as const };
@@ -740,12 +830,16 @@ export async function enqueueMessage(
     }
 
     const queued = await withQueueLock(async () => {
-      if (rotating || identityGeneration !== prepared.generation) return { ok: false as const };
+      if (shuttingDown || rotating || identityGeneration !== prepared.generation) return { ok: false as const };
       const busy = runtime.busy || processing || queue.length > 0;
       queue.push({ id: prepared.id, text: trimmed, attachments, generation: prepared.generation, source });
       return { ok: true as const, busy };
     });
-    if (!queued.ok) return false;
+    if (!queued.ok) {
+      /* The message is already in a transcript and on every screen; it will not run, so take it back. */
+      await emit({ type: "user.retracted", id: prepared.id });
+      return false;
+    }
     if (queued.busy) await emit({ type: "run.queued" });
     await broadcastQueue();
     void processQueue().catch((err) => log("error", "processQueue", { error: String(err) }));
@@ -776,7 +870,10 @@ export async function cancelQueued(id: string): Promise<void> {
 export async function cancelRun(): Promise<void> {
   const gen = cancelGeneration + 1;
   cancelGeneration = gen;
-  if (!currentRun) return;
+  if (!currentRun) {
+    abortStartingRun();
+    return;
+  }
   try {
     await currentRun.cancel();
   } catch (err) {
@@ -814,7 +911,7 @@ export async function applyConfigPatch(
         } catch {
           /* ignore */
         }
-      }
+      } else abortStartingRun();
       await finishIdentityResetIfIdle();
     }
   }
@@ -969,6 +1066,7 @@ export async function exportLiveThread(id: string): Promise<{ filename: string; 
 }
 
 export async function initRuntime(): Promise<void> {
+  shuttingDown = false;
   await ensureLiveThread();
   const state = await loadState();
   runtime.agentId = usableAgentId(state.agentId) ? state.agentId : null;
@@ -1003,18 +1101,26 @@ export async function shutdownRuntime(): Promise<void> {
   bindScheduleRuntime(null);
   await cancelLoginJob().catch(() => undefined);
   await withQueueLock(async () => {
+    shuttingDown = true;
     queue = [];
     cancelGeneration += 1;
     identityGeneration += 1;
     pendingIdentityReset = false;
     resetFromAgent = null;
     rotating = false;
+  });
+  abortStartingRun();
+  const run = currentRun;
+  if (run) await cancelAndWait(run);
+  /* Let the queue loop see the cancel and leave; disposing under a run that is still starting leaks it. */
+  const deadline = nowFn() + runCancelTimeoutMs + 2_000;
+  while (processing && nowFn() < deadline) await new Promise((r) => setTimeout(r, 25));
+  await sessionInFlight?.catch(() => undefined);
+  await withQueueLock(async () => {
     processing = false;
     runtime.busy = false;
   });
-  const run = currentRun;
   currentRun = null;
-  if (run) await cancelAndWait(run);
   await disposeSession();
   runtime.agentId = null;
   runtime.fingerprint = null;

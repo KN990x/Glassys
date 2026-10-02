@@ -12,6 +12,9 @@ const control = vi.hoisted(() => {
   return {
     held: Promise.resolve(),
     sendHeld: Promise.resolve(),
+    waitError: null as string | null,
+    sessionClosed: false,
+    creates: 0,
     hold() {
       this.held = new Promise<void>((resolve) => {
         release = resolve;
@@ -53,14 +56,19 @@ const fakeAdapter: Adapter = {
     return { models: [{ id: "m", displayName: "M" }], source: "live" as const };
   },
   async create(): Promise<AdapterSession> {
+    control.creates += 1;
     return {
       agentId: "agent-1",
+      get closed() {
+        return control.sessionClosed;
+      },
       async send(text, onEvent) {
         await control.sendHeld;
         return pendingRun(`run-${text}`, async ({ isCancelled }) => {
           onEvent({ type: "text.delta", text: `echo:${text}` } as ServerMessage);
           await control.held;
           if (isCancelled()) return "cancelled";
+          if (control.waitError) throw new Error(control.waitError);
           return "finished";
         });
       },
@@ -97,6 +105,9 @@ describe("runtime queue", () => {
   beforeEach(async () => {
     control.go();
     control.goSend();
+    control.waitError = null;
+    control.sessionClosed = false;
+    control.creates = 0;
     dir = await mkdtemp(join(tmpdir(), "glassys-rt-"));
     process.env.GLASSYS_DATA_DIR = dir;
     const cfg = defaultConfig();
@@ -190,6 +201,75 @@ describe("runtime queue", () => {
     await drainEmit();
     const events = await readTranscript();
     expect(events.some((e) => e.type === "run.cancelled")).toBe(true);
+  });
+
+  it("cancels a run that is still inside send(), before the adapter returned it", async () => {
+    control.holdSend();
+    const { hub } = await import("./hub.js");
+    const live: string[] = [];
+    const orig = hub.broadcast.bind(hub);
+    hub.broadcast = (msg) => {
+      live.push(msg.type);
+      orig(msg);
+    };
+    try {
+      const { enqueueMessage, cancelRun, runtimeBusy, readTranscript, drainEmit } = await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(() => live.includes("run.start"));
+      await cancelRun();
+      await waitUntil(() => !runtimeBusy());
+      await drainEmit();
+      expect((await readTranscript()).some((e) => e.type === "run.cancelled")).toBe(true);
+      control.goSend();
+      await new Promise((r) => setTimeout(r, 50));
+      await drainEmit();
+      const events = await readTranscript();
+      expect(events.some((e) => e.type === "text.delta")).toBe(false);
+    } finally {
+      hub.broadcast = orig;
+    }
+  });
+
+  it("reports why wait() failed instead of a bare 'Run failed'", async () => {
+    control.waitError = "agent crashed: boom";
+    const { enqueueMessage, readTranscript } = await import("./runtime.js");
+    await enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.error"));
+    const err = (await readTranscript()).find((e) => e.type === "run.error");
+    expect(err && "message" in err ? err.message : "").toBe("agent crashed: boom");
+  });
+
+  it("retracts a message that was persisted but could not be queued", async () => {
+    const { hub } = await import("./hub.js");
+    const runtime = await import("./runtime.js");
+    const orig = hub.broadcast.bind(hub);
+    hub.broadcast = (msg) => {
+      orig(msg);
+      if (msg.type === "user.message") runtime.setRotatingForTests(true);
+    };
+    try {
+      expect(await runtime.enqueueMessage("lost", undefined, "11111111-1111-4111-8111-111111111111")).toBe(false);
+      runtime.setRotatingForTests(false);
+      await runtime.drainEmit();
+      const events = await runtime.readTranscript();
+      expect(events.some((e) => e.type === "user.retracted" && e.id === "11111111-1111-4111-8111-111111111111")).toBe(
+        true,
+      );
+    } finally {
+      hub.broadcast = orig;
+    }
+  });
+
+  it("opens a new session when the adapter reports the old one closed", async () => {
+    const { enqueueMessage, readTranscript } = await import("./runtime.js");
+    const done = async (n: number) => (await readTranscript()).filter((e) => e.type === "run.done").length >= n;
+    await enqueueMessage("one");
+    await waitUntil(() => done(1));
+    expect(control.creates).toBe(1);
+    control.sessionClosed = true;
+    await enqueueMessage("two");
+    await waitUntil(() => done(2));
+    expect(control.creates).toBe(2);
   });
 
   it("retracts a queued follow-up without cancelling the in-flight run", async () => {

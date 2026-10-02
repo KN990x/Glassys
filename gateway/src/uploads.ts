@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { MessageAttachment, TranscriptEvent } from "@glassys/protocol";
 import type { PromptAttachment } from "@glassys/adapter-contract";
-import { paths } from "./paths.js";
+import { log, paths } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { loadConfig } from "./config.js";
 import { loadState } from "./state.js";
@@ -128,7 +128,7 @@ const UPLOAD_DIR = ".glassys-uploads";
 
 function safeUploadName(id: string, name: string): string {
   const base = name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || "image";
-  return `${id.slice(0, 8)}-${base}`;
+  return `${id}-${base}`;
 }
 
 /** Copy uploads into `$cwd/.glassys-uploads` so sandboxed agents can read them. */
@@ -139,7 +139,12 @@ export async function materializeAttachments(
   if (!attachments?.length) return [];
   const destDir = join(cwd, UPLOAD_DIR);
   await mkdir(destDir, { recursive: true });
-  await writeFile(join(destDir, ".gitignore"), "*\n", "utf8").catch(() => undefined);
+  await writeFile(join(destDir, ".gitignore"), "*\n", "utf8").catch((err) => {
+    log("warn", "could not write .glassys-uploads/.gitignore; copied images may show up in git", {
+      cwd,
+      error: String(err),
+    });
+  });
   const out: PromptAttachment[] = [];
   for (const item of attachments) {
     const file = await readUploadBody(item.id);
@@ -213,6 +218,7 @@ export async function gcUploads(now = Date.now()): Promise<void> {
 }
 
 async function gcCwdUploads(referenced: Set<string>, now: number): Promise<void> {
+  /* Copies are `<id>-<name>`; older ones used the first 8 characters of the id. Matching on that prefix keeps both. */
   const prefixes = new Set([...referenced].map((id) => id.slice(0, 8)));
   const cwds = new Set<string>();
   try {

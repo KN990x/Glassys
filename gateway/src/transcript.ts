@@ -1,7 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 import type { TranscriptEvent } from "@glassys/protocol";
-import { ensureLiveThread, liveTranscriptPath, refreshLiveTitle } from "./threads.js";
+import { appendLiveTranscriptLine, ensureLiveThread, liveTranscriptPath, refreshLiveTitle } from "./threads.js";
 import { parseJsonl } from "./jsonl.js";
 
 export const TRANSCRIPT_SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024;
@@ -13,9 +12,7 @@ async function filePath(): Promise<string> {
 }
 
 export async function appendTranscript(event: TranscriptEvent): Promise<void> {
-  const path = await filePath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(event)}\n`, { encoding: "utf8", flag: "a" });
+  await appendLiveTranscriptLine(`${JSON.stringify(event)}\n`);
   if (event.type === "user.message") await refreshLiveTitle();
 }
 

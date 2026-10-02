@@ -132,7 +132,9 @@ async function ensureLiveThreadUnlocked(): Promise<string> {
     try {
       await rename(paths.legacyTranscript(), paths.threadTranscript(id));
     } catch {
-      await writeFile(paths.threadTranscript(id), "", "utf8");
+      /* The legacy file is not migrated again once state points here, so keep what was read. */
+      const body = legacy.map((e) => JSON.stringify(e)).join("\n");
+      await writeFile(paths.threadTranscript(id), body ? `${body}\n` : "", { encoding: "utf8", mode: 0o600 });
     }
     const meta = metaFromAgent(id, cfg.agent, state.agentId);
     meta.title = titleFrom(cfg.agent.cwd, legacy);
@@ -147,6 +149,16 @@ async function ensureLiveThreadUnlocked(): Promise<string> {
 
 export async function ensureLiveThread(): Promise<string> {
   return withThreads(() => ensureLiveThreadUnlocked());
+}
+
+/** Append to the live transcript under the same lock as rotate/switch, so a line never lands in a thread just archived. */
+export async function appendLiveTranscriptLine(line: string): Promise<void> {
+  return withThreads(async () => {
+    const id = await ensureLiveThreadUnlocked();
+    const path = paths.threadTranscript(id);
+    await mkdir(paths.threadDir(id), { recursive: true });
+    await writeFile(path, line, { encoding: "utf8", flag: "a", mode: 0o600 });
+  });
 }
 
 async function archiveLiveThreadUnlocked(agentId: string | null, agent?: AgentConfig): Promise<ThreadMeta | null> {
