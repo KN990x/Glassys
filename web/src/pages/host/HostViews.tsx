@@ -61,19 +61,27 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const generation = useRef(0);
   const reload = useCallback(async () => {
+    const gen = ++generation.current;
     setLoading(true);
     try {
-      setData(await load());
+      const next = await load();
+      if (gen !== generation.current) return;
+      setData(next);
       setError("");
     } catch (err) {
+      if (gen !== generation.current) return;
       setError(operatorError(err instanceof Error ? err.message : t("host.loadFailed"), t));
     } finally {
-      setLoading(false);
+      if (gen === generation.current) setLoading(false);
     }
   }, deps);
   useEffect(() => {
     void reload();
+    return () => {
+      generation.current += 1;
+    };
   }, [reload]);
   return { data, error, loading, reload };
 }
@@ -473,28 +481,45 @@ export function LogsView({
     [source, caps?.services],
   );
 
+  /* Bumped by every full load and filter change; a reply from an older
+     generation belongs to another unit or priority and is dropped. */
+  const generation = useRef(0);
+  const fullLoads = useRef(0);
+
   const load = useCallback(async () => {
+    const gen = ++generation.current;
+    fullLoads.current += 1;
     setLoading(true);
     try {
       const page = await source.hostLogs({ unit: unit || undefined, priority: priority === "all" ? undefined : priority, lines: 300 });
+      if (gen !== generation.current) return;
       cursor.current = page.cursor;
       setEntries(page.entries);
       setSelected(new Set());
       setError("");
     } catch (err) {
+      if (gen !== generation.current) return;
       setError(operatorError(err instanceof Error ? err.message : t("host.loadFailed"), t));
     } finally {
-      setLoading(false);
+      fullLoads.current -= 1;
+      if (gen === generation.current) setLoading(false);
     }
   }, [source, unit, priority, t]);
 
   useEffect(() => {
     if (caps?.logs) void load();
+    return () => {
+      generation.current += 1;
+    };
   }, [load, caps?.logs]);
 
   useEffect(() => {
     if (!follow || !caps?.logs) return;
+    let inFlight = false;
     const id = setInterval(async () => {
+      if (inFlight || fullLoads.current > 0) return;
+      inFlight = true;
+      const gen = generation.current;
       try {
         const page = await source.hostLogs({
           unit: unit || undefined,
@@ -502,10 +527,13 @@ export function LogsView({
           cursor: cursor.current,
           lines: 500,
         });
+        if (gen !== generation.current) return;
         cursor.current = page.cursor ?? cursor.current;
         if (page.entries.length) setEntries((cur) => [...(cur ?? []), ...page.entries].slice(-MAX_LOG_ROWS));
       } catch {
         /* the next tick retries */
+      } finally {
+        inFlight = false;
       }
     }, FOLLOW_MS);
     return () => clearInterval(id);

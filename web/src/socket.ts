@@ -10,6 +10,7 @@ export function openSocket(handlers: {
   let fatal = false;
   let ws: WebSocket | null = null;
   let pingTimer: ReturnType<typeof setInterval> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
   let keepaliveMs = 25_000;
 
@@ -28,6 +29,7 @@ export function openSocket(handlers: {
   };
 
   const connect = () => {
+    retryTimer = undefined;
     if (closed || fatal) return;
     handlers.onState(attempt === 0 ? "connecting" : "reconnecting");
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -35,7 +37,6 @@ export function openSocket(handlers: {
     ws = socket;
 
     socket.addEventListener("open", () => {
-      attempt = 0;
       startPing(socket);
       socket.send(JSON.stringify({ type: "hello", protocolVersion: PROTOCOL_VERSION } satisfies ClientMessage));
     });
@@ -65,6 +66,7 @@ export function openSocket(handlers: {
         handlers.onState("error");
         socket.close();
       } else if (msg.type === "auth.ok") {
+        attempt = 0;
         handlers.onState("connected");
       }
       handlers.onEvent(msg);
@@ -79,8 +81,9 @@ export function openSocket(handlers: {
       clearPing();
       if (closed || fatal) return;
       attempt += 1;
+      handlers.onState("reconnecting");
       const wait = Math.min(10_000, 500 * 2 ** attempt);
-      setTimeout(connect, wait);
+      retryTimer = setTimeout(connect, wait);
     });
   };
 
@@ -95,6 +98,8 @@ export function openSocket(handlers: {
     close: () => {
       closed = true;
       clearPing();
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = undefined;
       ws?.close();
     },
     setKeepalive: (seconds) => {

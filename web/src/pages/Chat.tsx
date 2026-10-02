@@ -39,6 +39,7 @@ import { ChatMain } from "../components/ChatMain";
 import { RunStatus } from "../components/RunStatus";
 import { useConfirm } from "../components/ConfirmDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
+import { overlayPopped, popOverlay, pushOverlay } from "../overlayHistory";
 
 const COMPOSER_MAX_PX = 160;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
@@ -48,22 +49,6 @@ const INSPECTOR_QUERY = "(min-width: 1280px)";
 const OPS_CHIP_IDS = ["status", "disk", "failed-units"] as const;
 
 export { shouldSubmitOnEnter };
-
-function overlayState(): { glassysOverlay?: string } | null {
-  const st = history.state;
-  if (st && typeof st === "object" && "glassysOverlay" in st) return st as { glassysOverlay?: string };
-  return null;
-}
-
-function pushOverlay(kind: "threads" | "settings") {
-  if (overlayState()) history.replaceState({ glassysOverlay: kind }, "");
-  else history.pushState({ glassysOverlay: kind }, "");
-}
-
-function popOverlay() {
-  if (overlayState()) history.back();
-}
-
 
 export function resizeComposer(el: HTMLTextAreaElement, maxPx = COMPOSER_MAX_PX): void {
   if (!el.value) {
@@ -177,6 +162,8 @@ export function Chat({
   }, []);
   const onLogoutRef = useRef(onLogout);
   onLogoutRef.current = onLogout;
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const snapshotReadyRef = useRef(false);
 
@@ -218,7 +205,7 @@ export function Chat({
           return;
         }
         if (msg.type === "config.error") {
-          setConfigError(operatorError(msg.message, t));
+          setConfigError(operatorError(msg.message, tRef.current));
           return;
         }
         if (msg.type === "threads.snapshot") {
@@ -329,11 +316,12 @@ export function Chat({
   useEffect(() => {
     const name = config.space.name.trim() || "Glassys";
     const th = threads.find((item) => item.id === currentThreadId);
-    document.title = th?.title ? `${th.title} · ${name}` : name;
+    const lead = view === "chat" ? th?.title : t(`nav.${view}`);
+    document.title = lead ? `${lead} · ${name}` : name;
     return () => {
       document.title = name;
     };
-  }, [config.space.name, threads, currentThreadId]);
+  }, [config.space.name, threads, currentThreadId, view, t]);
 
   useEffect(() => {
     if (!draftModel) return;
@@ -344,9 +332,14 @@ export function Chat({
   }, [config.agent.model, config.agent.modelParams, draftModel]);
 
   useEffect(() => {
+    pinToBottom.current = true;
+    setAtBottom(true);
+  }, [currentThreadId, view]);
+
+  useEffect(() => {
     if (!pinToBottom.current) return;
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-  }, [blocks, busy]);
+  }, [blocks, busy, currentThreadId, view]);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -439,15 +432,12 @@ export function Chat({
         cancelRun();
         return;
       }
-      if (settings) return;
-      if (threadOpen) closeThreads();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
     settings,
     threadOpen,
-    closeThreads,
     paletteOpen,
     slashOpen,
     searchOpen,
@@ -461,6 +451,7 @@ export function Chat({
 
   useEffect(() => {
     function onPop() {
+      overlayPopped();
       setSettings(false);
       setSettingsFocus(undefined);
       setSchedulePrefill("");
