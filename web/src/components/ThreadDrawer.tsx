@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useT } from "../i18n";
 import { IconClose, IconPlus } from "./Icon";
 import { ThreadList, type ThreadListProps } from "./ThreadList";
+import { useDialogFocus } from "../useDialogFocus";
 
 /**
  * Mobile sheet around the shared thread list. The desktop rail renders the same
@@ -18,45 +19,23 @@ export function ThreadDrawer({
 }) {
   const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  useDialogFocus(panelRef, onClose, closeRef);
 
   useEffect(() => {
-    closeRef.current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const root = document.querySelector(".thread-panel");
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab" || !root) return;
-      const nodes = [
-        ...root.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
-      ].filter((el) => !el.hasAttribute("disabled"));
-      if (!nodes.length) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last?.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
-    }
-    window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="thread-drawer" role="dialog" aria-modal="true" aria-labelledby="threads-title">
       {/* A full-viewport <button> used to sit in the tab order and paint a
           viewport-wide focus ring; the real close control is in the header. */}
       <div className="thread-scrim" onClick={onClose} aria-hidden="true" />
-      <aside className="thread-panel">
+      <aside className="thread-panel" ref={panelRef}>
         <header>
           <h2 id="threads-title">{t("threads.title")}</h2>
           <button

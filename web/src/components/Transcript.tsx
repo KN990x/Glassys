@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import type { MessageAttachment, PromptTemplate, QueueItem } from "@glassys/protocol";
 import type { Block, ToolBlock } from "../transcript";
 import { useT } from "../i18n";
@@ -134,6 +134,9 @@ export function Transcript({
 }: TranscriptProps) {
   const t = useT();
   const grouped = groupBlocks(blocks);
+  const lastItem = grouped[grouped.length - 1] as Block | undefined;
+  const liveId = busy && lastItem?.kind === "text" ? lastItem.id : undefined;
+  const announcement = useClosedReply(allBlocks, liveId);
 
   return (
     <>
@@ -169,7 +172,7 @@ export function Transcript({
       {search.trim() && blocks.length === 0 && allBlocks.length > 0 && (
         <p className="empty">{t("chat.searchEmpty")}</p>
       )}
-      {grouped.map((item, i) => {
+      {grouped.map((item) => {
         const b = item as Block;
         return (
           <TranscriptRow
@@ -177,7 +180,7 @@ export function Transcript({
             item={item}
             search={search}
             pending={b.kind === "user" && Boolean(b.messageId && queuedIds.has(b.messageId))}
-            live={Boolean(busy) && i === grouped.length - 1 && b.kind === "text"}
+            live={item.id === liveId}
             locale={locale}
             thinkingDefault={thinkingDefault}
             shellLines={shellLines}
@@ -185,8 +188,27 @@ export function Transcript({
           />
         );
       })}
+      <p className="visually-hidden" role="status">
+        {announcement}
+      </p>
     </>
   );
+}
+
+const ANNOUNCE_MAX_CHARS = 1500;
+
+/** The text of a streamed reply once it stops streaming, for the status region. */
+function useClosedReply(blocks: Block[], liveId: string | undefined): string {
+  const [text, setText] = useState("");
+  const prev = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const closed = prev.current;
+    prev.current = liveId;
+    if (!closed || closed === liveId) return;
+    const block = blocks.find((b) => b.id === closed);
+    if (block?.kind === "text") setText(block.text.slice(0, ANNOUNCE_MAX_CHARS));
+  }, [liveId, blocks]);
+  return text;
 }
 
 type Row = ReturnType<typeof groupBlocks>[number];

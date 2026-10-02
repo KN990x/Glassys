@@ -1019,7 +1019,15 @@ export function Chat({
       }
       inspectorAsColumn={hasInspectorColumn}
       onCloseInspector={() => toggleActivity(false)}
-      bottomNav={!isDesktop ? <BottomNav active={navTarget} onSelect={navigate} /> : null}
+      bottomNav={
+        !isDesktop ? (
+          <BottomNav
+            active={navTarget}
+            onSelect={navigate}
+            buttonRefs={{ threads: threadBtn, settings: settingsBtn }}
+          />
+        ) : null
+      }
       overlays={
         <>
           {threadOpen && !isDesktop && (

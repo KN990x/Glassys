@@ -24,9 +24,12 @@ export function RunStatus({
 }) {
   const t = useT();
   return (
-    <div className="composer-status" aria-live="polite">
+    <div className="composer-status">
       <span className="pulse" aria-hidden />
-      <span className="status-shimmer">{t("status.running")}</span>
+      {/* The clock ticks every second; it stays outside the live region. */}
+      <span className="status-shimmer" role="status">
+        {t("status.running")}
+      </span>
       {startedAt ? (
         <span className="muted">
           <Elapsed startedAt={startedAt} />

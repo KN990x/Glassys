@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { useT } from "../i18n";
+import { useDialogFocus } from "../useDialogFocus";
 
 /**
  * The frame every screen after sign-in sits in: an optional rail, the centre
@@ -50,13 +51,23 @@ export function AppShell({
         inspectorAsColumn ? (
           inspector
         ) : (
-          <div className="inspector-sheet" role="dialog" aria-modal="true" aria-label={t("nav.activity")}>
-            <div className="thread-scrim" onClick={onCloseInspector} aria-hidden="true" />
+          <InspectorSheet label={t("nav.activity")} onClose={onCloseInspector}>
             {inspector}
-          </div>
+          </InspectorSheet>
         )
       ) : null}
       {overlays}
+    </div>
+  );
+}
+
+function InspectorSheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref, onClose);
+  return (
+    <div className="inspector-sheet" role="dialog" aria-modal="true" aria-label={label} ref={ref} tabIndex={-1}>
+      <div className="thread-scrim" onClick={onClose} aria-hidden="true" />
+      {children}
     </div>
   );
 }

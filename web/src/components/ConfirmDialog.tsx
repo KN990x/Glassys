@@ -31,6 +31,7 @@ export function ConfirmDialog({
   onResolveRef.current = onResolve;
 
   useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     confirmRef.current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -59,6 +60,7 @@ export function ConfirmDialog({
     return () => {
       window.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = prev;
+      if (opener?.isConnected) opener.focus();
     };
   }, []);
 

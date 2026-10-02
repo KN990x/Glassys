@@ -128,6 +128,7 @@
   "chat.search": "Search this thread",
   "chat.searchEmpty": "No matches in this thread.",
   "chat.export": "Export",
+  "chat.transcript": "Conversation",
   "chat.transcriptTruncated": "Older messages were omitted. Export the thread for the full transcript.",
   "chat.opsChips": "Host checks",
   "chat.jumpBottom": "Jump to latest",

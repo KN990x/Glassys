@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import type { PromptTemplate } from "@glassys/protocol";
 import { Kbd } from "./Primitives";
@@ -46,6 +46,8 @@ export function CommandPalette({
   const t = useT();
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const optionId = (i: number) => `${listId}-opt-${i}`;
   const filtered = useMemo(() => filterPaletteItems(items, query), [items, query]);
   const ids = paletteItemIds(filtered);
 
@@ -63,6 +65,13 @@ export function CommandPalette({
       if (e.key === "Escape") {
         e.preventDefault();
         onClose();
+        return;
+      }
+      /* Options are not tab stops (the input drives them), so Tab would leave
+         the modal palette for the page behind it. */
+      if (e.key === "Tab" && !inline) {
+        e.preventDefault();
+        inputRef.current?.focus();
         return;
       }
       if (e.key === "ArrowDown") {
@@ -85,7 +94,12 @@ export function CommandPalette({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, filtered, active, onClose]);
+  }, [open, filtered, active, onClose, inline]);
+
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(optionId(active))?.scrollIntoView?.({ block: "nearest" });
+  }, [open, active]);
 
   if (!open) return null;
 
@@ -97,7 +111,7 @@ export function CommandPalette({
   }
 
   const panel = (
-    <div className={`palette-panel${inline ? " palette-inline" : ""}`} role={inline ? "listbox" : undefined}>
+    <div className={`palette-panel${inline ? " palette-inline" : ""}`}>
       {!hideSearch && (
         <span className="search-field palette-search">
           <IconSearch />
@@ -108,22 +122,31 @@ export function CommandPalette({
             onChange={(e) => onQuery?.(e.target.value)}
             placeholder={t("palette.placeholder")}
             aria-label={t("palette.placeholder")}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={filtered[active] ? optionId(active) : undefined}
           />
         </span>
       )}
-      <ul className="palette-list">
+      <ul className="palette-list" role="listbox" id={listId} aria-label={t("palette.title")}>
         {filtered.map((item, i) => {
           const header = i === 0 || item.group !== filtered[i - 1]?.group;
           return (
             <Fragment key={item.id}>
               {header && (
-                <li className="muted palette-group" aria-hidden="true">
+                <li className="muted palette-group" role="presentation" aria-hidden="true">
                   {t(`palette.group.${item.group}`)}
                 </li>
               )}
-              <li>
+              <li role="none">
                 <button
                   type="button"
+                  id={optionId(i)}
+                  role="option"
+                  aria-selected={i === active}
+                  tabIndex={-1}
                   className={`ghost picker-item${i === active ? " current" : ""}`}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => choose(i)}
@@ -141,7 +164,11 @@ export function CommandPalette({
             </Fragment>
           );
         })}
-        {filtered.length === 0 && <li className="muted palette-empty">{t("palette.empty")}</li>}
+        {filtered.length === 0 && (
+          <li className="muted palette-empty" role="presentation">
+            {t("palette.empty")}
+          </li>
+        )}
       </ul>
       {!inline && (
         <footer className="palette-foot muted">

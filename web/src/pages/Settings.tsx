@@ -39,6 +39,7 @@ import { SchedulesTab, type ScheduleJob } from "./settings/SchedulesTab";
 import { UpdatesTab, type UpdateInfo } from "./settings/UpdatesTab";
 import { PhoneTab } from "./settings/PhoneTab";
 import { UsageTab } from "./settings/UsageTab";
+import { useDialogFocus } from "../useDialogFocus";
 
 export type SettingsTab =
   | "appearance"
@@ -163,35 +164,14 @@ export function Settings({
     setTab(focusSection);
   }, [focusSection]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, () => void requestCloseRef.current(), closeRef);
+
   useEffect(() => {
-    closeRef.current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const root = document.querySelector(".settings-dialog");
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        void requestCloseRef.current();
-        return;
-      }
-      if (e.key !== "Tab" || !root) return;
-      const nodes = [...root.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      )].filter((el) => !el.hasAttribute("disabled"));
-      if (!nodes.length) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last?.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
-    }
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
     };
   }, []);
 
@@ -453,6 +433,7 @@ export function Settings({
     <div className="settings-overlay" onClick={() => void requestClose()}>
       <div
         className="settings-dialog"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"

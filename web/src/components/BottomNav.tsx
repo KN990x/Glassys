@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { useT } from "../i18n";
 import { IconFiles, IconHistory, IconOverview, IconSettings, IconThreads } from "./Icon";
 
@@ -12,9 +12,12 @@ export type NavTarget = "chat" | "threads" | "host" | "files" | "settings";
 export function BottomNav({
   active,
   onSelect,
+  buttonRefs,
 }: {
   active: NavTarget;
   onSelect: (target: NavTarget) => void;
+  /** Sheets opened from a tab hand focus back to it when they close. */
+  buttonRefs?: Partial<Record<NavTarget, Ref<HTMLButtonElement>>>;
 }) {
   const t = useT();
   const items: Array<{ id: NavTarget; label: string; glyph: ReactNode }> = [
@@ -29,6 +32,7 @@ export function BottomNav({
       {items.map((item) => (
         <button
           key={item.id}
+          ref={buttonRefs?.[item.id]}
           type="button"
           className={`tabbar-item${active === item.id ? " current" : ""}`}
           aria-current={active === item.id ? "page" : undefined}

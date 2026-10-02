@@ -34,7 +34,9 @@ export function ChatMain({
       <AlertStack alerts={alerts} />
       <AlertStack alerts={notices} />
       <div className="transcript" ref={scrollerRef} onScroll={onScroll}>
-        <div className="transcript-inner">
+        {/* A log, but not a live one: streamed tokens would be read one by one.
+            Transcript announces each reply once it closes. */}
+        <div className="transcript-inner" role="log" aria-live="off" aria-label={t("chat.transcript")}>
           <Transcript {...transcript} />
         </div>
         {!atBottom && (

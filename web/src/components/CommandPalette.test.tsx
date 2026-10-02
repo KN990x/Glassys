@@ -62,4 +62,37 @@ describe("CommandPalette groups", () => {
     });
     expect(host.querySelector("button.current")?.textContent).toContain("Host status");
   });
+
+  it("points the input at the active option and keeps Tab inside", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    const items: PaletteItem[] = [
+      { id: "new", group: "product", label: "New thread", run: () => undefined },
+      { id: "tpl:status", group: "template", label: "Host status", run: () => undefined },
+    ];
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <CommandPalette open query="" items={items} onClose={() => undefined} onQuery={() => undefined} />
+        </I18nProvider>,
+      );
+    });
+    const input = host.querySelector<HTMLInputElement>('input[role="combobox"]');
+    expect(input).not.toBeNull();
+    const first = host.querySelector('[role="option"][aria-selected="true"]');
+    expect(input?.getAttribute("aria-activedescendant")).toBe(first?.id);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    const second = host.querySelector('[role="option"][aria-selected="true"]');
+    expect(second?.textContent).toContain("Host status");
+    expect(input?.getAttribute("aria-activedescendant")).toBe(second?.id);
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    await act(async () => {
+      window.dispatchEvent(tab);
+    });
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
 });

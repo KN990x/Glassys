@@ -14,7 +14,8 @@ export type ActivityTab = "commands" | "files";
 export function revealBlock(id: string): void {
   const node = document.getElementById(`tool-${id}`);
   if (!node) return;
-  node.scrollIntoView({ block: "center", behavior: "smooth" });
+  const reduce = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  node.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
   node.classList.add("flash");
   setTimeout(() => node.classList.remove("flash"), 1200);
 }
