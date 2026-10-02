@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { gatewayListenPort, nodeMeetsMin } from "./host-service.mjs";
+import { gatewayListenPort, isRoot, nodeMeetsMin } from "./host-service.mjs";
 
 export const DEFAULT_REPO = "https://github.com/KN990x/Glassys.git";
 
@@ -73,6 +73,9 @@ If this file is already inside a clone, that clone is used.
 Otherwise clones ${DEFAULT_REPO} into ./glassys (or $GLASSYS_DIR).
 `);
     return;
+  }
+  if (isRoot(opts.uid ?? process.getuid?.())) {
+    fail("Do not install Glassys as root. Run this as the user the agent should act as.");
   }
   if (!nodeMeetsMin(opts.nodeVersion || process.versions.node)) {
     fail(`Glassys needs Node.js 22.13+ (this is v${opts.nodeVersion || process.versions.node}).`);

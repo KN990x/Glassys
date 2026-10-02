@@ -97,7 +97,9 @@ export async function fetchBehind(): Promise<{ behind: number; sha: string; bran
   try {
     await git(["fetch", "--quiet"], GIT_TIMEOUT_MS);
   } catch (err) {
-    throw new HttpError(400, err instanceof Error ? err.message : "git fetch failed");
+    /* git's stderr can name the remote URL with credentials in it; keep it in the log. */
+    log("warn", "git fetch failed", { error: String(err) });
+    throw new HttpError(400, "git fetch failed");
   }
   let behind = 0;
   try {
@@ -120,7 +122,7 @@ export async function readUpgradeStatus(): Promise<UpgradeStatus> {
 
 export async function writeUpgradeStatus(status: UpgradeStatus): Promise<void> {
   await mkdir(dirname(paths.upgradeStatus()), { recursive: true });
-  await writeFile(paths.upgradeStatus(), JSON.stringify(status, null, 2), "utf8");
+  await writeFile(paths.upgradeStatus(), JSON.stringify(status, null, 2), { encoding: "utf8", mode: 0o600 });
 }
 
 export async function adminUpdateSnapshot(): Promise<{

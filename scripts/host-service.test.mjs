@@ -4,6 +4,7 @@ import {
   gatewayListenPort,
   graphicalEnvFrom,
   healthProbeHosts,
+  isRoot,
   nodeMeetsMin,
   renderLaunchdPlist,
   renderSystemdUserUnit,
@@ -60,6 +61,17 @@ test("systemd user unit restarts and uses default.target", () => {
   assert.match(unit, /ExecStart=\/opt\/homebrew\/bin\/node \/opt\/glassys\/gateway\/dist\/index.js/);
   assert.doesNotMatch(unit, /CURSOR_API_KEY|User=glassys/);
   assert.doesNotMatch(unit, /Environment=DISPLAY=/);
+});
+
+test("systemd user unit quotes a working directory with spaces", () => {
+  const unit = renderSystemdUserUnit({ ...opts, cwd: "/home/op/My Apps/glassys" });
+  assert.match(unit, /WorkingDirectory="\/home\/op\/My Apps\/glassys"/);
+});
+
+test("isRoot only flags uid 0", () => {
+  assert.equal(isRoot(0), true);
+  assert.equal(isRoot(501), false);
+  assert.equal(isRoot(undefined), false);
 });
 
 test("systemd user unit inherits graphical session env when present", () => {

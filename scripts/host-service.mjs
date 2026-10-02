@@ -118,7 +118,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=${opts.cwd}
+WorkingDirectory=${systemdQuote(opts.cwd)}
 ${env.map((line) => `Environment=${systemdQuote(line)}`).join("\n")}
 ExecStart=${systemdQuote(opts.node)} ${systemdQuote(opts.gateway)}
 Restart=always
@@ -225,6 +225,10 @@ export function resolveInstallPaths(env = process.env, root = repoRootFrom()) {
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+
+export function isRoot(uid = process.getuid?.()) {
+  return uid === 0;
 }
 
 function run(cmd, args, opts = {}) {
@@ -338,7 +342,7 @@ function statusDarwin() {
 }
 
 function installLinux(opts) {
-  mkdirSync(opts.dataDir, { recursive: true });
+  mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
   mkdirSync(dirname(systemdUserUnitPath(opts.home)), { recursive: true });
   const unit = systemdUserUnitPath(opts.home);
   writeFileSync(unit, renderSystemdUserUnit(opts));
@@ -413,13 +417,17 @@ print       write the unit/plist to stdout (no install)
     return;
   }
 
+  if ((cmd === "install" || cmd === "upgrade") && isRoot()) {
+    fail("Do not install Glassys as root. Run this as the user the agent should act as.");
+  }
+
   if (cmd === "upgrade") {
     const strict = process.env.GLASSYS_UPGRADE_STRICT === "1";
     writeUpgradeStatus(opts.dataDir, "pulling");
     try {
       upgradeRepo(root, { strict, dataDir: opts.dataDir });
       writeUpgradeStatus(opts.dataDir, "restart");
-      mkdirSync(opts.dataDir, { recursive: true });
+      mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
       if (platform === "darwin") installDarwin(opts);
       else installLinux(opts);
       writeUpgradeStatus(opts.dataDir, "idle");
@@ -433,14 +441,14 @@ print       write the unit/plist to stdout (no install)
   if (cmd !== "install") fail(`Unknown command: ${cmd}`);
 
   ensureBuilt(root);
-  mkdirSync(opts.dataDir, { recursive: true });
+  mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
   if (platform === "darwin") installDarwin(opts);
   else installLinux(opts);
 }
 
 function writeUpgradeStatus(dataDir, phase, error) {
   try {
-    mkdirSync(dataDir, { recursive: true });
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     writeFileSync(
       join(dataDir, "upgrade-status.json"),
       JSON.stringify({ phase, error, startedAt: new Date().toISOString() }, null, 2),

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
 import { open, lstat, readdir, readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -421,13 +422,16 @@ export async function previewFile(raw: string): Promise<FilePreview> {
   if (!st.isFile()) throw new HttpError(400, "not a regular file");
   let handle;
   try {
-    handle = await open(file, "r");
+    /* `file` is already a real path; refusing a link here closes the gap between that check and the open. */
+    handle = await open(file, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "EACCES" || code === "EPERM") throw new HttpError(403, "permission denied");
     throw new HttpError(404, "not found");
   }
   try {
+    const opened = await handle.stat();
+    if (opened.dev !== st.dev || opened.ino !== st.ino) throw new HttpError(404, "not found");
     const length = Math.min(st.size, MAX_PREVIEW_BYTES);
     const buf = Buffer.alloc(length);
     const { bytesRead } = await handle.read(buf, 0, length, 0);

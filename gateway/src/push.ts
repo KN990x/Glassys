@@ -1,4 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
+import { lookup as dnsLookup } from "node:dns/promises";
+import { BlockList, isIP } from "node:net";
 import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import webpush from "web-push";
@@ -67,8 +69,69 @@ export async function listPushSubscriptions(): Promise<PushSubscriptionRecord[]>
   return withPushLock(readSubs);
 }
 
+const blocked = new BlockList();
+for (const [net, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const) {
+  blocked.addSubnet(net, prefix, "ipv4");
+}
+for (const [net, prefix] of [
+  ["::", 128],
+  ["::1", 128],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["ff00::", 8],
+] as const) {
+  blocked.addSubnet(net, prefix, "ipv6");
+}
+
+export function isPrivateAddress(address: string): boolean {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (mapped) return blocked.check(mapped[1]!, "ipv4");
+  const family = isIP(address);
+  if (family === 4) return blocked.check(address, "ipv4");
+  if (family === 6) return blocked.check(address, "ipv6");
+  return true;
+}
+
+type Lookup = (host: string) => Promise<Array<{ address: string }>>;
+let lookupHost: Lookup = (host) => dnsLookup(host, { all: true, verbatim: true });
+
+export function setPushLookupForTests(fn: Lookup | null): void {
+  lookupHost = fn ?? ((host) => dnsLookup(host, { all: true, verbatim: true }));
+}
+
+/**
+ * A push endpoint is a URL the gateway will POST to. Only public https hosts: anything else would
+ * let a stored subscription make the gateway call services on the host or the LAN.
+ */
+export async function assertPublicPushEndpoint(endpoint: string): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    throw new Error("invalid subscription");
+  }
+  if (url.protocol !== "https:") throw new Error("push endpoint must be https");
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const addresses = isIP(host) ? [{ address: host }] : await lookupHost(host).catch(() => []);
+  if (!addresses.length) throw new Error("push endpoint host does not resolve");
+  if (addresses.some((a) => isPrivateAddress(a.address))) throw new Error("push endpoint must be a public host");
+}
+
 export async function savePushSubscription(sub: PushSubscriptionRecord): Promise<void> {
   if (!sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) throw new Error("invalid subscription");
+  await assertPublicPushEndpoint(sub.endpoint);
   await withPushLock(async () => {
     const cur = await readSubs();
     const next = cur.filter((s) => s.endpoint !== sub.endpoint);
@@ -123,12 +186,18 @@ function payloadFor(event: ServerMessage, locale: string): { title: string; body
   }
 }
 
+const PUSH_SEND_TIMEOUT_MS = 10_000;
+
 async function defaultSend(sub: PushSubscriptionRecord, payload: string, vapid: VapidKeys): Promise<{ statusCode?: number }> {
   try {
+    await assertPublicPushEndpoint(sub.endpoint);
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: sub.keys },
       payload,
-      { vapidDetails: { subject: vapid.subject, publicKey: vapid.publicKey, privateKey: vapid.privateKey } },
+      {
+        vapidDetails: { subject: vapid.subject, publicKey: vapid.publicKey, privateKey: vapid.privateKey },
+        timeout: PUSH_SEND_TIMEOUT_MS,
+      },
     );
     return { statusCode: 201 };
   } catch (err) {

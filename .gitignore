@@ -14,6 +14,7 @@ web/dev-dist/
 coverage/
 *.tsbuildinfo
 .vite/
+.glassys-uploads/
 package-lock.json
 yarn.lock
 bun.lockb

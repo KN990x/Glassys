@@ -11,6 +11,11 @@ need_bin() {
   fi
 }
 
+if [[ "$(id -u)" == "0" ]]; then
+  echo "Do not install Glassys as root. Run this as the user the agent should act as." >&2
+  exit 1
+fi
+
 need_bin git
 need_bin node
 

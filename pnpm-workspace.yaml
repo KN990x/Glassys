@@ -20,5 +20,11 @@ minimumReleaseAge: 10080
 # Node < 18 (node-headers-polyfill.js), and Glassys requires Node >= 22.13, so the
 # vulnerable code never runs. This floor closes the advisories without waiting on either
 # parent; undici 6 still exports `Headers`, and 6 rather than 7 moves the least.
+#
+# fast-uri and ip-address arrive through @anthropic-ai/claude-agent-sdk >
+# @modelcontextprotocol/sdk (ajv, express-rate-limit), whose ranges already accept the
+# patched releases; the floors only stop the lockfile from holding the vulnerable ones.
 overrides:
   undici: '^6.28.1'
+  fast-uri: '^3.1.8'
+  ip-address: '^10.7.1'

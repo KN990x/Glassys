@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { loadConfig } from "./config.js";
 import { listenBind, listenPort } from "./listen.js";
 import { handleHttp } from "./http.js";
-import { log, webDir } from "./paths.js";
+import { log, secureDataDir, webDir } from "./paths.js";
 import { initRuntime, shutdownRuntime } from "./runtime.js";
 import { setRestartHandler } from "./restart.js";
 import { loadSecrets, clearBlankCredentialEnv, secretsFlags } from "./secrets.js";
@@ -12,6 +12,7 @@ import { attachWs, closeWs } from "./ws.js";
 
 async function main(): Promise<void> {
   clearBlankCredentialEnv();
+  await secureDataDir();
   await loadSecrets();
   const cfg = await loadConfig();
   await initRuntime();

@@ -16,6 +16,7 @@ import {
   verifyRequestSession,
 } from "./auth.js";
 import { attemptLogin } from "./login-limit.js";
+import { log } from "./paths.js";
 import { revalidateSockets } from "./sessions.js";
 import { hashPassword, loadSecrets, operatorPasswordError, patchSecrets, secretsFlags } from "./secrets.js";
 import { originAllowed, setCors, setupOriginAllowed } from "./cors.js";
@@ -136,6 +137,9 @@ function clientIp(req: IncomingMessage): string {
 }
 
 async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  /* Every response, API and static alike: no MIME sniffing, and a published instance is never indexed. */
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
   await setCors(req, res);
   const url = new URL(req.url || "/", "http://localhost");
   const path = url.pathname;
@@ -688,7 +692,9 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
         send(res, err.status, { error: err.message });
         return true;
       }
-      send(res, 502, { error: err instanceof Error ? err.message : "probe failed" });
+      /* A probe's raw error carries paths and command output; the PWA only needs to know it failed. */
+      log("warn", "host probe failed", { path, error: String(err) });
+      send(res, 502, { error: "probe failed" });
     }
     return true;
   }

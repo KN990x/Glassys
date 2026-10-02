@@ -79,8 +79,8 @@ export async function saveUpload(body: Buffer, mime: string, name: string): Prom
   const id = randomUUID();
   const base = name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || (isImageMime(safeMime) ? "image" : "file");
   await mkdir(paths.uploads(), { recursive: true });
-  await writeFile(dataPath(id), body);
-  await writeFile(metaPath(id), JSON.stringify({ id, mime: safeMime, name: base }), "utf8");
+  await writeFile(dataPath(id), body, { mode: 0o600 });
+  await writeFile(metaPath(id), JSON.stringify({ id, mime: safeMime, name: base }), { encoding: "utf8", mode: 0o600 });
   return { id, mime: safeMime, name: base };
 }
 

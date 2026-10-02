@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { chmod, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,6 +26,20 @@ export const paths = {
   upgradeStatus: () => join(defaultDataDir(), "upgrade-status.json"),
   upgradeLog: () => join(defaultDataDir(), "upgrade.log"),
 };
+
+/**
+ * The data dir holds secrets, transcripts and uploads: owner-only. Applied on every start, so a
+ * directory created by an older build with a looser mode is tightened too.
+ */
+export async function secureDataDir(): Promise<void> {
+  const dir = defaultDataDir();
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  try {
+    await chmod(dir, 0o700);
+  } catch (err) {
+    log("warn", "could not restrict the data directory to its owner", { dir, error: String(err) });
+  }
+}
 
 export function webDir(): string {
   if (process.env.GLASSYS_WEB_DIR) return process.env.GLASSYS_WEB_DIR;

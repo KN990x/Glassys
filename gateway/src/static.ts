@@ -17,6 +17,19 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
 };
 
+/* Inline styles stay allowed: React sets a few `style` attributes (progress, meters). Scripts never inline. */
+export const HTML_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "connect-src 'self' ws: wss:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 function pathnameOf(url: string): string {
   return url.split("?")[0] || "/";
 }
@@ -50,7 +63,7 @@ export function fileResponseHeaders(filePath: string): Record<string, string> {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
   };
-  if (ext === ".html") headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+  if (ext === ".html") headers["Content-Security-Policy"] = HTML_CSP;
   return headers;
 }
 

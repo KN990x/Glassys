@@ -61,7 +61,7 @@ async function ensureConfigFile(): Promise<void> {
     // Exclusive create. This used to be existsSync() followed by writeFile(),
     // and a config written between the two calls was overwritten with defaults
     // by what is only meant to be a first-run bootstrap.
-    await writeFile(paths.config(), YAML.stringify(defaultConfig()), { encoding: "utf8", flag: "wx" });
+    await writeFile(paths.config(), YAML.stringify(defaultConfig()), { encoding: "utf8", flag: "wx", mode: 0o600 });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
   }

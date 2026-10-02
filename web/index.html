@@ -12,25 +12,7 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Glassys</title>
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("glassys_theme");
-          var theme = stored;
-          if (theme !== "light" && theme !== "dark") {
-            theme =
-              window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-                ? "light"
-                : "dark";
-            if (stored !== "system") return;
-          }
-          document.documentElement.dataset.theme = theme;
-          document.documentElement.style.colorScheme = theme;
-          var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute("content", theme === "light" ? "#fafafa" : "#0a0a0a");
-        } catch (e) {}
-      })();
-    </script>
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

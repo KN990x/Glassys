@@ -3,6 +3,17 @@ import type { ServerMessage } from "@glassys/protocol";
 import { isPersistedTranscriptEvent } from "@glassys/protocol";
 
 export const MAX_HANDSHAKE_BUFFER = 500;
+/** A client this far behind (stalled tab, dead link) is dropped; it reconnects and gets a snapshot. */
+export const MAX_WS_BUFFERED_BYTES = 8 * 1024 * 1024;
+
+function sendRaw(ws: WebSocket, raw: string): void {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  if (ws.bufferedAmount > MAX_WS_BUFFERED_BYTES) {
+    ws.terminate();
+    return;
+  }
+  ws.send(raw);
+}
 
 export class Hub {
   private clients = new Set<WebSocket>();
@@ -33,7 +44,7 @@ export class Hub {
 
   send(ws: WebSocket, msg: ServerMessage): void {
     try {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      sendRaw(ws, JSON.stringify(msg));
     } catch {
       /* drop a broken socket; do not abort the rest of the hub */
     }
@@ -49,7 +60,7 @@ export class Hub {
         continue;
       }
       try {
-        if (ws.readyState === WebSocket.OPEN) ws.send(raw);
+        sendRaw(ws, raw);
       } catch {
         /* continue to remaining clients */
       }

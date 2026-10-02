@@ -34,6 +34,10 @@ import {
 
 const MAX_WS_PAYLOAD = 1_000_000;
 export const WS_HANDSHAKE_TIMEOUT_MS = 15_000;
+/** One operator: a few tabs and devices. Far more than this is a leak or a flood. */
+export const MAX_WS_CONNECTIONS = 32;
+/** Client messages are handled one at a time per socket; a backlog this deep means a flood. */
+export const MAX_WS_PENDING_MESSAGES = 64;
 
 interface SocketState {
   hello: boolean;
@@ -55,6 +59,10 @@ export function attachWs(
     verifyClient: (info, cb) => {
       void (async () => {
         try {
+          if (wss.clients.size >= MAX_WS_CONNECTIONS) {
+            cb(false, 503, "too many connections");
+            return;
+          }
           if (!(await originAllowed(info.origin, info.req.headers.host))) {
             cb(false, 403, "origin not allowed");
             return;
@@ -126,8 +134,15 @@ export function attachWs(
       untrackSocket(ws);
     });
 
+    let pendingMessages = 0;
     ws.on("message", (raw) => {
       state.alive = true;
+      if (pendingMessages >= MAX_WS_PENDING_MESSAGES) {
+        log("warn", "ws client flooded the message queue; closing");
+        ws.close(1008, "too many pending messages");
+        return;
+      }
+      pendingMessages += 1;
       void enqueue(async () => {
         let parsed: unknown;
         try {
@@ -155,7 +170,11 @@ export function attachWs(
             hub.send(ws, { type: "config.error", message });
           }
         }
-      });
+      })
+        .catch((err) => log("error", "ws queue", { error: String(err) }))
+        .finally(() => {
+          pendingMessages -= 1;
+        });
     });
   });
 

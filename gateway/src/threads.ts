@@ -106,7 +106,7 @@ function metaFromAgent(id: string, agent: AgentConfig, agentId: string | null, c
 async function createEmptyThread(agent: AgentConfig, agentId: string | null): Promise<ThreadMeta> {
   const id = randomUUID();
   await mkdir(paths.threadDir(id), { recursive: true });
-  await writeFile(paths.threadTranscript(id), "", "utf8");
+  await writeFile(paths.threadTranscript(id), "", { encoding: "utf8", mode: 0o600 });
   const meta = metaFromAgent(id, agent, agentId);
   await writeMeta(meta);
   currentThreadId = id;

@@ -371,12 +371,22 @@ describe("http api", () => {
     });
     expect(badSub.status).toBe(400);
 
+    const lanSub = await fetch(`${base}/api/push/subscribe`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: "https://127.0.0.1:9000/x", keys: { p256dh: "p", auth: "a" } }),
+    });
+    expect(lanSub.status).toBe(400);
+
+    const { setPushLookupForTests } = await import("./push.js");
+    setPushLookupForTests(async () => [{ address: "142.250.184.10" }]);
     const sub = await fetch(`${base}/api/push/subscribe`, {
       method: "POST",
       headers: { ...auth, "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: "https://push.example/a", keys: { p256dh: "p", auth: "a" } }),
     });
     expect(sub.status).toBe(200);
+    setPushLookupForTests(null);
     const unsub = await fetch(`${base}/api/push/subscribe`, {
       method: "DELETE",
       headers: { ...auth, "Content-Type": "application/json" },
