@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { JsonRpcStdio } from "./rpc.js";
+import { JsonRpcStdio, headerEnd } from "./rpc.js";
+
+describe("headerEnd", () => {
+  it("finds the blank line with CRLF, bare LF, and the mixed form left by an NDJSON re-insert", () => {
+    expect(headerEnd(Buffer.from("Content-Length: 2\r\n\r\n{}"))).toEqual({ end: 18, bodyStart: 21 });
+    expect(headerEnd(Buffer.from("Content-Length: 2\n\n{}"))).toEqual({ end: 17, bodyStart: 19 });
+    expect(headerEnd(Buffer.from("Content-Length: 2\n\r\n{}"))).toEqual({ end: 17, bodyStart: 20 });
+    expect(headerEnd(Buffer.from("Content-Length: 2\r\n"))).toBeNull();
+  });
+});
+
+describe("JsonRpcStdio lifecycle", () => {
+  it("times out a request the child never answers", async () => {
+    const rpc = new JsonRpcStdio(process.execPath, ["-e", "setInterval(() => {}, 1000)"], process.cwd());
+    await expect(rpc.request("initialize", {}, 100)).rejects.toThrow(/timed out/);
+    await rpc.close();
+  });
+
+  it("kills a child that ignores SIGTERM and rejects later requests", async () => {
+    const rpc = new JsonRpcStdio(
+      process.execPath,
+      ["-e", "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"],
+      process.cwd(),
+    );
+    await new Promise((r) => setTimeout(r, 150));
+    await rpc.close();
+    expect(rpc.alive).toBe(false);
+    await expect(rpc.request("session/prompt", {})).rejects.toThrow(/exited/);
+  }, 10_000);
+});
 
 describe("JsonRpcStdio stderr", () => {
   it("drains child stderr so a noisy process cannot fill the pipe", async () => {

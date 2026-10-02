@@ -28,6 +28,8 @@ import { mapAcpUpdate } from "./mapper.js";
 
 const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Agent default" }];
 export const ACP_CANCEL_TIMEOUT_MS = 20_000;
+/** `npx -y` may download the agent on first start, so setup gets minutes, not seconds. */
+export const ACP_SETUP_TIMEOUT_MS = 180_000;
 
 function commandOf(opts: AdapterCreateOptions): { command: string; args: string[] } {
   const command = optionString(opts.options, "command", "");
@@ -138,19 +140,21 @@ async function openAcpSession(
   if (resumeId) {
     if (canResume) {
       try {
-        await rpc.request("session/resume", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] });
+        await rpc.request("session/resume", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
         return resumeId;
       } catch {
         /* fall through to load */
       }
     }
     if (loadSession) {
-      await rpc.request("session/load", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] });
+      await rpc.request("session/load", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
       return resumeId;
     }
     throw new AdapterError("ACP agent cannot resume the stored session", "startup");
   }
-  const created = asRecord(await rpc.request("session/new", { cwd: opts.cwd, mcpServers: [] }));
+  const created = asRecord(
+    await rpc.request("session/new", { cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS),
+  );
   return typeof created?.sessionId === "string" ? created.sessionId : randomUUID();
 }
 
@@ -167,6 +171,10 @@ class AcpSession implements AdapterSession {
     this.sessionId = sessionId;
   }
 
+  get closed(): boolean {
+    return !this.rpc.alive;
+  }
+
   static async start(opts: AdapterCreateOptions, resumeId?: string): Promise<AcpSession> {
     const { command, args } = commandOf(opts);
     const rpc = new JsonRpcStdio(command, args, opts.cwd, opts.apiKey ? { API_KEY: opts.apiKey } : undefined);
@@ -174,14 +182,18 @@ class AcpSession implements AdapterSession {
     let init: Record<string, unknown> | undefined;
     try {
       init = asRecord(
-        await rpc.request("initialize", {
-          protocolVersion: 1,
-          clientInfo: { name: "Glassys", version: "0.1.0" },
-          clientCapabilities: {
-            fs: { readTextFile: true, writeTextFile: true },
-            terminal: true,
+        await rpc.request(
+          "initialize",
+          {
+            protocolVersion: 1,
+            clientInfo: { name: "Glassys", version: "0.1.0" },
+            clientCapabilities: {
+              fs: { readTextFile: true, writeTextFile: true },
+              terminal: true,
+            },
           },
-        }),
+          ACP_SETUP_TIMEOUT_MS,
+        ),
       ) ?? undefined;
       await authenticateIfNeeded(rpc, init, opts.apiKey);
     } catch (err) {
@@ -247,6 +259,9 @@ class AcpSession implements AdapterSession {
               await new Promise((r) => setTimeout(r, 40));
               if (stop) return prompt;
               if (cancelledAt && Date.now() - cancelledAt > ACP_CANCEL_TIMEOUT_MS) {
+                /* The prompt is still open in the child; a new one on top of it would interleave. */
+                this.cleanupHost();
+                await this.rpc.close();
                 throw new AdapterError("ACP did not stop after session/cancel", "run");
               }
             }

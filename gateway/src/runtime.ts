@@ -324,7 +324,7 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
   const cwdCheck = await validateCwd(opts.cwd);
   if (!cwdCheck.ok) throw new Error(cwdCheck.error);
 
-  if (session && runtime.fingerprint === fp) return session;
+  if (session && !session.closed && runtime.fingerprint === fp) return session;
 
   const identityChanged = runtime.fingerprint !== null && runtime.fingerprint !== fp;
   const previousAgentId = runtime.agentId;

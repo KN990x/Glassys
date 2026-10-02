@@ -46,6 +46,8 @@ export interface AdapterRun {
 
 export interface AdapterSession {
   agentId: string;
+  /** True once the session can no longer send (its child process died); the runtime then opens a new one. */
+  readonly closed?: boolean;
   send(
     text: string,
     onEvent: AdapterEventHandler,

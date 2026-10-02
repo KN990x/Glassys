@@ -231,9 +231,10 @@ class OpencodeSession implements AdapterSession {
       let idle = false;
       let failed = false;
       let sawRunEvent = false;
-      void prompt.finally(() => {
+      const settle = () => {
         promptSettled = true;
-      });
+      };
+      prompt.then(settle, settle);
       try {
         while (!isCancelled()) {
           const waitMs = promptSettled ? OPENCODE_DRAIN_MS : OPENCODE_IDLE_MS;
@@ -272,6 +273,7 @@ class OpencodeSession implements AdapterSession {
           } catch {
             /* ignore */
           }
+          await Promise.race([prompt.catch(() => undefined), new Promise((r) => setTimeout(r, OPENCODE_DRAIN_MS))]);
           return "cancelled";
         }
         try {

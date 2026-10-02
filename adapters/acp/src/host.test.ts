@@ -1,8 +1,26 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_ACP_READ_BYTES, registerHostHandlers, resolveInsideCwd } from "./host.js";
+import { MAX_ACP_READ_BYTES, registerHostHandlers, resolveInsideCwd, resolveRealInsideCwd } from "./host.js";
+
+describe("resolveRealInsideCwd", () => {
+  it("rejects a symlink inside the workspace that points out of it", async () => {
+    const outside = await mkdtemp(join(tmpdir(), "glassys-acp-out-"));
+    await writeFile(join(outside, "secret.txt"), "x");
+    const ws = await mkdtemp(join(tmpdir(), "glassys-acp-ws-"));
+    await symlink(outside, join(ws, "link"));
+    await expect(resolveRealInsideCwd(ws, "link/secret.txt")).rejects.toThrow(/outside/);
+    await expect(resolveRealInsideCwd(ws, "link/new/file.txt")).rejects.toThrow(/outside/);
+  });
+
+  it("allows real paths and files that do not exist yet", async () => {
+    const ws = await mkdtemp(join(tmpdir(), "glassys-acp-ws-"));
+    await mkdir(join(ws, "src"));
+    await expect(resolveRealInsideCwd(ws, "src/a.ts")).resolves.toBe(join(ws, "src/a.ts"));
+    await expect(resolveRealInsideCwd(ws, "new/dir/b.ts")).resolves.toBe(join(ws, "new/dir/b.ts"));
+  });
+});
 
 describe("resolveInsideCwd", () => {
   const cwd = resolve("/tmp/glassys-ws");
@@ -98,5 +116,35 @@ describe("registerHostHandlers autoRun", () => {
     } finally {
       cleanup();
     }
+  });
+
+  it("reports a missing binary instead of crashing the process", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-term-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    try {
+      const created = map.get("terminal/create")?.({ command: "glassys-no-such-binary-xyz" }) as { terminalId: string };
+      const result = (await map.get("terminal/wait_for_exit")?.({ terminalId: created.terminalId })) as {
+        exitCode: number;
+      };
+      expect(result.exitCode).not.toBe(0);
+      const out = (await map.get("terminal/output")?.({ terminalId: created.terminalId })) as { output: string };
+      expect(out.output).toMatch(/ENOENT/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("gives every terminal its own id and settles waiters on dispose", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-term-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    const args = ["-e", "setInterval(() => {}, 1000)"];
+    const a = map.get("terminal/create")?.({ command: process.execPath, args }) as { terminalId: string };
+    const b = map.get("terminal/create")?.({ command: process.execPath, args }) as { terminalId: string };
+    expect(a.terminalId).not.toBe(b.terminalId);
+    const waiting = map.get("terminal/wait_for_exit")?.({ terminalId: a.terminalId });
+    cleanup();
+    await expect(waiting).resolves.toMatchObject({ exitCode: expect.any(Number) });
   });
 });

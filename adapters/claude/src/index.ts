@@ -208,10 +208,14 @@ class ClaudeSession implements AdapterSession {
           /* ignore */
         }
       })();
+      const cancelExpired = () =>
+        isCancelled() && cancelledAt > 0 && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS;
+      /* An async iterator takes one next() at a time; a tick must not start a second one. */
+      let pending: Promise<{ kind: "msg"; v: Awaited<ReturnType<typeof iterator.next>> }> | null = null;
       try {
         const mapState = { sawStreamEvent: false };
         while (!stop) {
-          if (isCancelled() && cancelledAt && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS) {
+          if (cancelExpired()) {
             try {
               query.close?.();
             } catch {
@@ -219,23 +223,18 @@ class ClaudeSession implements AdapterSession {
             }
             return "cancelled";
           }
+          if (!pending) {
+            pending = iterator.next().then((v) => ({ kind: "msg" as const, v }));
+            pending.catch(() => undefined);
+          }
           const abortTick = new AbortController();
           const next = await Promise.race([
-            iterator.next().then((v) => ({ kind: "msg" as const, v })),
-            waitUntil(() => isCancelled() || stop, abortTick.signal).then(() => ({ kind: "tick" as const })),
+            pending,
+            waitUntil(() => stop || cancelExpired(), abortTick.signal).then(() => ({ kind: "tick" as const })),
           ]);
           abortTick.abort();
-          if (next.kind === "tick") {
-            if (isCancelled() && cancelledAt && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS) {
-              try {
-                query.close?.();
-              } catch {
-                /* ignore */
-              }
-              return "cancelled";
-            }
-            continue;
-          }
+          if (next.kind === "tick") continue;
+          pending = null;
           if (next.v.done) return isCancelled() ? "cancelled" : "finished";
           const sid = claudeSessionId(next.v.value);
           if (sid) this.agentId = sid;

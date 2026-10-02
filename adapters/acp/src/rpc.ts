@@ -5,11 +5,18 @@ type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 export type RpcHandler = (params: unknown) => Promise<unknown> | unknown;
 
-function indexOfCrlfCrlf(buf: Buffer): number {
-  for (let i = 0; i + 3 < buf.length; i++) {
-    if (buf[i] === 13 && buf[i + 1] === 10 && buf[i + 2] === 13 && buf[i + 3] === 10) return i;
+/** A frame (or an unterminated NDJSON line) larger than this kills the child instead of growing without bound. */
+export const MAX_RPC_FRAME_BYTES = 64 * 1024 * 1024;
+export const RPC_KILL_GRACE_MS = 3_000;
+
+/** End of the LSP header block (the first blank line, CRLF or bare LF) and where the body starts. */
+export function headerEnd(buf: Buffer): { end: number; bodyStart: number } | null {
+  for (let i = 0; i + 1 < buf.length; i++) {
+    if (buf[i] !== 10) continue;
+    if (buf[i + 1] === 10) return { end: i, bodyStart: i + 2 };
+    if (buf[i + 1] === 13 && buf[i + 2] === 10) return { end: i, bodyStart: i + 3 };
   }
-  return -1;
+  return null;
 }
 
 export class JsonRpcStdio {
@@ -20,19 +27,47 @@ export class JsonRpcStdio {
   private pending = new Map<number | string, Pending>();
   private notifications = new Map<string, Array<(params: unknown) => void>>();
   private methods = new Map<string, RpcHandler>();
+  private exited = false;
+  private exitWaiters: Array<() => void> = [];
   readonly child: ChildProcess;
 
   constructor(command: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv) {
     this.child = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, ...env } });
+    /* EPIPE on a child that already died arrives here; the close handler reports it. */
+    this.child.stdin?.on("error", () => undefined);
     this.child.stdout?.on("data", (chunk: Buffer) => this.onData(chunk));
     this.child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       this.stderrTail = (this.stderrTail + text).slice(-8_192);
     });
-    this.child.on("error", (err) => this.failAll(err));
+    this.child.on("error", (err) => {
+      this.failAll(err);
+      this.markExited();
+    });
     this.child.on("close", () => {
       const tail = this.stderrTail.trim();
       this.failAll(new Error(tail ? `ACP process exited: ${tail.slice(-2000)}` : "ACP process exited"));
+      this.markExited();
+    });
+  }
+
+  get alive(): boolean {
+    return !this.exited;
+  }
+
+  private markExited() {
+    this.exited = true;
+    for (const done of this.exitWaiters.splice(0)) done();
+  }
+
+  private waitExit(ms: number): Promise<boolean> {
+    if (this.exited) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), ms);
+      this.exitWaiters.push(() => {
+        clearTimeout(timer);
+        resolve(true);
+      });
     });
   }
 
@@ -50,10 +85,20 @@ export class JsonRpcStdio {
     };
   }
 
-  request(method: string, params?: unknown): Promise<unknown> {
+  request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
+    if (this.exited) return Promise.reject(new Error("ACP process exited"));
     const id = this.nextId++;
+    const result = new Promise<unknown>((resolve, reject) => this.pending.set(id, { resolve, reject }));
     this.send({ jsonrpc: "2.0", id, method, params });
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+    if (!timeoutMs) return result;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`ACP ${method} timed out after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+    });
+    return Promise.race([result, timeout]).finally(() => clearTimeout(timer));
   }
 
   notify(method: string, params?: unknown) {
@@ -62,10 +107,23 @@ export class JsonRpcStdio {
 
   async close() {
     this.failAll(new Error("closed"));
-    this.child.kill("SIGTERM");
+    if (this.exited) return;
+    try {
+      this.child.kill("SIGTERM");
+    } catch {
+      /* already gone */
+    }
+    if (await this.waitExit(RPC_KILL_GRACE_MS)) return;
+    try {
+      this.child.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+    await this.waitExit(RPC_KILL_GRACE_MS);
   }
 
   private send(msg: unknown) {
+    if (this.exited) return;
     const json = JSON.stringify(msg);
     if (this.framing === "ndjson") {
       this.child.stdin?.write(`${json}\n`);
@@ -79,6 +137,11 @@ export class JsonRpcStdio {
   private onData(chunk: Buffer) {
     this.buf = Buffer.concat([this.buf, chunk]);
     this.consume();
+    if (this.buf.length > MAX_RPC_FRAME_BYTES) {
+      this.buf = Buffer.alloc(0);
+      this.failAll(new Error(`ACP message larger than ${MAX_RPC_FRAME_BYTES} bytes`));
+      void this.close();
+    }
   }
 
   private consume() {
@@ -90,16 +153,22 @@ export class JsonRpcStdio {
         else return;
       }
       if (this.framing === "lsp") {
-        const headerEnd = indexOfCrlfCrlf(this.buf);
-        if (headerEnd < 0) return;
-        const header = this.buf.subarray(0, headerEnd).toString("utf8");
+        const split = headerEnd(this.buf);
+        if (!split) return;
+        const header = this.buf.subarray(0, split.end).toString("utf8");
         const match = header.match(/Content-Length:\s*(\d+)/i);
         if (!match) {
           this.framing = "ndjson";
           continue;
         }
         const len = Number(match[1]);
-        const bodyStart = headerEnd + 4;
+        if (len > MAX_RPC_FRAME_BYTES) {
+          this.buf = Buffer.alloc(0);
+          this.failAll(new Error(`ACP message larger than ${MAX_RPC_FRAME_BYTES} bytes`));
+          void this.close();
+          return;
+        }
+        const bodyStart = split.bodyStart;
         if (this.buf.length < bodyStart + len) return;
         const body = this.buf.subarray(bodyStart, bodyStart + len).toString("utf8");
         this.buf = this.buf.subarray(bodyStart + len);

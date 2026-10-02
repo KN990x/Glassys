@@ -2,10 +2,13 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { HttpError } from "./errors.js";
 import {
+  MAX_ONE_SHOT_ATTEMPTS,
   bindScheduleRuntime,
   createSchedule,
   listSchedules,
+  previewNextRun,
   setScheduleIdlePollMsForTests,
   setScheduleIdleWaitMsForTests,
   stopSchedules,
@@ -112,5 +115,84 @@ describe("schedules", () => {
     const listed = (await listSchedules()).find((j) => j.id === job.id);
     expect(listed?.enabled).toBe(true);
     expect(listed?.lastError).toMatch(/not queued/i);
+  });
+
+  it("backs a failed one-shot off instead of firing it again at once, then disables it", async () => {
+    let now = Date.now();
+    let calls = 0;
+    bindScheduleRuntime({
+      enqueue: async () => {
+        calls += 1;
+        return false;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+      now: () => now,
+    });
+    const job = await createSchedule({ text: "missed", cwd: dir, at: new Date(now - 1000).toISOString() });
+    await tickSchedulesForTests();
+    expect(calls).toBe(1);
+    const after = (await listSchedules()).find((j) => j.id === job.id)!;
+    expect(previewNextRun(after, new Date(now))).toBe(after.retryAt);
+    expect(Date.parse(after.retryAt!)).toBeGreaterThan(now);
+
+    await tickSchedulesForTests();
+    expect(calls).toBe(1);
+
+    for (let i = 1; i < MAX_ONE_SHOT_ATTEMPTS; i++) {
+      now += 60 * 60_000;
+      await tickSchedulesForTests();
+    }
+    expect(calls).toBe(MAX_ONE_SHOT_ATTEMPTS);
+    const last = (await listSchedules()).find((j) => j.id === job.id)!;
+    expect(last.enabled).toBe(false);
+    expect(last.attempts).toBe(MAX_ONE_SHOT_ATTEMPTS);
+  });
+
+  it("does not change the workspace when the thread switch fails because the gateway is busy", async () => {
+    const applied: string[] = [];
+    bindScheduleRuntime({
+      enqueue: async () => true,
+      isIdle: () => true,
+      liveThreadId: () => "t-live",
+      liveCwd: async () => "/other",
+      switchThread: async () => {
+        throw new HttpError(409, "busy");
+      },
+      applyCwd: async (cwd) => {
+        applied.push(cwd);
+      },
+    });
+    const job = await createSchedule({
+      text: "x",
+      cwd: dir,
+      threadId: "t-old",
+      at: new Date(Date.now() - 1000).toISOString(),
+    });
+    await tickSchedulesForTests();
+    expect(applied).toEqual([]);
+    expect((await listSchedules()).find((j) => j.id === job.id)?.lastError).toBe("busy");
+  });
+
+  it("falls back to the job's workspace when its thread is gone", async () => {
+    const applied: string[] = [];
+    bindScheduleRuntime({
+      enqueue: async () => true,
+      isIdle: () => true,
+      liveThreadId: () => "t-live",
+      liveCwd: async () => "/other",
+      switchThread: async () => {
+        throw new HttpError(404, "Thread not found");
+      },
+      applyCwd: async (cwd) => {
+        applied.push(cwd);
+      },
+    });
+    await createSchedule({ text: "x", cwd: dir, threadId: "t-gone", at: new Date(Date.now() - 1000).toISOString() });
+    await tickSchedulesForTests();
+    expect(applied).toEqual([dir]);
   });
 });

@@ -61,6 +61,15 @@ async function main(): Promise<void> {
   setRestartHandler(() => shutdown(0));
   process.on("SIGINT", () => void shutdown(0));
   process.on("SIGTERM", () => void shutdown(0));
+  /* One adapter promise nobody awaited must not take the live run and every socket down with it. */
+  process.on("unhandledRejection", (reason) => {
+    log("error", "unhandled rejection", { error: String(reason) });
+  });
+  /* State after a throw is unknown: stop cleanly and let the service manager restart the gateway. */
+  process.on("uncaughtException", (err) => {
+    log("error", "uncaught exception", { error: String(err) });
+    void shutdown(1);
+  });
 
   const bind = listenBind(cfg);
   const port = listenPort(cfg);

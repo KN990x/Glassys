@@ -8,6 +8,10 @@ import { createMutex } from "./lock.js";
 import { HttpError } from "./errors.js";
 
 export const MAX_SCHEDULES = 20;
+/** A one-shot that keeps failing to queue is retried with backoff and then disabled. */
+export const MAX_ONE_SHOT_ATTEMPTS = 5;
+const RETRY_BASE_MS = 60_000;
+const RETRY_MAX_MS = 30 * 60_000;
 
 export interface ScheduleJob {
   id: string;
@@ -20,6 +24,10 @@ export interface ScheduleJob {
   createdAt: string;
   lastRun?: string;
   lastError?: string;
+  /** Failed attempts of a one-shot since it was created or last edited. */
+  attempts?: number;
+  /** Earliest time a failed one-shot fires again. */
+  retryAt?: string;
 }
 
 export interface ScheduleHooks {
@@ -88,7 +96,8 @@ function nextFireMs(job: ScheduleJob, from: Date): number | null {
   if (job.at) {
     const t = Date.parse(job.at);
     if (!Number.isFinite(t)) return null;
-    return t;
+    const retry = job.retryAt ? Date.parse(job.retryAt) : NaN;
+    return Number.isFinite(retry) && retry > t ? retry : t;
   }
   if (!job.cron) return null;
   try {
@@ -157,6 +166,8 @@ export async function patchSchedule(
       text: patch.text !== undefined ? patch.text.trim() : cur.text,
       cron: patch.cron !== undefined ? patch.cron.trim() || undefined : cur.cron,
       at: patch.at !== undefined ? patch.at.trim() || undefined : cur.at,
+      attempts: undefined,
+      retryAt: undefined,
     };
     if (!next.text) throw new HttpError(400, "Schedule text required");
     assertXor(next.cron, next.at);
@@ -196,18 +207,21 @@ async function soonestDue(): Promise<{ job: ScheduleJob; at: number } | null> {
   return best;
 }
 
+let armGeneration = 0;
+
 function armTimer(): void {
   if (timer) clearTimeout(timer);
   timer = undefined;
+  const gen = ++armGeneration;
   if (!hooks) return;
   void (async () => {
     const due = await soonestDue();
-    if (!due) return;
+    if (!due || gen !== armGeneration) return;
     const wait = Math.max(0, due.at - nowMs());
     timer = setTimeout(() => {
       void tickSchedules();
     }, Math.min(wait, 60_000));
-  })();
+  })().catch((err) => log("warn", "schedule arm failed", { error: String(err) }));
 }
 
 async function patchJob(id: string, patch: Partial<ScheduleJob>): Promise<void> {
@@ -217,12 +231,31 @@ async function patchJob(id: string, patch: Partial<ScheduleJob>): Promise<void> 
   });
 }
 
+/** Record a failed fire. A cron simply waits for its next slot; a one-shot backs off, then gives up. */
+async function failJob(job: ScheduleJob, lastError: string): Promise<void> {
+  if (!job.at) {
+    await patchJob(job.id, { lastError });
+    return;
+  }
+  const attempts = (job.attempts ?? 0) + 1;
+  if (attempts >= MAX_ONE_SHOT_ATTEMPTS) {
+    await patchJob(job.id, { lastError, attempts, retryAt: undefined, enabled: false });
+    return;
+  }
+  const backoff = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (attempts - 1));
+  await patchJob(job.id, { lastError, attempts, retryAt: new Date(nowMs() + backoff).toISOString() });
+}
+
+function errorStatus(err: unknown): number | undefined {
+  return err instanceof HttpError ? err.status : undefined;
+}
+
 async function fireJob(job: ScheduleJob): Promise<void> {
   if (!hooks) return;
   const deadline = nowMs() + idleWaitMaxMs;
   while (!hooks.isIdle()) {
     if (nowMs() >= deadline) {
-      await patchJob(job.id, { lastError: "Gateway stayed busy" });
+      await failJob(job, "Gateway stayed busy");
       return;
     }
     await new Promise((r) => setTimeout(r, idlePollMs));
@@ -232,7 +265,9 @@ async function fireJob(job: ScheduleJob): Promise<void> {
     if (job.threadId) {
       try {
         if (hooks.liveThreadId() !== job.threadId) await hooks.switchThread(job.threadId);
-      } catch {
+      } catch (err) {
+        /* Only a missing thread falls back to the job's workspace; a busy gateway must not lose its run. */
+        if (errorStatus(err) !== 404) throw err;
         const cwd = await hooks.liveCwd();
         if (job.cwd && cwd !== job.cwd) await hooks.applyCwd(job.cwd);
       }
@@ -242,25 +277,25 @@ async function fireJob(job: ScheduleJob): Promise<void> {
     }
     const queued = await hooks.enqueue(job.text, "schedule");
     if (!queued) {
-      await patchJob(job.id, { lastError: "Message was not queued" });
+      await failJob(job, "Message was not queued");
       return;
     }
     await patchJob(job.id, {
       lastRun: new Date(nowMs()).toISOString(),
       lastError: undefined,
+      attempts: undefined,
+      retryAt: undefined,
       enabled: job.at ? false : job.enabled,
     });
   } catch (err) {
     log("warn", "schedule fire failed", { id: job.id, error: String(err) });
-    await patchJob(job.id, { lastError: err instanceof Error ? err.message : String(err) });
+    await failJob(job, err instanceof Error ? err.message : String(err));
   }
 }
 
 async function tickSchedules(): Promise<void> {
-  if (firing || !hooks) {
-    armTimer();
-    return;
-  }
+  /* The tick in progress re-arms when it finishes; re-arming here would spin on a job that is already due. */
+  if (firing || !hooks) return;
   firing = true;
   try {
     const due = await soonestDue();
