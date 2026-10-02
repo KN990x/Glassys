@@ -15,6 +15,7 @@ const MIME: Record<string, string> = {
   ".webmanifest": "application/manifest+json",
   ".ico": "image/x-icon",
   ".map": "application/json",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 /* Inline styles stay allowed: React sets a few `style` attributes (progress, meters). Scripts never inline. */
@@ -74,6 +75,7 @@ export function fileResponseHeaders(filePath: string, root?: string): Record<str
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow",
   };
   if (ext === ".html") headers["Content-Security-Policy"] = HTML_CSP;
   return headers;

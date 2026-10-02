@@ -17,6 +17,7 @@ describe("static serving", () => {
     const headers = fileResponseHeaders("/tmp/index.html");
     expect(headers["X-Content-Type-Options"]).toBe("nosniff");
     expect(headers["X-Frame-Options"]).toBe("DENY");
+    expect(headers["X-Robots-Tag"]).toBe("noindex, nofollow");
     const csp = headers["Content-Security-Policy"] ?? "";
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("script-src 'self'");

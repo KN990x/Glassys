@@ -70,9 +70,11 @@ function inCircle(x, y, cx, cy, r) {
  * diagonals, plus a solid focus point. Authored in a 48 unit box and placed in
  * the 64 unit plate at 0.85 scale, matching web/public/icon.svg.
  */
-function iconPixel(size, x, y) {
+function iconPixel(size, x, y, maskable = false) {
   const s = size / 64;
-  if (!inRoundRect(x, y, 0, 0, size, size, 14 * s)) return [0, 0, 0, 0];
+  // A maskable icon is full bleed: the launcher cuts its own shape, and the mark
+  // already sits inside the 80% safe circle.
+  if (!maskable && !inRoundRect(x, y, 0, 0, size, size, 14 * s)) return [0, 0, 0, 0];
 
   const cx = 32 * s;
   const cy = 32 * s;
@@ -96,10 +98,11 @@ function iconPixel(size, x, y) {
 }
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "../public");
-for (const [name, size] of [
-  ["icon-192.png", 192],
-  ["icon-512.png", 512],
-  ["apple-touch-icon.png", 180],
+for (const [name, size, maskable] of [
+  ["icon-192.png", 192, false],
+  ["icon-512.png", 512, false],
+  ["apple-touch-icon.png", 180, false],
+  ["icon-maskable-512.png", 512, true],
 ]) {
-  writeFileSync(join(dir, name), png(size, (x, y) => iconPixel(size, x, y)));
+  writeFileSync(join(dir, name), png(size, (x, y) => iconPixel(size, x, y, maskable)));
 }
