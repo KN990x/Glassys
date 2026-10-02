@@ -135,7 +135,7 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       const idx = findTool(next, event.callId);
       if (idx >= 0 && next[idx].kind === "tool") {
         const t = next[idx];
-        next[idx] = { ...t, chunk: t.chunk + (event.chunk ?? "") };
+        next[idx] = { ...t, chunk: capChunk(t.chunk + (event.chunk ?? "")) };
       }
       return next;
     }
@@ -187,6 +187,17 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
     default:
       return next;
   }
+}
+
+/* A long build streams megabytes of shell output; the card only ever shows the
+   tail, so the rest is dropped instead of re-concatenated on every delta. */
+export const MAX_TOOL_CHUNK = 64 * 1024;
+
+function capChunk(chunk: string): string {
+  if (chunk.length <= MAX_TOOL_CHUNK) return chunk;
+  const cut = chunk.length - MAX_TOOL_CHUNK;
+  const nl = chunk.indexOf("\n", cut);
+  return chunk.slice(nl >= 0 && nl < chunk.length - 1 ? nl + 1 : cut);
 }
 
 function findTool(blocks: Block[], callId: string): number {

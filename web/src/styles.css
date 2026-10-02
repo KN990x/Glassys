@@ -3096,6 +3096,8 @@ mark {
 .preview-path { flex: 1; font-size: var(--fs-code); color: var(--muted); padding: 0 var(--s-1); }
 .preview-pane .files-pane-head .ghost.tiny { border-color: transparent; }
 .file-preview {
+  display: flex;
+  gap: var(--s-3);
   margin: 0;
   padding: var(--s-2) 0;
   font-family: var(--mono);
@@ -3103,9 +3105,8 @@ mark {
   line-height: var(--lh-code);
   overflow: auto;
 }
-.file-line { display: flex; gap: var(--s-3); padding-right: var(--s-3); min-width: max-content; }
-.file-no { flex: none; width: 5ch; text-align: right; color: var(--faint); opacity: 0.7; user-select: none; }
-.file-line code { white-space: pre; }
+.file-no { flex: none; min-width: 5ch; text-align: right; color: var(--faint); opacity: 0.7; user-select: none; white-space: pre; }
+.file-preview code { white-space: pre; padding-right: var(--s-3); }
 .preview-empty { display: grid; place-items: center; align-content: center; gap: var(--s-2); height: 100%; font-size: var(--fs-sm); }
 .preview-empty svg { width: var(--icon-xl); height: var(--icon-xl); color: var(--faint); }
 .preview-empty p { margin: 0; }

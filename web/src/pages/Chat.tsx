@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type {
   AdapterPublicInfo,
   ClientMessage,
@@ -19,7 +19,6 @@ import { api } from "../api";
 import { openSocket, type ConnState } from "../socket";
 import { reduceTranscript, replay, type Block } from "../transcript";
 import { Composer } from "../components/Composer";
-import { Settings } from "./Settings";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
 import { blockMatchesQuery, formatElapsed, slashQuery } from "../format";
@@ -27,7 +26,7 @@ import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette } from "../components/CommandPalette";
 import { buildPaletteItems } from "./chatPalette";
 import { ActivityPanel } from "../components/ActivityPanel";
-import { HostViews, type HostViewId } from "./host/HostViews";
+import type { HostViewId } from "./host/HostViews";
 import { type AppView } from "../components/ViewTabs";
 import { Topbar } from "../components/Topbar";
 import { Sidebar } from "../components/Sidebar";
@@ -40,6 +39,10 @@ import { RunStatus } from "../components/RunStatus";
 import { useConfirm } from "../components/ConfirmDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 import { overlayPopped, popOverlay, pushOverlay } from "../overlayHistory";
+import { Skeleton } from "../components/Primitives";
+
+const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Settings })));
+const HostViews = lazy(() => import("./host/HostViews").then((m) => ({ default: m.HostViews })));
 
 const COMPOSER_MAX_PX = 160;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
@@ -1023,15 +1026,17 @@ export function Chat({
             <ThreadDrawer {...threadListProps} onNew={() => void onNewThread()} onClose={closeThreads} />
           )}
           {settings && (
-            <Settings
-              config={config}
-              onClose={closeSettings}
-              onConfig={onConfig}
-              onLogout={onLogout}
-              currentThreadId={currentThreadId}
-              focusSection={settingsFocus}
-              schedulePrefill={schedulePrefill}
-            />
+            <Suspense fallback={null}>
+              <Settings
+                config={config}
+                onClose={closeSettings}
+                onConfig={onConfig}
+                onLogout={onLogout}
+                currentThreadId={currentThreadId}
+                focusSection={settingsFocus}
+                schedulePrefill={schedulePrefill}
+              />
+            </Suspense>
           )}
           <CommandPalette
             open={paletteOpen}
@@ -1045,16 +1050,18 @@ export function Chat({
       }
     >
       {view !== "chat" ? (
-        <HostViews
-          view={view}
-          onView={showView}
-          caps={hostCaps}
-          locale={config.space.locale}
-          cwd={config.agent.cwd}
-          narrow={!isDesktop}
-          onDraft={draftPrompt}
-          onMention={mentionInComposer}
-        />
+        <Suspense fallback={<Skeleton rows={8} label={t("host.loading")} />}>
+          <HostViews
+            view={view}
+            onView={showView}
+            caps={hostCaps}
+            locale={config.space.locale}
+            cwd={config.agent.cwd}
+            narrow={!isDesktop}
+            onDraft={draftPrompt}
+            onMention={mentionInComposer}
+          />
+        </Suspense>
       ) : (
         <>
           <ChatMain
@@ -1091,6 +1098,7 @@ export function Chat({
               cwd: config.agent.cwd,
               adapterName: currentAdapter?.displayName || config.agent.adapter,
               queue: queueItems,
+              busy,
             }}
           />
           <Composer

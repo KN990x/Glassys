@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { api } from "../api";
 import { useT } from "../i18n";
-import { QrCode } from "./QrCode";
 import { Callout } from "./Primitives";
 import { IconCheck, IconCopy } from "./Icon";
+
+const QrCode = lazy(() => import("./QrCode").then((m) => ({ default: m.QrCode })));
 
 /**
  * How to reach this gateway from a phone. The URL used to render unstyled: the
@@ -50,7 +51,11 @@ export function ReachabilityCard() {
         </button>
         {loopback && <Callout tone="warn">{t("reach.loopback")}</Callout>}
       </div>
-      {url && <QrCode value={url} label={t("reach.qr")} />}
+      {url && (
+        <Suspense fallback={null}>
+          <QrCode value={url} label={t("reach.qr")} />
+        </Suspense>
+      )}
     </div>
   );
 }

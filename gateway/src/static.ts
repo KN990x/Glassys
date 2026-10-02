@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { extname, join, relative, resolve, sep } from "node:path";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { webDir } from "./paths.js";
 
 const MIME: Record<string, string> = {
@@ -53,12 +53,24 @@ function safeJoin(root: string, reqPath: string): string | null {
   return full;
 }
 
-export function fileResponseHeaders(filePath: string): Record<string, string> {
+/* Vite names everything under /assets/ by content hash, so a changed file is a new URL. */
+function cacheControl(filePath: string, root?: string): string {
+  const ext = extname(filePath);
+  const name = basename(filePath);
+  if (ext === ".html" || ext === ".webmanifest" || name === "sw.js") return "no-cache";
+  if (root) {
+    const rel = relative(root, filePath).split(sep);
+    if (rel.length > 1 && rel[0] === "assets") return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=3600";
+}
+
+export function fileResponseHeaders(filePath: string, root?: string): Record<string, string> {
   const ext = extname(filePath);
   const type = MIME[ext] || "application/octet-stream";
   const headers: Record<string, string> = {
     "Content-Type": type,
-    "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+    "Cache-Control": cacheControl(filePath, root),
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
@@ -67,8 +79,33 @@ export function fileResponseHeaders(filePath: string): Record<string, string> {
   return headers;
 }
 
+const ENCODINGS = [
+  { name: "br", suffix: ".br" },
+  { name: "gzip", suffix: ".gz" },
+] as const;
+
+export function acceptsEncoding(header: string | undefined, name: string): boolean {
+  if (!header) return false;
+  for (const part of header.split(",")) {
+    const [token, ...params] = part.trim().toLowerCase().split(";");
+    if (token !== name && token !== "*") continue;
+    const q = params.map((p) => p.trim()).find((p) => p.startsWith("q="));
+    if (!q || Number(q.slice(2)) > 0) return true;
+  }
+  return false;
+}
+
+/** The build writes .br and .gz beside compressible files; pick one the client takes. */
+export function pickEncoded(file: string, acceptEncoding: string | undefined): { path: string; encoding?: string } {
+  for (const enc of ENCODINGS) {
+    if (!acceptsEncoding(acceptEncoding, enc.name)) continue;
+    const candidate = `${file}${enc.suffix}`;
+    if (existsSync(candidate)) return { path: candidate, encoding: enc.name };
+  }
+  return { path: file };
+}
+
 export function serveStatic(req: IncomingMessage, res: ServerResponse): boolean {
-  const path = pathnameOf(req.url || "/");
   if (isGatewayApiPath(req.url || "/")) return false;
 
   const root = webDir();
@@ -80,8 +117,18 @@ export function serveStatic(req: IncomingMessage, res: ServerResponse): boolean 
     file = join(root, "index.html");
   }
   if (!existsSync(file)) return false;
-  res.writeHead(200, fileResponseHeaders(file));
-  const stream = createReadStream(file);
+  const headers = fileResponseHeaders(file, root);
+  const encodingHeader = req.headers["accept-encoding"];
+  const picked = pickEncoded(file, Array.isArray(encodingHeader) ? encodingHeader.join(",") : encodingHeader);
+  headers["Vary"] = "Accept-Encoding";
+  if (picked.encoding) headers["Content-Encoding"] = picked.encoding;
+  headers["Content-Length"] = String(statSync(picked.path).size);
+  res.writeHead(200, headers);
+  if (req.method === "HEAD") {
+    res.end();
+    return true;
+  }
+  const stream = createReadStream(picked.path);
   stream.on("error", () => {
     if (!res.headersSent) {
       res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });

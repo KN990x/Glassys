@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import type { MessageAttachment, PromptTemplate, QueueItem } from "@glassys/protocol";
 import type { Block, ToolBlock } from "../transcript";
 import { useT } from "../i18n";
@@ -110,6 +110,8 @@ export type TranscriptProps = {
   cwd: string;
   adapterName: string;
   queue: QueueItem[];
+  /** A run is streaming into the last text block. */
+  busy?: boolean;
 };
 
 export function Transcript({
@@ -128,6 +130,7 @@ export function Transcript({
   hostLabel,
   cwd,
   adapterName,
+  busy,
 }: TranscriptProps) {
   const t = useT();
   const grouped = groupBlocks(blocks);
@@ -166,80 +169,118 @@ export function Transcript({
       {search.trim() && blocks.length === 0 && allBlocks.length > 0 && (
         <p className="empty">{t("chat.searchEmpty")}</p>
       )}
-      {grouped.map((item) => {
-        if ("kind" in item && item.kind === "tools") {
-          return <ToolGroup key={item.id} blocks={item.blocks} shellLines={shellLines} showDiff={showDiff} />;
-        }
+      {grouped.map((item, i) => {
         const b = item as Block;
-        if (b.kind === "user") {
-          const pending = Boolean(b.messageId && queuedIds.has(b.messageId));
-          return (
-            <div key={b.id} className={`bubble user${b.retracted ? " retracted" : ""}${pending ? " pending" : ""}`}>
-              {b.attachments && b.attachments.length > 0 && <Thumbs attachments={b.attachments} />}
-              <Highlight text={b.text} query={search} />
-              {pending && <span className="muted bubble-flag">{t("chat.pending")}</span>}
-              {b.retracted && <span className="muted bubble-flag">{t("chat.retracted")}</span>}
-            </div>
-          );
-        }
-        if (b.kind === "thinking") {
-          return (
-            <Thinking
-              key={b.id}
-              text={b.text}
-              durationMs={b.durationMs}
-              defaultOpen={thinkingDefault === "expanded"}
-            />
-          );
-        }
-        if (b.kind === "text") {
-          return (
-            <div key={b.id} className="bubble assistant">
-              <MarkdownBody text={b.text} />
-              <div className="turn-foot">
-                <CopyTurn text={b.text} />
-              </div>
-            </div>
-          );
-        }
-        if (b.kind === "usage") {
-          const parts = [
-            b.inputTokens != null ? `↓${formatTokens(b.inputTokens, locale)}` : "",
-            b.outputTokens != null ? `↑${formatTokens(b.outputTokens, locale)}` : "",
-          ].filter(Boolean);
-          if (!parts.length) return null;
-          return (
-            <p key={b.id} className="muted usage" title={t("chat.usageTotal")}>
-              {t("chat.usage")} {parts.join(" ")}
-            </p>
-          );
-        }
-        if (b.kind === "banner") {
-          const text =
-            b.text === "cancelled"
-              ? t("status.cancelled")
-              : b.text === "stalled"
-                ? t("chat.stalled")
-                : operatorError(b.text, t);
-          const tone = b.text === "stalled" ? "warn" : b.tone;
-          return (
-            <p
-              key={b.id}
-              className={`banner ${tone}`}
-              role={tone === "error" ? "alert" : "status"}
-            >
-              <span className="banner-icon" aria-hidden="true">
-                {tone === "error" ? <IconError /> : tone === "warn" ? <IconAlert /> : <IconInfo />}
-              </span>
-              {text}
-            </p>
-          );
-        }
-        return null;
+        return (
+          <TranscriptRow
+            key={item.id}
+            item={item}
+            search={search}
+            pending={b.kind === "user" && Boolean(b.messageId && queuedIds.has(b.messageId))}
+            live={Boolean(busy) && i === grouped.length - 1 && b.kind === "text"}
+            locale={locale}
+            thinkingDefault={thinkingDefault}
+            shellLines={shellLines}
+            showDiff={showDiff}
+          />
+        );
       })}
     </>
   );
 }
+
+type Row = ReturnType<typeof groupBlocks>[number];
+
+type RowProps = {
+  item: Row;
+  search: string;
+  pending: boolean;
+  live: boolean;
+  locale: string;
+  thinkingDefault: "collapsed" | "expanded";
+  shellLines: number;
+  showDiff: boolean;
+};
+
+/* groupBlocks rebuilds tool groups on every render; the blocks inside keep
+   their identity unless an event touched them. */
+function sameRow(a: RowProps, b: RowProps): boolean {
+  for (const key of Object.keys(a) as Array<keyof RowProps>) {
+    if (key === "item") continue;
+    if (a[key] !== b[key]) return false;
+  }
+  if (a.item === b.item) return true;
+  const ga = a.item as { kind: string; blocks?: ToolBlock[] };
+  const gb = b.item as { kind: string; blocks?: ToolBlock[] };
+  if (ga.kind !== "tools" || gb.kind !== "tools" || !ga.blocks || !gb.blocks) return false;
+  return ga.blocks.length === gb.blocks.length && ga.blocks.every((tb, i) => tb === gb.blocks![i]);
+}
+
+const TranscriptRow = memo(function TranscriptRow({
+  item,
+  search,
+  pending,
+  live,
+  locale,
+  thinkingDefault,
+  shellLines,
+  showDiff,
+}: RowProps) {
+  const t = useT();
+  if ("kind" in item && item.kind === "tools") {
+    return <ToolGroup blocks={item.blocks} shellLines={shellLines} showDiff={showDiff} />;
+  }
+  const b = item as Block;
+  if (b.kind === "user") {
+    return (
+      <div className={`bubble user${b.retracted ? " retracted" : ""}${pending ? " pending" : ""}`}>
+        {b.attachments && b.attachments.length > 0 && <Thumbs attachments={b.attachments} />}
+        <Highlight text={b.text} query={search} />
+        {pending && <span className="muted bubble-flag">{t("chat.pending")}</span>}
+        {b.retracted && <span className="muted bubble-flag">{t("chat.retracted")}</span>}
+      </div>
+    );
+  }
+  if (b.kind === "thinking") {
+    return <Thinking text={b.text} durationMs={b.durationMs} defaultOpen={thinkingDefault === "expanded"} />;
+  }
+  if (b.kind === "text") {
+    return (
+      <div className="bubble assistant">
+        <MarkdownBody text={b.text} live={live} />
+        <div className="turn-foot">
+          <CopyTurn text={b.text} />
+        </div>
+      </div>
+    );
+  }
+  if (b.kind === "usage") {
+    const parts = [
+      b.inputTokens != null ? `↓${formatTokens(b.inputTokens, locale)}` : "",
+      b.outputTokens != null ? `↑${formatTokens(b.outputTokens, locale)}` : "",
+    ].filter(Boolean);
+    if (!parts.length) return null;
+    return (
+      <p className="muted usage" title={t("chat.usageTotal")}>
+        {t("chat.usage")} {parts.join(" ")}
+      </p>
+    );
+  }
+  if (b.kind === "banner") {
+    const text =
+      b.text === "cancelled" ? t("status.cancelled") : b.text === "stalled" ? t("chat.stalled") : operatorError(b.text, t);
+    const tone = b.text === "stalled" ? "warn" : b.tone;
+    return (
+      <p className={`banner ${tone}`} role={tone === "error" ? "alert" : "status"}>
+        <span className="banner-icon" aria-hidden="true">
+          {tone === "error" ? <IconError /> : tone === "warn" ? <IconAlert /> : <IconInfo />}
+        </span>
+        {text}
+      </p>
+    );
+  }
+  return null;
+}, sameRow);
 
 function Thumbs({ attachments }: { attachments: MessageAttachment[] }) {
   return (

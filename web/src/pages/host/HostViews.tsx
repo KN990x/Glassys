@@ -717,6 +717,7 @@ export function FilesView({
     [source, file],
   );
   const lines = useMemo(() => (preview.data?.text ?? "").replace(/\n$/, "").split("\n"), [preview.data?.text]);
+  const lineNumbers = useMemo(() => lines.map((_, i) => i + 1).join("\n"), [lines]);
 
   function open(path: string) {
     setDir(path);
@@ -815,14 +816,10 @@ export function FilesView({
             {preview.data?.binary ? <Callout>{t("files.binary")}</Callout> : null}
             {preview.data?.text !== undefined ? (
               <pre className="file-preview">
-                {lines.map((line, i) => (
-                  <span key={i} className="file-line">
-                    <span className="file-no" aria-hidden="true">
-                      {i + 1}
-                    </span>
-                    <code>{line}</code>
-                  </span>
-                ))}
+                <span className="file-no" aria-hidden="true">
+                  {lineNumbers}
+                </span>
+                <code>{lines.join("\n")}</code>
               </pre>
             ) : null}
             {preview.data?.truncated ? <p className="muted host-empty">{t("files.truncated")}</p> : null}

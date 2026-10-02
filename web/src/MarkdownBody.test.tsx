@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
 import { I18nProvider } from "./i18n";
-import { MarkdownBody, safeHref } from "./components/MarkdownBody";
+import { MarkdownBody, STREAM_PARSE_MS, safeHref } from "./components/MarkdownBody";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,5 +35,32 @@ describe("MarkdownBody", () => {
     expect(host.querySelector("img")).toBeNull();
     expect(host.textContent).toContain("x");
     host.remove();
+  });
+
+  it("throttles reparsing while live and renders the final text at once when it closes", async () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const render = (text: string, live: boolean) =>
+      root.render(
+        <I18nProvider locale="en">
+          <MarkdownBody text={text} live={live} />
+        </I18nProvider>,
+      );
+    await act(async () => render("one", true));
+    expect(host.textContent).toBe("one");
+    await act(async () => render("one two", true));
+    expect(host.textContent).toBe("one");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STREAM_PARSE_MS);
+    });
+    expect(host.textContent).toBe("one two");
+    await act(async () => render("one two three", true));
+    await act(async () => render("one two three four", false));
+    expect(host.textContent).toBe("one two three four");
+    act(() => root.unmount());
+    host.remove();
+    vi.useRealTimers();
   });
 });

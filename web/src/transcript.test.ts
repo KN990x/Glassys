@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { reduceTranscript, replay } from "./transcript";
+import { MAX_TOOL_CHUNK, reduceTranscript, replay } from "./transcript";
 
 describe("transcript reducer", () => {
+  it("keeps only the tail of a long tool stream, cut on a line", () => {
+    let blocks = reduceTranscript([], { type: "tool.start", callId: "c1", kind: "shell", title: "Shell" });
+    const line = `${"x".repeat(99)}\n`;
+    for (let i = 0; i < 1000; i++) {
+      blocks = reduceTranscript(blocks, { type: "tool.progress", callId: "c1", chunk: line });
+    }
+    blocks = reduceTranscript(blocks, { type: "tool.progress", callId: "c1", chunk: "last line" });
+    const tool = blocks[0];
+    if (tool?.kind !== "tool") throw new Error("expected a tool block");
+    expect(tool.chunk.length).toBeLessThanOrEqual(MAX_TOOL_CHUNK);
+    expect(tool.chunk.startsWith("x")).toBe(true);
+    expect(tool.chunk.endsWith("last line")).toBe(true);
+  });
+
   it("uses stable tool keys from callId", () => {
     const start = reduceTranscript([], {
       type: "tool.start",

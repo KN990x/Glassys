@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import type { RedactedConfig } from "@glassys/protocol";
 import { isTheme, resolveTheme, type Theme } from "@glassys/protocol";
 import { I18nProvider, useT, type Locale } from "./i18n";
 import { api, setUnauthorizedHandler } from "./api";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
-import { Wizard } from "./pages/Wizard";
 import { Chat } from "./pages/Chat";
 import { GlassysMark } from "./components/Icon";
+
+const Wizard = lazy(() => import("./pages/Wizard").then((m) => ({ default: m.Wizard })));
 
 type Gate = "boot" | "unreachable" | "setup" | "login" | "wizard" | "chat";
 type ResolvedTheme = "dark" | "light";
@@ -143,7 +144,9 @@ export function App() {
         {gate === "setup" && <Setup locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
         {gate === "login" && <Login locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
         {gate === "wizard" && config && (
-          <Wizard config={config} onConfig={setConfig} onDone={() => void refresh()} />
+          <Suspense fallback={<BootScreen />}>
+            <Wizard config={config} onConfig={setConfig} onDone={() => void refresh()} />
+          </Suspense>
         )}
         {gate === "chat" && config && (
           <Chat config={config} onConfig={setConfig} onLogout={() => void refresh()} />

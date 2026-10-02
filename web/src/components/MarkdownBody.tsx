@@ -1,5 +1,5 @@
-import { memo, useState, type ReactNode } from "react";
-import Markdown from "react-markdown";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useT } from "../i18n";
 import { IconAlert, IconCheck, IconCopy } from "./Icon";
@@ -12,38 +12,67 @@ export function safeHref(href: string | undefined): string | undefined {
   return SAFE_HREF.test(trimmed) ? trimmed : undefined;
 }
 
-function MarkdownBodyInner({ text }: { text: string }) {
+const REMARK_PLUGINS = [remarkGfm];
+
+const COMPONENTS: Components = {
+  pre({ children }) {
+    return <CodeBlock language={codeLanguage(children)}>{children}</CodeBlock>;
+  },
+  a({ href, children }) {
+    const safe = safeHref(href);
+    if (!safe) return <span>{children}</span>;
+    return (
+      <a href={safe} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    );
+  },
+  img() {
+    return null;
+  },
+  table({ children }) {
+    /* Wide tables scroll inside themselves; the page never does. */
+    return (
+      <div className="table-wrap">
+        <table>{children}</table>
+      </div>
+    );
+  },
+};
+
+/* A streaming block grows by a few characters per delta; reparsing the whole
+   reply on every one is what made long answers stutter. */
+export const STREAM_PARSE_MS = 80;
+
+function useThrottledText(text: string, live: boolean): string {
+  const [shown, setShown] = useState(text);
+  const last = useRef(0);
+  useEffect(() => {
+    if (!live) {
+      setShown(text);
+      return;
+    }
+    const wait = STREAM_PARSE_MS - (Date.now() - last.current);
+    if (wait <= 0) {
+      last.current = Date.now();
+      setShown(text);
+      return;
+    }
+    const id = setTimeout(() => {
+      last.current = Date.now();
+      setShown(text);
+    }, wait);
+    return () => clearTimeout(id);
+  }, [text, live]);
+  return live ? shown : text;
+}
+
+function MarkdownBodyInner({ text, live = false }: { text: string; live?: boolean }) {
+  const shown = useThrottledText(text, live);
   return (
     <div className="md">
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          pre({ children }) {
-            return <CodeBlock language={codeLanguage(children)}>{children}</CodeBlock>;
-          },
-          a({ href, children }) {
-            const safe = safeHref(href);
-            if (!safe) return <span>{children}</span>;
-            return (
-              <a href={safe} target="_blank" rel="noopener noreferrer">
-                {children}
-              </a>
-            );
-          },
-          img() {
-            return null;
-          },
-          table({ children }) {
-            /* Wide tables scroll inside themselves; the page never does. */
-            return (
-              <div className="table-wrap">
-                <table>{children}</table>
-              </div>
-            );
-          },
-        }}
-      >
-        {text}
+      <Markdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
+        {shown}
       </Markdown>
     </div>
   );

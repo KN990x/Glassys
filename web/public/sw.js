@@ -1,4 +1,5 @@
-/* Cache name is rewritten at build to glassys-v${root package.json version}. */
+/* The build rewrites the cache name to glassys-v<version>-<build hash>, so each
+   build gets its own cache and activate drops the assets of every older one. */
 const CACHE = "glassys-v0.1.0";
 const PRECACHE = [
   "/",
