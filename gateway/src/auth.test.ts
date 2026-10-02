@@ -31,9 +31,10 @@ describe("session cookie", () => {
     expect(requestIsSecure(req({ "x-forwarded-proto": "http" }))).toBe(false);
   });
 
-  it("detects TLS from publicUrl", () => {
-    expect(requestIsSecure(req({}), "https://glassys.example")).toBe(true);
-    expect(requestIsSecure(req({}), "http://127.0.0.1:8787")).toBe(false);
+  it("detects TLS from publicUrl only for requests to that host", () => {
+    expect(requestIsSecure(req({ host: "glassys.example" }), "https://glassys.example")).toBe(true);
+    expect(requestIsSecure(req({ host: "192.168.1.20:8787" }), "https://glassys.example")).toBe(false);
+    expect(requestIsSecure(req({ host: "127.0.0.1:8787" }), "http://127.0.0.1:8787")).toBe(false);
   });
 
   it("does not throw on malformed percent-encoding in cookies", () => {
@@ -61,6 +62,31 @@ describe("verifySession", () => {
       .setExpirationTime("1h")
       .sign(new TextEncoder().encode(process.env.GLASSYS_JWT_SECRET));
     expect(await verifySession(other)).toBe(false);
+  });
+
+  it("revokes one session on logout and leaves the others valid", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-jwt-rev-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    process.env.GLASSYS_JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
+    const { signSession, verifySession, revokeSessionToken } = await import("./auth.js");
+    const phone = await signSession();
+    const laptop = await signSession();
+    await revokeSessionToken(laptop);
+    expect(await verifySession(laptop)).toBe(false);
+    expect(await verifySession(phone)).toBe(true);
+  });
+
+  it("rejects a token signed with another algorithm", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-jwt-alg-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    process.env.GLASSYS_JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
+    const { verifySession } = await import("./auth.js");
+    const hs512 = await new SignJWT({ sub: "operator", jwtEpoch: 0 })
+      .setProtectedHeader({ alg: "HS512" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(new TextEncoder().encode(process.env.GLASSYS_JWT_SECRET));
+    expect(await verifySession(hs512)).toBe(false);
   });
 });
 

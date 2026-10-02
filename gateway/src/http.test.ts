@@ -113,6 +113,42 @@ describe("http api", () => {
     expect(ok.status).toBe(200);
   });
 
+  it("revokes the session on logout so the same token stops working", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const auth = { Authorization: `Bearer ${token}` };
+    expect((await fetch(`${base}/api/auth/me`, { headers: auth })).status).toBe(200);
+    const out = await fetch(`${base}/api/auth/logout`, { method: "POST", headers: auth });
+    expect(out.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+    expect((await fetch(`${base}/api/auth/me`, { headers: auth })).status).toBe(401);
+  });
+
+  it("serializes password attempts per address and turns a pile-up away with 429", async () => {
+    const { setLoginBaseDelayForTests, resetLoginLimitForTests, LOGIN_MAX_WAITING } = await import("./login-limit.js");
+    resetLoginLimitForTests();
+    setLoginBaseDelayForTests(200);
+    try {
+      await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+      const attempt = () =>
+        fetch(`${base}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: "wrong-password" }),
+        }).then((r) => r.status);
+      const statuses = await Promise.all(Array.from({ length: LOGIN_MAX_WAITING + 2 }, attempt));
+      expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(1);
+      expect(statuses.filter((s) => s === 401).length).toBeGreaterThanOrEqual(1);
+    } finally {
+      setLoginBaseDelayForTests();
+      resetLoginLimitForTests();
+    }
+  });
+
   it("serves the host views only to a session, and never the data directory", async () => {
     const anon = await fetch(`${base}/api/host/capabilities`);
     expect(anon.status).toBe(401);

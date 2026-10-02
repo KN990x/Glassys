@@ -82,8 +82,7 @@ vi.mock("./api", () => ({
     createSchedule: vi.fn(async () => ({ id: "s1", nextRun: null })),
     upgrade: vi.fn(async () => ({ ok: true, upgrading: true })),
   },
-  clearToken: vi.fn(),
-  getToken: () => "tok",
+  setUnauthorizedHandler: vi.fn(),
 }));
 
 vi.mock("./pages/Settings", () => ({

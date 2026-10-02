@@ -11,7 +11,7 @@ vi.mock("./api", () => ({
     config: vi.fn(),
     logout: vi.fn(),
   },
-  getToken: () => null,
+  setUnauthorizedHandler: vi.fn(),
 }));
 
 describe("App boot", () => {

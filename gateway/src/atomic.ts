@@ -6,6 +6,9 @@ import { rename, rm, writeFile } from "node:fs/promises";
  * half-written file. The temp name is unique per call: two writers that reach the same
  * target (a lock held by another module instance, a second process) each rename their
  * own file instead of one renaming the other's away and failing with ENOENT.
+ *
+ * Everything written here is gateway state (config, threads, schedules, push keys), so it is
+ * owner-only by default.
  */
 export async function writeFileAtomic(
   target: string,
@@ -14,7 +17,7 @@ export async function writeFileAtomic(
 ): Promise<void> {
   const tmp = `${target}.${randomBytes(6).toString("hex")}.tmp`;
   try {
-    await writeFile(tmp, data, { encoding: "utf8", ...options });
+    await writeFile(tmp, data, { encoding: "utf8", mode: 0o600, ...options });
     await rename(tmp, target);
   } catch (err) {
     await rm(tmp, { force: true });

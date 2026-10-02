@@ -3,7 +3,7 @@ import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { paths } from "./paths.js";
+import { log, paths } from "./paths.js";
 import { createMutex } from "./lock.js";
 
 const withSecretsLock = createMutex();
@@ -49,6 +49,21 @@ async function readDisk(): Promise<SecretsFile> {
   }
 }
 
+export const MIN_JWT_SECRET_BYTES = 32;
+let warnedShortJwtSecret = false;
+
+/** GLASSYS_JWT_SECRET when it is long enough to sign sessions with; a short one is ignored, loudly. */
+export function envJwtSecret(): string {
+  const value = process.env.GLASSYS_JWT_SECRET || "";
+  if (!value) return "";
+  if (Buffer.byteLength(value, "utf8") >= MIN_JWT_SECRET_BYTES) return value;
+  if (!warnedShortJwtSecret) {
+    warnedShortJwtSecret = true;
+    log("error", `GLASSYS_JWT_SECRET is shorter than ${MIN_JWT_SECRET_BYTES} bytes; ignoring it and using the secret in secrets.json`);
+  }
+  return "";
+}
+
 function applyEnv(file: SecretsFile): SecretsFile {
   const adapters = { ...file.adapters };
   for (const [id, names] of Object.entries(ENV_BY_ADAPTER)) {
@@ -61,7 +76,7 @@ function applyEnv(file: SecretsFile): SecretsFile {
     }
   }
   return {
-    jwtSecret: process.env.GLASSYS_JWT_SECRET || file.jwtSecret,
+    jwtSecret: envJwtSecret() || file.jwtSecret,
     operatorPasswordHash: process.env.GLASSYS_OPERATOR_PASSWORD_HASH || file.operatorPasswordHash,
     jwtEpoch: file.jwtEpoch ?? 0,
     adapters,
@@ -100,7 +115,7 @@ export async function loadSecrets(): Promise<SecretsFile> {
   return withSecretsLock(async () => {
     if (cache?.path === p) return applyEnv(cache.file);
     const file = await readDisk();
-    if (!file.jwtSecret && !process.env.GLASSYS_JWT_SECRET) {
+    if (!file.jwtSecret && !envJwtSecret()) {
       file.jwtSecret = randomBytes(32).toString("hex");
       await writeSecrets(file);
     } else {

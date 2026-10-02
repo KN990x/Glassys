@@ -8,7 +8,8 @@ import {
   type ClientMessage,
   type ConfigPatch,
 } from "@glassys/protocol";
-import { verifyEdge, verifyRequestSession, verifySession } from "./auth.js";
+import { requestSessionToken, verifyEdge, verifySession } from "./auth.js";
+import { revalidateSockets, trackSocketSession, untrackSocket } from "./sessions.js";
 import { originAllowed } from "./cors.js";
 import { redacted, loadConfig } from "./config.js";
 import { hub, flushHandshakeBuffer } from "./hub.js";
@@ -122,6 +123,7 @@ export function attachWs(
       if (state.handshakeTimer) clearTimeout(state.handshakeTimer);
       if (state.pingTimer) clearInterval(state.pingTimer);
       hub.remove(ws);
+      untrackSocket(ws);
     });
 
     ws.on("message", (raw) => {
@@ -202,12 +204,13 @@ async function handleClient(
   }
 
   if (msg.type === "auth") {
-    const ok = (await verifySession(msg.token)) || (await verifyRequestSession(req));
-    if (!ok) {
+    const token = (await verifySession(msg.token)) ? msg.token : await requestSessionToken(req);
+    if (!token) {
       hub.send(ws, { type: "auth.error", message: "unauthorized" });
       return;
     }
     state.auth = true;
+    trackSocketSession(ws, token);
     if (state.handshakeTimer) clearTimeout(state.handshakeTimer);
     const config = await redacted();
     hub.add(ws, { buffer: true });
@@ -288,6 +291,7 @@ async function handleClient(
         break;
       }
       await applyConfigPatch(patch);
+      if (patch.operatorPassword) await revalidateSockets();
       break;
     }
     default:

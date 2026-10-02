@@ -18,6 +18,7 @@ import { paths } from "./paths.js";
 import {
   adapterApiKey,
   adapterKeyFromEnv,
+  envJwtSecret,
   hashPassword,
   loadSecrets,
   operatorPasswordError,
@@ -201,7 +202,7 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
       await patchSecrets({
         operatorPasswordHash: await hashPassword(operatorPassword),
         jwtEpoch: (secrets.jwtEpoch ?? 0) + 1,
-        ...(process.env.GLASSYS_JWT_SECRET ? {} : { jwtSecret: randomBytes(32).toString("hex") }),
+        ...(envJwtSecret() ? {} : { jwtSecret: randomBytes(32).toString("hex") }),
       });
     }
     return { config: after, restart: restartRequired(before, after) };

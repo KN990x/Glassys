@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api, setToken } from "../api";
+import { api } from "../api";
 import { useT, type Locale } from "../i18n";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import { GlassysMark, IconEye, IconEyeOff } from "../components/Icon";
@@ -26,8 +26,7 @@ export function Login({
     setSubmitting(true);
     setError("");
     try {
-      const { token } = await api.login(password);
-      setToken(token);
+      await api.login(password);
       try {
         await api.saveConfig({ space: { locale } });
       } catch {

@@ -17,26 +17,33 @@ import type {
   ThreadSummary,
 } from "@glassys/protocol";
 
-const TOKEN_KEY = "glassys_token";
-
-export function getToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY);
+/*
+ * The PWA authenticates with the HttpOnly session cookie alone, so a script injected into the page
+ * has no token to read. Earlier builds kept one in sessionStorage; drop it.
+ */
+try {
+  sessionStorage.removeItem("glassys_token");
+} catch {
+  /* storage unavailable */
 }
 
-export function setToken(token: string): void {
-  sessionStorage.setItem(TOKEN_KEY, token);
+let onUnauthorized: (() => void) | null = null;
+
+/** Called when a request outside the login flow comes back 401: the session ended (logout elsewhere, new password). */
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
 }
 
-export function clearToken(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
+function checkSession(path: string, res: Response): void {
+  if (res.status !== 401 || path.startsWith("/api/auth/")) return;
+  onUnauthorized?.();
 }
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const res = await fetch(path, { ...init, headers, credentials: "include" });
+  checkSession(path, res);
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -150,16 +157,14 @@ export const api = {
     req<{ behind: number; sha: string; branch: string; dirty: boolean }>("/api/admin/update/check", { method: "POST" }),
   upgrade: () => req<{ ok: boolean; upgrading: boolean }>("/api/admin/upgrade", { method: "POST" }),
   upload: async (file: File) => {
-    const token = getToken();
-    const res = await fetch(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
+    const path = "/api/uploads";
+    const res = await fetch(`${path}?name=${encodeURIComponent(file.name)}`, {
       method: "POST",
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        "Content-Type": file.type || "application/octet-stream",
-      },
+      headers: { "Content-Type": file.type || "application/octet-stream" },
       credentials: "include",
       body: file,
     });
+    checkSession(path, res);
     const data = (await res.json().catch(() => ({}))) as MessageAttachment & { error?: string };
     if (!res.ok) throw new Error(data.error || res.statusText);
     return data as MessageAttachment;
@@ -183,10 +188,9 @@ export const api = {
       body: JSON.stringify({ title }),
     }),
   exportThread: async (id: string) => {
-    const headers = new Headers();
-    const token = getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    const res = await fetch(`/api/threads/${encodeURIComponent(id)}/export`, { headers, credentials: "include" });
+    const path = `/api/threads/${encodeURIComponent(id)}/export`;
+    const res = await fetch(path, { credentials: "include" });
+    checkSession(path, res);
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(data.error || res.statusText);

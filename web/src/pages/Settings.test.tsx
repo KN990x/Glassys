@@ -74,7 +74,7 @@ vi.mock("../api", () => ({
       user: "ops",
     })),
   },
-  clearToken: vi.fn(),
+  setUnauthorizedHandler: vi.fn(),
 }));
 
 const { disableWebPush } = vi.hoisted(() => ({

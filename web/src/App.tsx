@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RedactedConfig } from "@glassys/protocol";
 import { isTheme, resolveTheme, type Theme } from "@glassys/protocol";
 import { I18nProvider, useT, type Locale } from "./i18n";
-import { api, getToken } from "./api";
+import { api, setUnauthorizedHandler } from "./api";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
 import { Wizard } from "./pages/Wizard";
@@ -80,27 +80,12 @@ export function App() {
         setGate("setup");
         return;
       }
-      if (!getToken()) {
-        try {
-          await api.me();
-        } catch {
-          setGate("login");
-          return;
-        }
-      }
       try {
         const me = await api.me();
         const cfg = await api.config();
         setConfig(cfg);
         setGate(me.onboarded ? "chat" : "wizard");
       } catch {
-        if (getToken()) {
-          try {
-            setConfig(await api.config());
-          } catch {
-            /* invalid session */
-          }
-        }
         setGate("login");
       }
     } catch {
@@ -111,6 +96,11 @@ export function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => setGate("login"));
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   useEffect(() => {
     if (typeof globalThis.matchMedia !== "function") return;

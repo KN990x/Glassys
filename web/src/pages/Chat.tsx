@@ -15,7 +15,7 @@ import type {
 } from "@glassys/protocol";
 import { PROTOCOL_VERSION, MAX_ATTACHMENTS, isTranscriptEvent } from "@glassys/protocol";
 import { useT } from "../i18n";
-import { api, clearToken } from "../api";
+import { api } from "../api";
 import { openSocket, type ConnState } from "../socket";
 import { reduceTranscript, replay, type Block } from "../transcript";
 import { Composer } from "../components/Composer";
@@ -210,7 +210,6 @@ export function Chat({
       },
       onEvent: (msg: ServerMessage) => {
         if (msg.type === "auth.error") {
-          clearToken();
           void api.logout().finally(() => onLogoutRef.current());
           return;
         }

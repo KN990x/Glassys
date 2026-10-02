@@ -46,14 +46,20 @@ export function forwardedProto(req: IncomingMessage): string {
     .toLowerCase() ?? "";
 }
 
+/**
+ * Whether the browser reached us over TLS. An https publicUrl only counts when the request is for
+ * that host (a proxy that does not send X-Forwarded-Proto): the same gateway reached over plain
+ * http on the LAN must get a cookie without Secure, or the browser drops it.
+ */
 export function requestIsSecure(req: IncomingMessage, publicUrl?: string): boolean {
   if (forwardedProto(req) === "https") return true;
-  if (publicUrl) {
-    try {
-      if (new URL(publicUrl).protocol === "https:") return true;
-    } catch {
-      /* ignore */
-    }
+  if (!publicUrl) return false;
+  try {
+    const url = new URL(publicUrl);
+    if (url.protocol !== "https:") return false;
+    const host = String(req.headers.host || "").toLowerCase();
+    return host === url.host.toLowerCase();
+  } catch {
+    return false;
   }
-  return false;
 }

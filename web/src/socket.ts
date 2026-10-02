@@ -1,5 +1,4 @@
 import { PROTOCOL_VERSION, clampKeepaliveSeconds, type ClientMessage, type ServerMessage } from "@glassys/protocol";
-import { getToken } from "./api";
 
 export type ConnState = "connecting" | "connected" | "reconnecting" | "error";
 
@@ -49,7 +48,8 @@ export function openSocket(handlers: {
         return;
       }
       if (msg.type === "hello.ok") {
-        socket.send(JSON.stringify({ type: "auth", token: getToken() ?? "" } satisfies ClientMessage));
+        /* The upgrade request carried the session cookie; the gateway authenticates with that. */
+        socket.send(JSON.stringify({ type: "auth", token: "" } satisfies ClientMessage));
       } else if (msg.type === "hello.incompatible") {
         fatal = true;
         closed = true;

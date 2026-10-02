@@ -6,14 +6,17 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { PROTOCOL_VERSION, type ConfigPatch } from "@glassys/protocol";
 import { loadConfig, redacted } from "./config.js";
 import {
+  buildClearSessionCookie,
   buildSessionCookie,
-  clearSessionCookie,
   loginWithPassword,
+  requestSessionToken,
+  revokeSessionToken,
   signSession,
   verifyEdge,
   verifyRequestSession,
-  requestIsSecure,
 } from "./auth.js";
+import { attemptLogin } from "./login-limit.js";
+import { revalidateSockets } from "./sessions.js";
 import { hashPassword, loadSecrets, operatorPasswordError, patchSecrets, secretsFlags } from "./secrets.js";
 import { originAllowed, setCors, setupOriginAllowed } from "./cors.js";
 import { UnknownAdapterError } from "./adapters.js";
@@ -112,8 +115,6 @@ async function requireAuth(req: IncomingMessage, res: ServerResponse): Promise<b
 }
 
 let setupLock: Promise<void> = Promise.resolve();
-const LOGIN_FAIL_TTL_MS = 15 * 60 * 1000;
-const failedLoginsByIp = new Map<string, { count: number; at: number }>();
 
 async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
   let release: () => void = () => undefined;
@@ -132,20 +133,6 @@ async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
 function clientIp(req: IncomingMessage): string {
   const addr = req.socket.remoteAddress || "unknown";
   return addr.replace(/^::ffff:/, "");
-}
-
-function pruneFailedLogins(now = Date.now()): void {
-  for (const [ip, rec] of failedLoginsByIp) {
-    if (now - rec.at > LOGIN_FAIL_TTL_MS) failedLoginsByIp.delete(ip);
-  }
-}
-
-async function loginBackoff(ip: string): Promise<void> {
-  pruneFailedLogins();
-  const failed = failedLoginsByIp.get(ip)?.count ?? 0;
-  if (failed <= 0) return;
-  const ms = Math.min(2000, 150 * 2 ** Math.min(failed - 1, 4));
-  await new Promise((r) => setTimeout(r, ms));
 }
 
 async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
@@ -225,27 +212,32 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/auth/login") {
     if (!(await requireEdge(req, res))) return true;
-    const ip = clientIp(req);
-    await loginBackoff(ip);
-    const body = (await readJson(req)) as { password?: string };
-    const token = await loginWithPassword(body.password || "");
+    const body = (await readJson(req, 4096)) as { password?: unknown };
+    const password = typeof body.password === "string" ? body.password : "";
+    const token = await attemptLogin(clientIp(req), async () => {
+      const signed = await loginWithPassword(password);
+      return { ok: signed !== null, value: signed };
+    });
+    if (token === "busy") {
+      res.setHeader("Retry-After", "30");
+      send(res, 429, { error: "too many attempts" });
+      return true;
+    }
     if (!token) {
-      const prev = failedLoginsByIp.get(ip);
-      failedLoginsByIp.set(ip, { count: (prev?.count ?? 0) + 1, at: Date.now() });
       send(res, 401, { error: "invalid password" });
       return true;
     }
-    failedLoginsByIp.delete(ip);
     res.setHeader("Set-Cookie", await buildSessionCookie(token, req));
     send(res, 200, { token });
     return true;
   }
 
   if (method === "POST" && path === "/api/auth/logout") {
-    const ok = await verifyRequestSession(req);
-    if (ok) {
-      const cfg = await loadConfig();
-      res.setHeader("Set-Cookie", clearSessionCookie(requestIsSecure(req, cfg.network.publicUrl)));
+    const token = await requestSessionToken(req);
+    if (token) {
+      await revokeSessionToken(token);
+      await revalidateSockets();
+      res.setHeader("Set-Cookie", await buildClearSessionCookie(req));
     }
     send(res, 200, { ok: true });
     return true;
@@ -279,6 +271,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     }
     try {
       const { restart } = await applyConfigPatch(patch);
+      if (patch.operatorPassword) await revalidateSockets();
       send(res, 200, await redacted(undefined, restart));
     } catch (err) {
       if (err instanceof HttpError) {

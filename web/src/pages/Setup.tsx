@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api, setToken } from "../api";
+import { api } from "../api";
 import { useT, type Locale } from "../i18n";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import { GlassysMark } from "../components/Icon";
@@ -30,8 +30,7 @@ export function Setup({
     setSubmitting(true);
     setError("");
     try {
-      const { token } = await api.setup(password);
-      setToken(token);
+      await api.setup(password);
       try {
         await api.saveConfig({ space: { locale } });
       } catch {

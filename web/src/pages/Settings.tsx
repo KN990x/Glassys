@@ -9,7 +9,7 @@ import type {
   SettingSource,
 } from "@glassys/protocol";
 import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
-import { api, clearToken } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { paramsForSelection } from "../components/ModelPicker";
 import { defaultOptionsFor, optionString, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
@@ -350,10 +350,7 @@ export function Settings({
       setSaved(t("settings.saved"));
       await loadModels(next.agent.adapter);
       setAuth(await api.adapterStatus(next.agent.adapter).catch(() => null));
-      if (rotatedPassword) {
-        clearToken();
-        onLogout();
-      }
+      if (rotatedPassword) onLogout();
     } catch (err) {
       setError(operatorError(err instanceof Error ? err.message : String(err), t));
     } finally {
@@ -569,7 +566,6 @@ export function Settings({
                   onLogout={() => {
                     void (async () => {
                       await api.logout();
-                      clearToken();
                       onLogout();
                     })();
                   }}

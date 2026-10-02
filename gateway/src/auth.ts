@@ -1,7 +1,9 @@
 import { SignJWT, jwtVerify, createRemoteJWKSet, type JWTPayload } from "jose";
 import type { IncomingMessage } from "node:http";
+import { randomUUID } from "node:crypto";
 import { loadConfig } from "./config.js";
-import { loadSecrets, verifyPassword } from "./secrets.js";
+import { MAX_OPERATOR_PASSWORD, loadSecrets, verifyPassword } from "./secrets.js";
+import { isSessionRevoked, revokeSession } from "./revoked.js";
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -24,11 +26,19 @@ function jwksFor(teamHost: string): ReturnType<typeof createRemoteJWKSet> {
   return jwks;
 }
 
-/** Prefer a valid Bearer token; fall back to the session cookie if Bearer is missing or expired. */
-export async function verifyRequestSession(req: IncomingMessage): Promise<boolean> {
+/** The valid session token a request carries: a Bearer header first, then the session cookie. */
+export async function requestSessionToken(req: IncomingMessage): Promise<string | null> {
   const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ") && (await verifySession(auth.slice(7)))) return true;
-  return verifySession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
+  if (auth?.startsWith("Bearer ")) {
+    const bearer = auth.slice(7);
+    if (await verifySession(bearer)) return bearer;
+  }
+  const cookie = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+  return (await verifySession(cookie)) ? cookie! : null;
+}
+
+export async function verifyRequestSession(req: IncomingMessage): Promise<boolean> {
+  return (await requestSessionToken(req)) !== null;
 }
 
 export async function signSession(): Promise<string> {
@@ -37,27 +47,58 @@ export async function signSession(): Promise<string> {
   const ttlHours = cfg.security.sessionTtlHours || 168;
   return new SignJWT({ sub: "operator", jwtEpoch: jwtEpoch ?? 0 })
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(randomUUID())
     .setIssuedAt()
     .setExpirationTime(`${ttlHours}h`)
     .sign(new TextEncoder().encode(jwtSecret));
 }
 
-export async function verifySession(token: string | undefined): Promise<boolean> {
-  if (!token) return false;
+export async function sessionClaims(token: string | undefined): Promise<JWTPayload | null> {
+  if (!token) return null;
   try {
     const { jwtSecret, jwtEpoch } = await loadSecrets();
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret));
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret), { algorithms: ["HS256"] });
     const epoch = typeof payload.jwtEpoch === "number" ? payload.jwtEpoch : 0;
-    return payload.sub === "operator" && epoch === (jwtEpoch ?? 0);
+    if (payload.sub !== "operator" || epoch !== (jwtEpoch ?? 0)) return null;
+    if (await isSessionRevoked(payload.jti)) return null;
+    return payload;
   } catch {
-    return false;
+    return null;
+  }
+}
+
+export async function verifySession(token: string | undefined): Promise<boolean> {
+  return (await sessionClaims(token)) !== null;
+}
+
+/** Revoke this one session (logout on one device); the operator's other devices stay signed in. */
+export async function revokeSessionToken(token: string): Promise<void> {
+  const claims = await sessionClaims(token);
+  if (!claims?.jti || typeof claims.exp !== "number") return;
+  await revokeSession(claims.jti, claims.exp);
+}
+
+/** scrypt is deliberately slow; a burst of logins must not take every core. */
+const MAX_CONCURRENT_VERIFY = 2;
+let verifying = 0;
+const verifyWaiters: Array<() => void> = [];
+
+async function withVerifySlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (verifying >= MAX_CONCURRENT_VERIFY) await new Promise<void>((resolve) => verifyWaiters.push(resolve));
+  verifying += 1;
+  try {
+    return await fn();
+  } finally {
+    verifying -= 1;
+    verifyWaiters.shift()?.();
   }
 }
 
 export async function loginWithPassword(password: string): Promise<string | null> {
+  if (!password || password.length > MAX_OPERATOR_PASSWORD) return null;
   const { operatorPasswordHash } = await loadSecrets();
   if (!operatorPasswordHash) return null;
-  const ok = await verifyPassword(password, operatorPasswordHash);
+  const ok = await withVerifySlot(() => verifyPassword(password, operatorPasswordHash));
   if (!ok) return null;
   return signSession();
 }
@@ -65,6 +106,11 @@ export async function loginWithPassword(password: string): Promise<string | null
 export async function buildSessionCookie(token: string, req: IncomingMessage): Promise<string> {
   const cfg = await loadConfig();
   return sessionCookie(token, requestIsSecure(req, cfg.network.publicUrl), cfg.security.sessionTtlHours || 168);
+}
+
+export async function buildClearSessionCookie(req: IncomingMessage): Promise<string> {
+  const cfg = await loadConfig();
+  return clearSessionCookie(requestIsSecure(req, cfg.network.publicUrl));
 }
 
 export async function verifyEdge(req: IncomingMessage): Promise<{ ok: boolean; reason?: string }> {
