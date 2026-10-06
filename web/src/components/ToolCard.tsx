@@ -12,6 +12,7 @@ import {
   IconFolder,
   IconSearch,
   IconSpinner,
+  IconStop,
   IconTerminal,
 } from "./Icon";
 
@@ -46,7 +47,7 @@ function ToolState({ status, label }: { status: string; label: string }) {
   }
   return (
     <span className={`tool-state ${status}`}>
-      {status === "denied" ? <IconAlert /> : <IconError />}
+      {status === "denied" ? <IconAlert /> : status === "stopped" ? <IconStop /> : <IconError />}
       {label}
     </span>
   );
@@ -91,6 +92,7 @@ export function ToolGroup({
   const { files, add, del } = useMemo(() => toolGroupSummary(blocks), [blocks]);
   const running = blocks.some((b) => b.status === "running");
   const failed = blocks.some((b) => b.status === "error" || b.status === "denied");
+  const stopped = blocks.some((b) => b.status === "stopped");
   /* Open, a group whose changes all sit in one row would print that row's
      totals twice; the head keeps them when folded or when they add up. */
   const statRows = blocks.filter((b) => b.stats).length;
@@ -126,8 +128,8 @@ export function ToolGroup({
             </span>
           ) : null}
           <ToolState
-            status={running ? "running" : failed ? "error" : "done"}
-            label={running ? t("tool.running") : failed ? t("tool.error") : t("tool.done")}
+            status={running ? "running" : failed ? "error" : stopped ? "stopped" : "done"}
+            label={running ? t("tool.running") : failed ? t("tool.error") : stopped ? t("tool.stopped") : t("tool.done")}
           />
         </span>
       </div>
@@ -179,7 +181,9 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
         ? t("tool.denied")
         : block.status === "error"
           ? t("tool.error")
-          : t("tool.done");
+          : block.status === "stopped"
+            ? t("tool.stopped")
+            : t("tool.done");
 
   return (
     <article className={`tool ${block.status}`} id={`tool-${block.id}`}>

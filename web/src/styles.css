@@ -1472,6 +1472,7 @@ details label { margin-top: var(--s-2); }
 .activity-state.running { color: var(--accent); }
 .activity-state.running svg { animation: spin 1s linear infinite; }
 .activity-state.denied, .activity-state.error { color: var(--danger); }
+.activity-state.stopped { color: var(--muted); }
 .activity-touches { color: var(--faint); }
 .activity-file { display: grid; gap: var(--s-05); }
 .activity-file .disclosure { padding-left: var(--s-7); }
@@ -1924,6 +1925,7 @@ mark {
 .tool-state.running { color: var(--accent); }
 .tool-state.running svg { animation: spin 1s linear infinite; }
 .tool-state.error, .tool-state.denied { color: var(--danger); }
+.tool-state.stopped { color: var(--muted); }
 /* The body starts under the title, not under the glyph, and keeps 12px on
    the right like the row above it. */
 .tool-body {

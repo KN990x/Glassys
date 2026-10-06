@@ -267,6 +267,7 @@
   "tool.running": "Running",
   "tool.done": "Done",
   "tool.error": "Error",
+  "tool.stopped": "Stopped",
   "tool.denied": "Denied",
   "tool.truncated": "The runtime truncated this payload.",
   "tool.copyCommand": "Copy command",

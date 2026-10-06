@@ -69,3 +69,13 @@ describe("opencode workspace directory", () => {
     await opencodeAdapter.shutdown?.();
   });
 });
+
+describe("opencode model ids", () => {
+  it("splits provider/model and refuses a bare id with a readable error", async () => {
+    const { parseModel } = await import("./index.js");
+    expect(parseModel("anthropic/claude")).toEqual({ providerID: "anthropic", modelID: "claude" });
+    expect(parseModel("default")).toBeUndefined();
+    expect(() => parseModel("claude")).toThrow(/provider\/model/);
+    expect(() => parseModel("anthropic/")).toThrow(/provider\/model/);
+  });
+});

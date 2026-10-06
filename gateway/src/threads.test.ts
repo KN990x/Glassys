@@ -112,4 +112,16 @@ describe("threads store", () => {
     const fresh = await startNewThread(null, { fresh: true });
     expect(fresh.id).not.toBe(id);
   });
+
+  it("serves thread metadata from memory without handing out the cached object", async () => {
+    const id = await ensureLiveThread();
+    const { loadThread, renameThread } = await import("./threads.js");
+    await renameThread(id, "Disk audit");
+    const loaded = await loadThread(id);
+    loaded!.meta.title = "mutated by a caller";
+    expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Disk audit");
+    // A meta.json edited behind the gateway's back is not read again: only the gateway writes it.
+    await writeFile(paths.threadMeta(id), JSON.stringify({ ...loaded!.meta, title: "outside" }), "utf8");
+    expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Disk audit");
+  });
 });

@@ -8,7 +8,8 @@ export type ToolBlock = {
   title: string;
   path?: string;
   command?: string;
-  status: "running" | "done" | "error" | "denied";
+  /** `stopped`: still running when the run was cancelled or failed; it never reported an end. */
+  status: "running" | "done" | "error" | "denied" | "stopped";
   chunk: string;
   diff?: string;
   stats?: { add: number; del: number };
@@ -41,20 +42,24 @@ function closeOpenThinking(blocks: Block[]): Block[] {
   return changed ? next : blocks;
 }
 
-function closeOpenTools(blocks: Block[]): Block[] {
+/*
+ * A tool that never sent its end: after a clean run it finished, after a cancel or an error it
+ * was cut off. Painting the cut-off ones with the green check said they had completed.
+ */
+function closeOpenTools(blocks: Block[], status: "done" | "stopped"): Block[] {
   let changed = false;
   const next = blocks.map((b) => {
     if (b.kind === "tool" && b.status === "running") {
       changed = true;
-      return { ...b, status: "done" as const };
+      return { ...b, status };
     }
     return b;
   });
   return changed ? next : blocks;
 }
 
-function closeOpenWork(blocks: Block[]): Block[] {
-  return closeOpenThinking(closeOpenTools(blocks));
+function closeOpenWork(blocks: Block[], status: "done" | "stopped"): Block[] {
+  return closeOpenThinking(closeOpenTools(blocks, status));
 }
 
 export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block[] {
@@ -172,12 +177,12 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       return next.filter((b) => !(b.kind === "banner" && b.tone === "queue"));
     case "run.error":
       next.push({ id: nid("err"), kind: "banner", text: event.message, tone: "error" });
-      return closeOpenWork(next);
+      return closeOpenWork(next, "stopped");
     case "run.cancelled":
       next.push({ id: nid("c"), kind: "banner", text: "cancelled", tone: "info" });
-      return closeOpenWork(next);
+      return closeOpenWork(next, "stopped");
     case "run.done":
-      return closeOpenWork(next);
+      return closeOpenWork(next, "done");
     case "run.stalled":
       next.push({ id: nid("stall"), kind: "banner", text: "stalled", tone: "info" });
       return next;

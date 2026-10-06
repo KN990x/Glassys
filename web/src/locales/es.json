@@ -267,6 +267,7 @@
   "tool.running": "En curso",
   "tool.done": "Hecho",
   "tool.error": "Error",
+  "tool.stopped": "Detenida",
   "tool.denied": "Denegado",
   "tool.truncated": "El runtime recortó este payload.",
   "tool.copyCommand": "Copiar comando",

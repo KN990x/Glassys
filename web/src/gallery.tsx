@@ -219,6 +219,8 @@ const tools: ToolBlock[] = [
     command: "rm -rf /var/lib/postgresql", error: "Auto-review denied this command." },
   { id: "s6", kind: "tool", toolKind: "grep", title: "TLSv1.1", path: "/etc/nginx", status: "error",
     error: "grep: /etc/nginx/private: Permission denied" },
+  { id: "s7", kind: "tool", toolKind: "shell", title: "apt-get upgrade -y", status: "stopped",
+    command: "sudo apt-get upgrade -y", chunk: "Reading package lists... Done\nBuilding dependency tree... Done" },
 ] as ToolBlock[];
 
 /* The transcript the shells and the README screenshots render. */

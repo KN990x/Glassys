@@ -12,12 +12,14 @@ import type {
   ServerMessage,
   Theme,
   ThreadSummary,
+  TranscriptEvent,
 } from "@glassys/protocol";
 import { PROTOCOL_VERSION, MAX_ATTACHMENTS, isTranscriptEvent } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { api } from "../api";
 import { openSocket, type ConnState } from "../socket";
 import { reduceTranscript, replay, type Block } from "../transcript";
+import { createEventBatcher } from "../eventBatch";
 import { Composer } from "../components/Composer";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
@@ -192,6 +194,8 @@ export function Chat({
   }, []);
 
   useEffect(() => {
+    /* One batch per frame; a snapshot replaces the transcript and drops what is pending. */
+    const batcher = createEventBatcher<TranscriptEvent>((batch) => setBlocks((cur) => batch.reduce(reduceTranscript, cur)));
     const sock = openSocket({
       onState: (s) => {
         if (s === "connecting" || s === "reconnecting") {
@@ -224,6 +228,7 @@ export function Chat({
           setCurrentThreadId(msg.currentId);
         }
         if (msg.type === "transcript.snapshot") {
+          batcher.drop();
           snapshotReadyRef.current = true;
           setSnapshotReady(true);
           setTranscriptTruncated(Boolean(msg.truncated));
@@ -253,14 +258,17 @@ export function Chat({
         if (msg.type === "run.start") setQueued(false);
         if (isTranscriptEvent(msg)) {
           if (!snapshotReadyRef.current) return;
-          setBlocks((cur) => reduceTranscript(cur, msg));
+          batcher.push(msg);
         }
       },
     });
     sendRef.current = sock.send;
     keepaliveRef.current = sock.setKeepalive;
     keepaliveRef.current(config.network.wsKeepaliveSeconds);
-    return () => sock.close();
+    return () => {
+      batcher.drop();
+      sock.close();
+    };
   }, [onConfig]);
 
   useEffect(() => {

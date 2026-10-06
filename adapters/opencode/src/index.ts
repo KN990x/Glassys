@@ -78,11 +78,17 @@ function sessionIdFrom(created: unknown): string | undefined {
   return str(rec.id) || str(asRecord(rec.data)?.id) || str(asRecord(rec.session)?.id);
 }
 
-function parseModel(model: string): unknown {
+/** OpenCode needs both halves; "default" leaves the choice to the operator's OpenCode config. */
+export function parseModel(model: string): { providerID: string; modelID: string } | undefined {
   if (!model || model === "default") return undefined;
   const slash = model.indexOf("/");
-  if (slash > 0) return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
-  return { modelID: model };
+  if (slash > 0 && slash < model.length - 1) {
+    return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
+  }
+  throw new AdapterError(
+    `OpenCode models are provider/model (for example anthropic/claude-sonnet-4); got "${model}"`,
+    "startup",
+  );
 }
 
 /**

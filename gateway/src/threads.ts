@@ -30,6 +30,7 @@ let currentThreadId: string | null = null;
 
 export function resetLiveThreadCache(): void {
   currentThreadId = null;
+  metaCache.clear();
 }
 
 export function liveThreadId(): string | null {
@@ -60,13 +61,26 @@ async function readJson<T>(path: string): Promise<T | null> {
   }
 }
 
+/**
+ * Thread metadata by file path. Only this process writes it, so the cache is kept exact by
+ * writeMeta and removeThread; the thread list is rebuilt on every usage update and used to read
+ * and parse every meta.json each time. Keyed by path, so a different data dir never hits it.
+ */
+const metaCache = new Map<string, ThreadMeta>();
+
 async function writeMeta(meta: ThreadMeta): Promise<void> {
   await mkdir(paths.threadDir(meta.id), { recursive: true });
   await writeFileAtomic(paths.threadMeta(meta.id), JSON.stringify(meta, null, 2));
+  metaCache.set(paths.threadMeta(meta.id), structuredClone(meta));
 }
 
 async function loadMeta(id: string): Promise<ThreadMeta | null> {
-  return readJson<ThreadMeta>(paths.threadMeta(id));
+  const path = paths.threadMeta(id);
+  const cached = metaCache.get(path);
+  if (cached) return structuredClone(cached);
+  const meta = await readJson<ThreadMeta>(path);
+  if (meta) metaCache.set(path, structuredClone(meta));
+  return meta;
 }
 
 async function readEvents(path: string): Promise<TranscriptEvent[]> {
@@ -156,8 +170,14 @@ export async function appendLiveTranscriptLine(line: string): Promise<void> {
   return withThreads(async () => {
     const id = await ensureLiveThreadUnlocked();
     const path = paths.threadTranscript(id);
-    await mkdir(paths.threadDir(id), { recursive: true });
-    await writeFile(path, line, { encoding: "utf8", flag: "a", mode: 0o600 });
+    /* One line per streamed token: append straight away, and create the directory only if it is gone. */
+    try {
+      await writeFile(path, line, { encoding: "utf8", flag: "a", mode: 0o600 });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      await mkdir(paths.threadDir(id), { recursive: true });
+      await writeFile(path, line, { encoding: "utf8", flag: "a", mode: 0o600 });
+    }
   });
 }
 
@@ -327,6 +347,7 @@ export async function removeThread(id: string): Promise<void> {
     const meta = await loadMeta(id);
     if (!meta) throw new Error("Thread not found");
     await rm(paths.threadDir(id), { recursive: true, force: true });
+    metaCache.delete(paths.threadMeta(id));
   });
 }
 

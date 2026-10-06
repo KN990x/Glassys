@@ -43,15 +43,19 @@ describe("transcript reducer", () => {
     expect(snap.map((b) => b.kind)).toEqual(["user", "text"]);
   });
 
-  it("closes running tools when the run is cancelled", () => {
+  it("marks tools cut off by a cancel or an error as stopped, not done", () => {
     const start = reduceTranscript([], {
       type: "tool.start",
       callId: "c1",
       kind: "read",
       title: "Read",
     });
-    const closed = reduceTranscript(start, { type: "run.cancelled" });
-    expect(closed.find((b) => b.kind === "tool")).toMatchObject({ status: "done" });
+    const cancelled = reduceTranscript(start, { type: "run.cancelled" });
+    expect(cancelled.find((b) => b.kind === "tool")).toMatchObject({ status: "stopped" });
+    const failed = reduceTranscript(start, { type: "run.error", message: "boom", phase: "run" });
+    expect(failed.find((b) => b.kind === "tool")).toMatchObject({ status: "stopped" });
+    const finished = reduceTranscript(start, { type: "run.done" });
+    expect(finished.find((b) => b.kind === "tool")).toMatchObject({ status: "done" });
   });
 
   it("marks retracted user messages, denied tools, and usage", () => {

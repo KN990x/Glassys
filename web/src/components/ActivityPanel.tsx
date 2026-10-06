@@ -6,7 +6,7 @@ import { formatTokens, truncateMiddle } from "../format";
 import { SegmentedControl } from "./SegmentedControl";
 import { Disclosure, ListRow } from "./Primitives";
 import { Hunk } from "./ToolCard";
-import { IconAlert, IconCheck, IconClose, IconError, IconFileEdit, IconFile, IconSpinner, IconTerminal } from "./Icon";
+import { IconAlert, IconCheck, IconClose, IconError, IconFileEdit, IconFile, IconSpinner, IconStop, IconTerminal } from "./Icon";
 
 export type ActivityTab = "commands" | "files";
 
@@ -30,6 +30,8 @@ function StateGlyph({ status }: { status: string }) {
         <IconCheck />
       ) : status === "denied" ? (
         <IconAlert />
+      ) : status === "stopped" ? (
+        <IconStop />
       ) : (
         <IconError />
       )}
