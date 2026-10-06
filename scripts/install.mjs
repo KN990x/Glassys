@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { gatewayListenPort, isRoot, nodeMeetsMin } from "./host-service.mjs";
+import { isRoot, nodeMeetsMin, openUrl, resolveListen } from "./host-service.mjs";
 
 export const DEFAULT_REPO = "https://github.com/KN990x/Glassys.git";
 
@@ -28,8 +28,10 @@ export function needsGatewayBuild(root) {
   return !existsSync(join(root, "gateway/dist/index.js"));
 }
 
-export function listenUrl(env = process.env) {
-  return `http://127.0.0.1:${gatewayListenPort(env)}`;
+/** The URL the installed service answers on: same resolution as service:install (env, config.yaml, defaults). */
+export async function listenUrl(root, env = process.env) {
+  const dataDir = env.GLASSYS_DATA_DIR || join(root, "data");
+  return openUrl(await resolveListen(root, dataDir, env));
 }
 
 export function resolveInstallRoot({ cwd, scriptUrl, env } = {}) {
@@ -62,7 +64,7 @@ function run(bin, args, cwd, optional = false) {
   return result.status === 0;
 }
 
-export function main(argv = process.argv.slice(2), opts = {}) {
+export async function main(argv = process.argv.slice(2), opts = {}) {
   const env = opts.env || process.env;
   const cwd = opts.cwd || process.cwd();
   if (argv[0] === "-h" || argv[0] === "--help") {
@@ -96,7 +98,7 @@ Otherwise clones ${DEFAULT_REPO} into ./glassys (or $GLASSYS_DIR).
   for (const cmd of cmds) {
     run(cmd.bin, cmd.args, cmd.cwd, cmd.optional);
   }
-  console.log(`Glassys should be reachable at ${listenUrl(env)}`);
+  console.log(`Glassys should be reachable at ${await listenUrl(plan.root, env)}`);
 }
 
 function isMainModule() {
@@ -110,9 +112,5 @@ function isMainModule() {
 }
 
 if (isMainModule()) {
-  try {
-    main();
-  } catch (err) {
-    fail(err instanceof Error ? err.message : String(err));
-  }
+  main().catch((err) => fail(err instanceof Error ? err.message : String(err)));
 }

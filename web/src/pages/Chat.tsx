@@ -143,6 +143,9 @@ export function Chat({
   const [recents, setRecents] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const [restartNote, setRestartNote] = useState("");
+  /* The gateway commit this page loaded against; a reconnect to another one means an upgrade. */
+  const gatewayCommitRef = useRef<string | undefined>(undefined);
+  const [newVersion, setNewVersion] = useState(false);
   const sendRef = useRef<(msg: ClientMessage) => boolean>(() => false);
   const keepaliveRef = useRef<(seconds: number) => void>(() => undefined);
   const scroller = useRef<HTMLDivElement>(null);
@@ -205,6 +208,11 @@ export function Chat({
         }
         if (msg.type === "hello.incompatible") {
           setProtocolError(msg.protocolVersion);
+          return;
+        }
+        if (msg.type === "hello.ok" && msg.commit) {
+          if (!gatewayCommitRef.current) gatewayCommitRef.current = msg.commit;
+          else if (gatewayCommitRef.current !== msg.commit) setNewVersion(true);
           return;
         }
         if (msg.type === "config.error") {
@@ -877,6 +885,14 @@ export function Chat({
     });
   }
   if (configError) alerts.push({ id: "config", tone: "error", text: configError });
+  if (newVersion) {
+    alerts.push({
+      id: "new-version",
+      tone: "info",
+      text: t("settings.updateReloadNote"),
+      action: { label: t("settings.updateReload"), run: () => window.location.reload() },
+    });
+  }
   if (loopback && !hideLoopback) {
     alerts.push({
       id: "loopback",

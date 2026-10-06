@@ -324,7 +324,8 @@ export type TranscriptEvent =
   | { type: "run.usage"; inputTokens?: number; outputTokens?: number };
 
 export type ServerMessage =
-  | { type: "hello.ok"; protocolVersion: number }
+  /** `commit`: the gateway build this socket talks to; a new one after a reconnect means stale PWA assets. */
+  | { type: "hello.ok"; protocolVersion: number; commit?: string }
   | { type: "hello.incompatible"; protocolVersion: number }
   | { type: "auth.ok" }
   | { type: "auth.error"; message: string }

@@ -15,6 +15,7 @@ import { redacted, loadConfig } from "./config.js";
 import { hub, flushHandshakeBuffer } from "./hub.js";
 import { log } from "./paths.js";
 import { HttpError } from "./errors.js";
+import { runningBuild } from "./build-info.js";
 import { createMutex } from "./lock.js";
 import {
   applyConfigPatch,
@@ -215,7 +216,8 @@ async function handleClient(
       return;
     }
     state.hello = true;
-    hub.send(ws, { type: "hello.ok", protocolVersion: PROTOCOL_VERSION });
+    const { commit } = runningBuild();
+    hub.send(ws, { type: "hello.ok", protocolVersion: PROTOCOL_VERSION, ...(commit ? { commit } : {}) });
     return;
   }
 

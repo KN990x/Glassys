@@ -29,9 +29,13 @@ test("needsGatewayBuild is true until gateway/dist exists", () => {
   assert.equal(needsGatewayBuild(dir), false);
 });
 
-test("listenUrl stays on loopback", () => {
-  assert.equal(listenUrl({}), "http://127.0.0.1:8787");
-  assert.equal(listenUrl({ GLASSYS_PORT: "9000" }), "http://127.0.0.1:9000");
+test("listenUrl follows env, then config.yaml, then loopback", async () => {
+  const root = join(import.meta.dirname, "..");
+  const dataDir = mkdtempSync(join(tmpdir(), "glassys-install-"));
+  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: dataDir }), "http://127.0.0.1:8787");
+  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: dataDir, GLASSYS_PORT: "9000" }), "http://127.0.0.1:9000");
+  writeFileSync(join(dataDir, "config.yaml"), "network:\n  bind: 172.18.0.1\n  port: 8790\n");
+  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: dataDir }), "http://172.18.0.1:8790");
 });
 
 test("resolveInstallRoot uses the scripts parent when it is this repo", () => {

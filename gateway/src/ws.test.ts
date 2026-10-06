@@ -122,6 +122,20 @@ describe("websocket handshake", () => {
     ws.close();
   });
 
+  it("names the running commit in hello.ok", async () => {
+    const { setRunningCommitForTests } = await import("./build-info.js");
+    setRunningCommitForTests("a".repeat(40));
+    try {
+      const ws = await openClient(url, origin);
+      const helloOk = waitMessage(ws, "hello.ok");
+      ws.send(JSON.stringify({ type: "hello", protocolVersion: PROTOCOL_VERSION }));
+      expect((await helloOk).commit).toBe("a".repeat(40));
+      ws.close();
+    } finally {
+      setRunningCommitForTests(undefined);
+    }
+  });
+
   it("auths and sends a transcript snapshot before live events", async () => {
     await appendTranscript({ type: "user.message", text: "hi" });
     await appendTranscript({ type: "text.delta", text: "there" });

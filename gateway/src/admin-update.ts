@@ -39,6 +39,67 @@ export interface UpgradeStatus {
   fromSha?: string;
   /** The commit the restarted gateway must report. */
   targetSha?: string;
+  /** The upgrade script's pid while it runs (written by scripts/host-service.mjs). */
+  pid?: number;
+}
+
+const ACTIVE_PHASES: ReadonlySet<UpgradePhase> = new Set(["starting", "pulling", "install", "build"]);
+/** The gateway wrote "starting" but the script never reported in. */
+const STARTING_STALE_MS = 2 * 60_000;
+/** The restart was requested but no new gateway closed the run. */
+const RESTART_STALE_MS = 5 * 60_000;
+/** A live script that has not moved for this long (a hung install) is given up on. */
+const ACTIVE_STALE_MS = 60 * 60_000;
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    /* EPERM: it exists, it is just not ours. */
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+let pidAliveImpl = pidAlive;
+
+export function setPidAliveForTests(fn: ((pid: number) => boolean) | null): void {
+  pidAliveImpl = fn ?? pidAlive;
+}
+
+/**
+ * Why an unfinished upgrade can no longer finish, or undefined while it still can. Without this a
+ * script killed mid-build (OOM, a host reboot) left its phase behind for good, and every later
+ * upgrade was refused as "already running".
+ */
+export function stalledUpgradeReason(
+  status: UpgradeStatus,
+  now = Date.now(),
+  isAlive: (pid: number) => boolean = pidAliveImpl,
+): string | undefined {
+  const last = Date.parse(status.updatedAt || status.startedAt || "");
+  const age = Number.isNaN(last) ? Number.POSITIVE_INFINITY : now - last;
+  if (status.phase === "restart") {
+    return age > RESTART_STALE_MS ? "The gateway did not come back on the new version after the restart" : undefined;
+  }
+  if (!ACTIVE_PHASES.has(status.phase)) return undefined;
+  if (typeof status.pid === "number" && status.pid > 0) {
+    if (!isAlive(status.pid)) return `The upgrade stopped during "${status.phase}" without finishing`;
+    return age > ACTIVE_STALE_MS ? `The upgrade made no progress during "${status.phase}" for an hour` : undefined;
+  }
+  return age > STARTING_STALE_MS ? "The upgrade script did not start" : undefined;
+}
+
+/** The current status, with a run that can no longer finish recorded as an error. */
+export async function currentUpgradeStatus(): Promise<UpgradeStatus> {
+  const cur = await readUpgradeStatus();
+  const reason = stalledUpgradeReason(cur);
+  if (!reason) return cur;
+  log("warn", "upgrade stalled", { phase: cur.phase, reason });
+  const next: UpgradeStatus = { ...cur, phase: "error", error: reason };
+  delete next.pid;
+  await writeUpgradeStatus(next);
+  return next;
 }
 
 export function detectService(env = process.env, platform = process.platform): ServiceKind {
@@ -123,17 +184,26 @@ export async function writeUpgradeStatus(status: UpgradeStatus): Promise<void> {
  * the proof the restart happened, and its commit says whether it is the code that was built.
  */
 export async function reconcileUpgradeStatus(): Promise<void> {
+  /* A restart is closed by this very start however long it took; anything else may have died. */
   const cur = await readUpgradeStatus();
-  if (cur.phase !== "restart") return;
+  if (cur.phase !== "restart") {
+    await currentUpgradeStatus();
+    return;
+  }
   const { commit } = runningBuild();
   if (cur.targetSha && commit && cur.targetSha !== commit) {
     const error = `Restarted on ${commit.slice(0, 7)}, expected ${cur.targetSha.slice(0, 7)}`;
     log("warn", "upgrade restart came back on another commit", { expected: cur.targetSha, running: commit });
-    await writeUpgradeStatus({ ...cur, phase: "error", error });
+    const failed: UpgradeStatus = { ...cur, phase: "error", error };
+    delete failed.pid;
+    await writeUpgradeStatus(failed);
     return;
   }
   log("info", "upgrade finished", { commit });
-  await writeUpgradeStatus({ ...cur, phase: "idle", error: undefined });
+  const done: UpgradeStatus = { ...cur, phase: "idle" };
+  delete done.error;
+  delete done.pid;
+  await writeUpgradeStatus(done);
 }
 
 export async function adminUpdateSnapshot(): Promise<{
@@ -145,7 +215,7 @@ export async function adminUpdateSnapshot(): Promise<{
   upgrading?: UpgradeStatus;
 }> {
   const gitInfo = await readInstallGit();
-  const upgrading = await readUpgradeStatus();
+  const upgrading = await currentUpgradeStatus();
   return {
     version: GATEWAY_VERSION,
     protocolVersion: PROTOCOL_VERSION,
@@ -171,7 +241,7 @@ export async function startUpgrade(): Promise<void> {
   if (gitInfo?.dirty) {
     throw new HttpError(409, "Working tree is dirty");
   }
-  const cur = await readUpgradeStatus();
+  const cur = await currentUpgradeStatus();
   if (cur.phase !== "idle" && cur.phase !== "error") {
     throw new HttpError(409, "An upgrade is already running");
   }

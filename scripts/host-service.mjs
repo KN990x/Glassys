@@ -650,6 +650,8 @@ export function writeUpgradeStatus(dataDir, phase, error, run = upgradeRun) {
       updatedAt: new Date().toISOString(),
       ...(run.fromSha ? { fromSha: run.fromSha } : {}),
       ...(run.targetSha ? { targetSha: run.targetSha } : {}),
+      // Lets the gateway tell a running upgrade from one that died mid-way.
+      ...(phase !== "idle" && phase !== "error" ? { pid: process.pid } : {}),
     };
     writeFileSync(tmp, JSON.stringify(body, null, 2), { mode: 0o600 });
     renameSync(tmp, target);

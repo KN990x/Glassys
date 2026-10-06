@@ -43,12 +43,16 @@ export function commandTouchesProtectedPath(command: string, cwd: string, protec
       forms.add(`.${sep}${rel}`);
     }
     return [...forms].some((form) => {
+      // A bare one-segment name ("data" with the cwd at the Glassys clone) is also an ordinary
+      // word (`docker logs data`): count it only as a path, followed by "/".
+      const bareWord = !form.includes(sep) && !form.includes("/");
       let at = command.indexOf(form);
       while (at !== -1) {
         const before = at === 0 ? " " : command[at - 1]!;
         const after = command[at + form.length] ?? " ";
         // A whole path: not "mydata" for "data", not "data2".
-        if (/[\s'"=:;|&(<>`]/.test(before) && /[\s'"/;|&)<>`*]/.test(after)) return true;
+        const ends = bareWord ? after === "/" || after === sep : /[\s'"/;|&)<>`*]/.test(after);
+        if (/[\s'"=:;|&(<>`]/.test(before) && ends) return true;
         at = command.indexOf(form, at + 1);
       }
       return false;

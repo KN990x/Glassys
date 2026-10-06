@@ -35,4 +35,11 @@ describe("commandTouchesProtectedPath", () => {
     expect(commandTouchesProtectedPath("cat myglassys/data/x", home, [data])).toBe(false);
     expect(commandTouchesProtectedPath("docker compose ps", home, [data])).toBe(false);
   });
+
+  it("treats a one-segment name as a path only when it is used as one", () => {
+    const clone = join(home, "glassys");
+    expect(commandTouchesProtectedPath("docker logs data", clone, [data])).toBe(false);
+    expect(commandTouchesProtectedPath("cat data/secrets.json", clone, [data])).toBe(true);
+    expect(commandTouchesProtectedPath("ls ./data", clone, [data])).toBe(true);
+  });
 });

@@ -51,6 +51,8 @@ const config = {
   secrets: { adapters: {}, cursorApiKey: { configured: false } },
   onboarding: { completed: true },
   restartRequired: false,
+  /* Inside the cwd above, so the agent tab shows the exposed-secrets warning. */
+  dataDir: "/srv/www/glassys/data",
 };
 
 const host = { hostLabel: "ops@web-01", cwd: "/srv/www/deploy/current", git: { branch: "main", dirty: true }, adapter: "Cursor" };
