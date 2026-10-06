@@ -29,15 +29,23 @@ test("needsGatewayBuild is true until gateway/dist exists", () => {
   assert.equal(needsGatewayBuild(dir), false);
 });
 
-test("listenUrl follows env, then config.yaml, then loopback", async () => {
-  const root = join(import.meta.dirname, "..");
-  const dataDir = mkdtempSync(join(tmpdir(), "glassys-install-"));
-  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: dataDir }), "http://127.0.0.1:8787");
-  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: dataDir, GLASSYS_PORT: "9000" }), "http://127.0.0.1:9000");
-  writeFileSync(join(dataDir, "config.yaml"), "network:\n  bind: 172.18.0.1\n  port: 8790\n");
-  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: dataDir }), "http://172.18.0.1:8790");
+test("listenUrl falls back to env and loopback before the gateway is built", async () => {
+  const root = mkdtempSync(join(tmpdir(), "glassys-install-"));
+  assert.equal(await listenUrl(root, {}), "http://127.0.0.1:8787");
+  assert.equal(await listenUrl(root, { GLASSYS_PORT: "9000" }), "http://127.0.0.1:9000");
 });
 
+test("listenUrl asks the built gateway, with the clone's data dir", async () => {
+  // A stand-in for gateway/dist/listen.js; the real resolver is tested in gateway/src/listen.test.ts.
+  const root = mkdtempSync(join(tmpdir(), "glassys-install-"));
+  mkdirSync(join(root, "gateway", "dist"), { recursive: true });
+  writeFileSync(
+    join(root, "gateway", "dist", "listen.js"),
+    "export function resolveListenFromDataDir(dataDir) { return { bind: '172.18.0.1', port: 8790, publicUrl: dataDir.endsWith('custom') ? 'https://g.example' : '' }; }\n",
+  );
+  assert.equal(await listenUrl(root, {}), "http://172.18.0.1:8790");
+  assert.equal(await listenUrl(root, { GLASSYS_DATA_DIR: join(root, "custom") }), "https://g.example");
+});
 test("resolveInstallRoot uses the scripts parent when it is this repo", () => {
   const dir = mkdtempSync(join(tmpdir(), "glassys-install-"));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "glassys" }));
