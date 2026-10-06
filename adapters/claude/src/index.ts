@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
   AdapterError,
+  PROTECTED_PATH_DENIAL,
+  commandTouchesProtectedPath,
   errorMessage,
+  isProtectedPath,
   imagePartsFromAttachments,
   pendingRun,
   promptWithAttachments,
@@ -121,11 +124,73 @@ function usableSessionId(id: string | undefined): id is string {
   return Boolean(id) && id !== "pending";
 }
 
+/** Tool input fields that name a file or directory, across Claude's built-in tools. */
+const PATH_FIELDS = ["file_path", "notebook_path", "path"] as const;
+
+/**
+ * Whether a Claude tool call names a protected directory. File tools are checked by their path
+ * fields (and Glob by its pattern); Bash by the command text. A search rooted above the
+ * directory (Grep over $HOME) is not blocked: that would block every search from a home cwd.
+ */
+export function claudeToolTouchesProtected(
+  toolName: string,
+  toolInput: unknown,
+  cwd: string,
+  protectedPaths: readonly string[] | undefined,
+): boolean {
+  if (!protectedPaths?.length || !toolInput || typeof toolInput !== "object") return false;
+  const input = toolInput as Record<string, unknown>;
+  if (toolName === "Bash" || toolName === "BashOutput") {
+    return typeof input.command === "string" && commandTouchesProtectedPath(input.command, cwd, protectedPaths);
+  }
+  const base = typeof input.path === "string" && input.path ? input.path : cwd;
+  for (const field of PATH_FIELDS) {
+    const value = input[field];
+    if (typeof value === "string" && value && isProtectedPath(value, cwd, protectedPaths)) return true;
+  }
+  if (toolName === "Glob" && typeof input.pattern === "string") {
+    // The literal prefix of the pattern, before its first wildcard.
+    if (isProtectedPath(input.pattern.replace(/[*?{[].*$/, ""), base, protectedPaths)) return true;
+  }
+  return false;
+}
+
+/**
+ * PreToolUse runs in every permission mode, bypassPermissions included, so this holds even with
+ * auto-run on. It is not a sandbox: a shell can still reach the directory some other way.
+ */
+function protectedPathHooks(opts: AdapterCreateOptions) {
+  if (!opts.protectedPaths?.length) return {};
+  return {
+    hooks: {
+      PreToolUse: [
+        {
+          hooks: [
+            async (input: { tool_name?: string; tool_input?: unknown; cwd?: string }) => {
+              if (!claudeToolTouchesProtected(input.tool_name ?? "", input.tool_input, input.cwd || opts.cwd, opts.protectedPaths)) {
+                return {};
+              }
+              return {
+                hookSpecificOutput: {
+                  hookEventName: "PreToolUse" as const,
+                  permissionDecision: "deny" as const,
+                  permissionDecisionReason: PROTECTED_PATH_DENIAL,
+                },
+              };
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 function queryOptions(opts: AdapterCreateOptions, extra: Record<string, unknown> = {}) {
   const autoRun = optionBool(opts.options, "autoRun", true);
   const permissionMode =
     optionString(opts.options, "permissionMode", "") || (autoRun ? "bypassPermissions" : "dontAsk");
   return {
+    ...protectedPathHooks(opts),
     cwd: opts.cwd,
     model: opts.model || "sonnet",
     includePartialMessages: true,

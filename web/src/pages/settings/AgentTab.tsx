@@ -17,7 +17,7 @@ import { WorkspacePicker } from "../../components/WorkspacePicker";
 import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } from "../../components/Primitives";
 import { Switch } from "../../components/Switch";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
+import { cwdExposesDataDir, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
 
 export function AgentTab({
@@ -235,6 +235,9 @@ export function AgentTab({
         <Callout tone="warn">{t("wizard.exec.danger")}</Callout>
       )}
       {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
+      {cwdExposesDataDir({ cwd: draft.agent.cwd, dataDir: draft.dataDir, sandbox, sandboxSupported: Boolean(caps?.sandbox) }) && (
+        <Callout tone="warn">{t("settings.dataDirExposed")}</Callout>
+      )}
 
       {caps?.discover && (
         <SettingGroup title={t("wizard.step.acp")}>

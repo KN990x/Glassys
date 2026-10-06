@@ -150,6 +150,7 @@ export const api = {
       version: string;
       protocolVersion: number;
       git?: { sha: string; branch: string; dirty: boolean };
+      running?: { commit?: string; startedAt: string };
       service: "launchd" | "systemd" | "none";
       upgrading?: { phase: string; error?: string };
     }>("/api/admin/update"),

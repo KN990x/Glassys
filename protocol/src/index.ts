@@ -222,6 +222,8 @@ export interface SecretFlags {
 export interface RedactedConfig extends GlassysConfig {
   secrets: SecretFlags;
   restartRequired?: boolean;
+  /** Absolute Glassys data dir (secrets, sessions), so the PWA can warn when the cwd exposes it. */
+  dataDir?: string;
 }
 
 export type ConfigPatch = {

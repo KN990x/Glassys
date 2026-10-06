@@ -8,9 +8,14 @@ export type UpdateInfo = {
   version: string;
   protocolVersion: number;
   git?: { sha: string; branch: string; dirty: boolean };
+  /** The commit this gateway process started on; `git` is the clone on disk. */
+  running?: { commit?: string; startedAt: string };
   service: "launchd" | "systemd" | "none";
   upgrading?: { phase: string; error?: string };
 };
+
+/** The gateway commit this page was loaded against. A different one later means stale assets. */
+let pageCommit: string | undefined;
 
 export function UpdatesTab({
   update,
@@ -33,8 +38,24 @@ export function UpdatesTab({
 }) {
   const t = useT();
   const upgrading = update?.upgrading?.phase && update.upgrading.phase !== "idle";
+  const runningCommit = update?.running?.commit;
+  if (runningCommit && !pageCommit) pageCommit = runningCommit;
+  const reloadNeeded = Boolean(runningCommit && pageCommit && runningCommit !== pageCommit);
+  const restartPending = Boolean(runningCommit && update?.git?.sha && runningCommit !== update.git.sha);
   return (
     <>
+      {reloadNeeded && (
+        <Callout
+          tone="accent"
+          action={
+            <button type="button" className="primary" onClick={() => window.location.reload()}>
+              {t("settings.updateReload")}
+            </button>
+          }
+        >
+          {t("settings.updateReloadNote")}
+        </Callout>
+      )}
       <SettingGroup title={t("settings.updateVersionGroup")}>
         <SettingRow label={t("settings.updateVersion")}>
           <div className="row wrap">
@@ -43,6 +64,19 @@ export function UpdatesTab({
               <StatusBadge mono tone={update.git.dirty ? "warn" : "neutral"}>
                 {update.git.branch}@{update.git.sha.slice(0, 7)}
                 {update.git.dirty ? "*" : ""}
+              </StatusBadge>
+            )}
+          </div>
+        </SettingRow>
+        <SettingRow
+          label={t("settings.updateRunning")}
+          hint={restartPending && !upgrading ? t("settings.updateRestartPendingHint") : undefined}
+        >
+          <div className="row wrap">
+            {runningCommit ? <StatusBadge mono>{runningCommit.slice(0, 7)}</StatusBadge> : <span className="muted">—</span>}
+            {restartPending && !upgrading && (
+              <StatusBadge tone="warn" dot>
+                {t("settings.updateRestartPending")}
               </StatusBadge>
             )}
           </div>

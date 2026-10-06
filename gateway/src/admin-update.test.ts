@@ -1,11 +1,15 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { setRunningCommitForTests } from "./build-info.js";
+import { paths } from "./paths.js";
 import {
   detectService,
   readUpgradeStatus,
+  reconcileUpgradeStatus,
+  writeUpgradeStatus,
   setDetectServiceForTests,
   setInstallGitForTests,
   setUpgradeSpawnForTests,
@@ -21,6 +25,7 @@ describe("admin update", () => {
     setDetectServiceForTests(null);
     setInstallGitForTests(undefined);
     setUpgradeSpawnForTests(null);
+    setRunningCommitForTests(undefined);
   });
 
   it("treats GLASSYS_SERVICE=1 as the user service", () => {
@@ -51,5 +56,30 @@ describe("admin update", () => {
     }) as typeof import("node:child_process").spawn);
     await expect(startUpgrade()).rejects.toThrow(/ENOENT/);
     expect((await readUpgradeStatus()).phase).toBe("error");
+  });
+
+  it("writes the status owner-only even over a looser file", async () => {
+    await writeFile(paths.upgradeStatus(), "{}", { mode: 0o664 });
+    await writeUpgradeStatus({ phase: "pulling", startedAt: "2026-10-06T10:00:00.000Z" });
+    expect((await stat(paths.upgradeStatus())).mode & 0o777).toBe(0o600);
+  });
+
+  it("closes a restart phase when the new process runs the target commit", async () => {
+    const sha = "b".repeat(40);
+    setRunningCommitForTests(sha);
+    await writeUpgradeStatus({ phase: "restart", startedAt: "2026-10-06T10:00:00.000Z", targetSha: sha });
+    await reconcileUpgradeStatus();
+    const status = await readUpgradeStatus();
+    expect(status.phase).toBe("idle");
+    expect(status.startedAt).toBe("2026-10-06T10:00:00.000Z");
+  });
+
+  it("flags a restart that came back on another commit", async () => {
+    setRunningCommitForTests("c".repeat(40));
+    await writeUpgradeStatus({ phase: "restart", targetSha: "b".repeat(40) });
+    await reconcileUpgradeStatus();
+    const status = await readUpgradeStatus();
+    expect(status.phase).toBe("error");
+    expect(status.error).toMatch(/expected bbbbbbb/);
   });
 });

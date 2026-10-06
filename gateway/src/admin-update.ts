@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { chmod, readFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { spawn, spawnSync } from "node:child_process";
 import { PROTOCOL_VERSION } from "@glassys/protocol";
-import { readFileSync } from "node:fs";
+import { writeFileAtomic } from "./atomic.js";
+import { GATEWAY_VERSION, repoRoot, runningBuild } from "./build-info.js";
 import { paths, log } from "./paths.js";
 import { HttpError } from "./errors.js";
 
@@ -33,21 +33,12 @@ export function setInstallGitForTests(info: { sha: string; branch: string; dirty
 export interface UpgradeStatus {
   phase: UpgradePhase;
   error?: string;
+  /** Set once per upgrade run; every later phase keeps it. */
   startedAt?: string;
-}
-
-function repoRoot(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), "../..");
-}
-
-function gatewayVersion(): string {
-  try {
-    const pkg = join(dirname(fileURLToPath(import.meta.url)), "../package.json");
-    const parsed = JSON.parse(readFileSync(pkg, "utf8")) as { version?: string };
-    return parsed.version || "0.1.0";
-  } catch {
-    return "0.1.0";
-  }
+  updatedAt?: string;
+  fromSha?: string;
+  /** The commit the restarted gateway must report. */
+  targetSha?: string;
 }
 
 export function detectService(env = process.env, platform = process.platform): ServiceKind {
@@ -121,23 +112,45 @@ export async function readUpgradeStatus(): Promise<UpgradeStatus> {
 }
 
 export async function writeUpgradeStatus(status: UpgradeStatus): Promise<void> {
-  await mkdir(dirname(paths.upgradeStatus()), { recursive: true });
-  await writeFile(paths.upgradeStatus(), JSON.stringify(status, null, 2), { encoding: "utf8", mode: 0o600 });
+  await mkdir(dirname(paths.upgradeStatus()), { recursive: true, mode: 0o700 });
+  /* Temp file + rename: a file left 0664 by an older upgrade script is replaced, not kept. */
+  await writeFileAtomic(paths.upgradeStatus(), JSON.stringify({ ...status, updatedAt: new Date().toISOString() }, null, 2));
+}
+
+/**
+ * On systemd the upgrade script lives in the unit's cgroup, so the restart it asks for also
+ * kills it before it can report the outcome. The new process closes the run instead: it is
+ * the proof the restart happened, and its commit says whether it is the code that was built.
+ */
+export async function reconcileUpgradeStatus(): Promise<void> {
+  const cur = await readUpgradeStatus();
+  if (cur.phase !== "restart") return;
+  const { commit } = runningBuild();
+  if (cur.targetSha && commit && cur.targetSha !== commit) {
+    const error = `Restarted on ${commit.slice(0, 7)}, expected ${cur.targetSha.slice(0, 7)}`;
+    log("warn", "upgrade restart came back on another commit", { expected: cur.targetSha, running: commit });
+    await writeUpgradeStatus({ ...cur, phase: "error", error });
+    return;
+  }
+  log("info", "upgrade finished", { commit });
+  await writeUpgradeStatus({ ...cur, phase: "idle", error: undefined });
 }
 
 export async function adminUpdateSnapshot(): Promise<{
   version: string;
   protocolVersion: number;
   git?: { sha: string; branch: string; dirty: boolean };
+  running: { commit?: string; startedAt: string };
   service: ServiceKind;
   upgrading?: UpgradeStatus;
 }> {
   const gitInfo = await readInstallGit();
   const upgrading = await readUpgradeStatus();
   return {
-    version: gatewayVersion(),
+    version: GATEWAY_VERSION,
     protocolVersion: PROTOCOL_VERSION,
     ...(gitInfo ? { git: gitInfo } : {}),
+    running: runningBuild(),
     service: detectService(),
     ...(upgrading.phase !== "idle" ? { upgrading } : {}),
   };
@@ -162,19 +175,22 @@ export async function startUpgrade(): Promise<void> {
   if (cur.phase !== "idle" && cur.phase !== "error") {
     throw new HttpError(409, "An upgrade is already running");
   }
-  await writeUpgradeStatus({ phase: "starting", startedAt: new Date().toISOString() });
+  const startedAt = new Date().toISOString();
+  await writeUpgradeStatus({ phase: "starting", startedAt, ...(gitInfo ? { fromSha: gitInfo.sha } : {}) });
   const script = join(repoRoot(), "scripts", "host-service.mjs");
   const logPath = paths.upgradeLog();
-  await mkdir(dirname(logPath), { recursive: true });
+  await mkdir(dirname(logPath), { recursive: true, mode: 0o700 });
   const fs = await import("node:fs");
-  const out = fs.openSync(logPath, "a");
+  const out = fs.openSync(logPath, "a", 0o600);
+  /* The mode above only applies on create; a log left by an older build is tightened here. */
+  await chmod(logPath, 0o600).catch(() => undefined);
   try {
     await new Promise<void>((resolve, reject) => {
       const child = spawnUpgrade(process.execPath, [script, "upgrade"], {
         cwd: repoRoot(),
         detached: true,
         stdio: ["ignore", out, out],
-        env: { ...process.env, GLASSYS_UPGRADE_STRICT: "1" },
+        env: { ...process.env, GLASSYS_UPGRADE_STRICT: "1", GLASSYS_UPGRADE_STARTED_AT: startedAt },
       });
       const fail = (err: Error) => {
         try {
@@ -199,7 +215,7 @@ export async function startUpgrade(): Promise<void> {
     log("info", "upgrade spawned");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await writeUpgradeStatus({ phase: "error", error: message, startedAt: new Date().toISOString() });
+    await writeUpgradeStatus({ phase: "error", error: message, startedAt });
     throw new HttpError(500, message);
   }
 }

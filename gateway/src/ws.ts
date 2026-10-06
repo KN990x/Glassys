@@ -81,7 +81,9 @@ export function attachWs(
     },
   });
 
-  wss.on("error", (err) => {
+  wss.on("error", (err: NodeJS.ErrnoException) => {
+    /* ws re-emits the HTTP server's listen errors; index.ts logs (and retries) those. */
+    if (err.syscall === "listen") return;
     log("error", "wss", { error: String(err) });
   });
 

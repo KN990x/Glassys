@@ -13,3 +13,4 @@ export { extractListedModels, asRecord, errorMessage } from "./list.js";
 export { requireHostCommand } from "./probe.js";
 export { toolKindFromName, diffStats, extractDiff, looksLikeDiff, unifiedFromReplacement, toolDenied, promptWithAttachments, imagePartsFromAttachments } from "./tools.js";
 export { pendingRun } from "./run.js";
+export { PROTECTED_PATH_DENIAL, isProtectedPath, commandTouchesProtectedPath } from "./protected.js";

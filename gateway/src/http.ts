@@ -1,7 +1,4 @@
-import { readFileSync } from "node:fs";
 import { hostname, userInfo } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { PROTOCOL_VERSION, type ConfigPatch } from "@glassys/protocol";
 import { loadConfig, redacted } from "./config.js";
@@ -52,16 +49,7 @@ import { hostCapabilities, hostOverview, listDir, listServices, previewFile, rea
 import { ensureVapidKeys, removePushSubscription, savePushSubscription } from "./push.js";
 import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNextRun, scheduleTimezone } from "./schedules.js";
 import { adminUpdateSnapshot, fetchBehind, startUpgrade } from "./admin-update.js";
-
-const GATEWAY_VERSION = (() => {
-  try {
-    const pkg = join(dirname(fileURLToPath(import.meta.url)), "../package.json");
-    const parsed = JSON.parse(readFileSync(pkg, "utf8")) as { version?: string };
-    return parsed.version || "0.1.0";
-  } catch {
-    return "0.1.0";
-  }
-})();
+import { GATEWAY_VERSION, runningBuild } from "./build-info.js";
 
 class PayloadTooLargeError extends HttpError {
   constructor() {
@@ -160,7 +148,16 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   }
 
   if (method === "GET" && path === "/health") {
-    send(res, 200, { ok: true, name: "glassys", version: GATEWAY_VERSION, protocolVersion: PROTOCOL_VERSION });
+    /* `commit` is the code this process runs, read at start: after a pull without a restart it differs from HEAD. */
+    const { commit, startedAt } = runningBuild();
+    send(res, 200, {
+      ok: true,
+      name: "glassys",
+      version: GATEWAY_VERSION,
+      protocolVersion: PROTOCOL_VERSION,
+      ...(commit ? { commit } : {}),
+      startedAt,
+    });
     return true;
   }
 

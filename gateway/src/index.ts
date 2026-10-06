@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { createServer } from "node:http";
+import { reconcileUpgradeStatus } from "./admin-update.js";
+import { initBuildInfo } from "./build-info.js";
 import { loadConfig } from "./config.js";
 import { listenBind, listenPort } from "./listen.js";
 import { handleHttp } from "./http.js";
@@ -13,6 +15,8 @@ import { attachWs, closeWs } from "./ws.js";
 async function main(): Promise<void> {
   clearBlankCredentialEnv();
   await secureDataDir();
+  await initBuildInfo();
+  await reconcileUpgradeStatus().catch((err) => log("warn", "could not reconcile the upgrade status", { error: String(err) }));
   await loadSecrets();
   const cfg = await loadConfig();
   await initRuntime();
@@ -41,7 +45,26 @@ async function main(): Promise<void> {
 
   const wss = attachWs(server);
 
-  server.on("error", (err) => {
+  const bind = listenBind(cfg);
+  const port = listenPort(cfg);
+  /*
+   * A bind on a bridge or VPN address (Docker, WireGuard) does not exist until that network is
+   * up, and at boot the service manager can start us first. Wait for the address here instead
+   * of exiting: a crash loop would trip systemd's start limit and leave the unit failed.
+   */
+  const LISTEN_RETRY_MS = [1000, 2000, 5000];
+  const LISTEN_GIVE_UP_MS = 120_000;
+  const firstListenAt = Date.now();
+  let listenAttempt = 0;
+  let listening = false;
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (!listening && err.code === "EADDRNOTAVAIL" && Date.now() - firstListenAt < LISTEN_GIVE_UP_MS) {
+      const wait = LISTEN_RETRY_MS[Math.min(listenAttempt, LISTEN_RETRY_MS.length - 1)]!;
+      listenAttempt += 1;
+      log("warn", "bind address not available yet; retrying", { bind, port, attempt: listenAttempt, waitMs: wait });
+      setTimeout(() => server.listen(port, bind), wait);
+      return;
+    }
     log("error", "http server", { error: String(err) });
     process.exit(1);
   });
@@ -72,21 +95,21 @@ async function main(): Promise<void> {
     void shutdown(1);
   });
 
-  const bind = listenBind(cfg);
-  const port = listenPort(cfg);
   if (bind === "0.0.0.0" || bind === "::") {
     const flags = secretsFlags(await loadSecrets());
     if (!flags.operatorPassword) {
       log("warn", "listening on all interfaces before operator setup");
     }
   }
-  server.listen(port, bind, () => {
+  server.once("listening", () => {
+    listening = true;
     log("info", "glassys listening", {
       bind,
       port,
       web: webDir(),
     });
   });
+  server.listen(port, bind);
 }
 
 main().catch((err) => {

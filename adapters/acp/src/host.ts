@@ -2,7 +2,13 @@ import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { asRecord, toolKindFromName } from "@glassys/adapter-contract";
+import {
+  PROTECTED_PATH_DENIAL,
+  asRecord,
+  commandTouchesProtectedPath,
+  isProtectedPath,
+  toolKindFromName,
+} from "@glassys/adapter-contract";
 import { optionBool } from "@glassys/protocol";
 
 export const MAX_ACP_READ_BYTES = 1_048_576;
@@ -59,6 +65,18 @@ export async function resolveRealInsideCwd(cwd: string, path: string): Promise<s
   return abs;
 }
 
+/** Workspace check, then refuse the Glassys data dir even when it sits inside the workspace. */
+export async function resolveAllowedPath(cwd: string, path: string, protectedPaths: readonly string[] = []): Promise<string> {
+  const abs = await resolveRealInsideCwd(cwd, path);
+  if (protectedPaths.length) {
+    const real = await nearestRealPath(abs);
+    if (isProtectedPath(abs, cwd, protectedPaths) || isProtectedPath(real, cwd, protectedPaths)) {
+      throw new Error(PROTECTED_PATH_DENIAL);
+    }
+  }
+  return abs;
+}
+
 function killWithGrace(child: ChildProcess): void {
   if (child.exitCode != null || child.signalCode) return;
   try {
@@ -88,13 +106,14 @@ export function registerHostHandlers(
   rpc: { handle: (method: string, fn: (params: unknown) => Promise<unknown> | unknown) => void },
   cwd: string,
   options: Record<string, unknown>,
+  protectedPaths: readonly string[] = [],
 ) {
   const autoRun = optionBool(options, "autoRun", true);
 
   rpc.handle("fs/read_text_file", async (params) => {
     const rec = asRecord(params) ?? {};
     const path = typeof rec.path === "string" ? rec.path : "";
-    const abs = await resolveRealInsideCwd(cwd, path);
+    const abs = await resolveAllowedPath(cwd, path, protectedPaths);
     const info = await stat(abs);
     if (info.size > MAX_ACP_READ_BYTES) {
       throw new Error(`File is larger than ${MAX_ACP_READ_BYTES} bytes`);
@@ -108,7 +127,7 @@ export function registerHostHandlers(
     const rec = asRecord(params) ?? {};
     const path = typeof rec.path === "string" ? rec.path : "";
     const content = typeof rec.content === "string" ? rec.content : "";
-    const abs = await resolveRealInsideCwd(cwd, path);
+    const abs = await resolveAllowedPath(cwd, path, protectedPaths);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf8");
     return {};
@@ -136,6 +155,9 @@ export function registerHostHandlers(
     const rec = asRecord(params) ?? {};
     const command = typeof rec.command === "string" ? rec.command : "bash";
     const args = Array.isArray(rec.args) ? rec.args.map(String) : [];
+    if (commandTouchesProtectedPath([command, ...args].join(" "), cwd, protectedPaths)) {
+      throw new Error(PROTECTED_PATH_DENIAL);
+    }
     const id = `term-${randomUUID()}`;
     const child = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
     const term: Terminal = { child, exitCode: null, waiters: [] };

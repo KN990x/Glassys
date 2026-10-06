@@ -144,12 +144,14 @@ If you are already inside the repo: `pnpm install && pnpm run service:install`.
 # status
 cd glassys && pnpm run service:status
 
-# upgrade (git pull, install, build, restart)
+# upgrade (git pull, install, build, restart; checks /health reports the new commit)
 cd glassys && pnpm run service:upgrade
 
 # uninstall (stops the service; does not delete the clone or data/)
 cd glassys && pnpm run service:uninstall
 ```
+
+An upgrade stops if `git pull --ff-only` fails, instead of rebuilding the old clone; `pnpm run service:upgrade -- --allow-stale` rebuilds anyway. The service runs the stable node link (`opt/node` under Homebrew), not a versioned path; set `GLASSYS_NODE` before installing to choose another. `GET /health` reports the `commit` the gateway is running.
 
 Foreground (blocks the terminal): `pnpm run build && pnpm start`. Default bind is **localhost**. Put Caddy or Cloudflare Tunnel in front if you need a public URL. See [docs/deploy/host.md](docs/deploy/host.md).
 
@@ -309,12 +311,14 @@ Si ya estás dentro del repo: `pnpm install && pnpm run service:install`.
 # estado
 cd glassys && pnpm run service:status
 
-# actualizar (git pull, install, build, restart)
+# actualizar (git pull, install, build, restart; comprueba que /health da el commit nuevo)
 cd glassys && pnpm run service:upgrade
 
 # desinstalar (para el servicio; no borra el clone ni data/)
 cd glassys && pnpm run service:uninstall
 ```
+
+Un upgrade se detiene si `git pull --ff-only` falla, en vez de reconstruir el clon viejo; `pnpm run service:upgrade -- --allow-stale` lo reconstruye igualmente. El servicio usa el enlace estable de node (`opt/node` en Homebrew), no una ruta con versión; define `GLASSYS_NODE` antes de instalar para elegir otro. `GET /health` informa del `commit` que ejecuta el gateway.
 
 En primer plano (bloquea la terminal): `pnpm run build && pnpm start`. El bind por defecto es **localhost**. Pon Caddy o Cloudflare Tunnel delante si necesitas una URL pública. Véase [docs/deploy/host.md](docs/deploy/host.md).
 

@@ -1,5 +1,5 @@
-import { mkdir, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { mkdir, realpath, stat } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { AdapterError } from "@glassys/adapter-contract";
 import type { AdapterRun, AdapterSession } from "@glassys/adapter-contract";
@@ -285,7 +285,15 @@ async function createOpts() {
     modelParams: cfg.agent.modelParams ?? [],
     storeDir: paths.adapterStore(adapter.id),
     options: cfg.agent.options ?? {},
+    protectedPaths: await protectedPaths(),
   };
+}
+
+/** The data dir (secrets, sessions, transcripts), lexically and through any symlink. */
+async function protectedPaths(): Promise<string[]> {
+  const dir = resolve(paths.data());
+  const real = await realpath(dir).catch(() => dir);
+  return [...new Set([dir, real])];
 }
 
 async function disposeSession(): Promise<void> {

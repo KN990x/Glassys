@@ -74,3 +74,19 @@ export function adapterKeyConfigured(
   if (secrets.adapters?.[adapterId]?.apiKey?.configured) return true;
   return adapterId === "cursor" && Boolean(secrets.cursorApiKey?.configured);
 }
+
+/**
+ * True when the agent's cwd contains the Glassys data dir and nothing sandboxes the agent: a
+ * shell can then read the operator's secrets. Glassys blocks the plain paths where it mediates
+ * tools; only the sandbox actually stops a shell.
+ */
+export function cwdExposesDataDir(input: { cwd: string; dataDir?: string; sandbox: boolean; sandboxSupported: boolean }): boolean {
+  if (!input.dataDir || !input.cwd) return false;
+  if (input.sandboxSupported && input.sandbox) return false;
+  const trim = (p: string) => (p.length > 1 ? p.replace(/[\\/]+$/, "") : p);
+  const cwd = trim(input.cwd);
+  const data = trim(input.dataDir);
+  if (cwd === "/" || cwd === data) return true;
+  const sepChar = data.includes("\\") && !data.includes("/") ? "\\" : "/";
+  return data.startsWith(cwd + sepChar) || cwd.startsWith(data + sepChar);
+}

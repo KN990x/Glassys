@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { writeFileAtomic } from "./atomic.js";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import YAML from "yaml";
 import {
@@ -231,6 +231,7 @@ export async function redacted(cfg?: GlassysConfig, restart?: boolean): Promise<
       vapidConfigured: flags.vapidConfigured,
     },
     restartRequired: restart,
+    dataDir: resolve(paths.data()),
   };
 }
 

@@ -17,7 +17,7 @@ import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
 import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
-import { defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
+import { cwdExposesDataDir, defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { Callout, StatusBadge } from "../components/Primitives";
 import { Switch } from "../components/Switch";
@@ -644,6 +644,12 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               {caps?.toolConfirmation === "auto-review-deny" && <Callout tone="warn">{t("wizard.exec.danger")}</Callout>}
               {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
               {caps?.toolConfirmation === "permission-mode" && <Callout tone="warn">{t("wizard.exec.permission.hint")}</Callout>}
+              {cwdExposesDataDir({
+                cwd,
+                dataDir: config.dataDir,
+                sandbox: optionBool(options, "sandbox", false),
+                sandboxSupported: Boolean(caps?.sandbox),
+              }) && <Callout tone="warn">{t("settings.dataDirExposed")}</Callout>}
             </div>
           )}
 

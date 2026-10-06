@@ -27,6 +27,11 @@ export interface AdapterCreateOptions {
   modelParams: ModelParam[];
   storeDir: string;
   options: Record<string, unknown>;
+  /**
+   * Directories the agent must not read or write through tools Glassys mediates (the Glassys
+   * data dir: secrets, sessions). Without a sandbox a shell can still reach them.
+   */
+  protectedPaths?: string[];
 }
 
 export interface PromptAttachment {

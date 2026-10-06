@@ -178,7 +178,7 @@ class AcpSession implements AdapterSession {
   static async start(opts: AdapterCreateOptions, resumeId?: string): Promise<AcpSession> {
     const { command, args } = commandOf(opts);
     const rpc = new JsonRpcStdio(command, args, opts.cwd, opts.apiKey ? { API_KEY: opts.apiKey } : undefined);
-    const cleanupHost = registerHostHandlers(rpc, opts.cwd, opts.options);
+    const cleanupHost = registerHostHandlers(rpc, opts.cwd, opts.options, opts.protectedPaths);
     let init: Record<string, unknown> | undefined;
     try {
       init = asRecord(

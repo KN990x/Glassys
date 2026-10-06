@@ -58,11 +58,30 @@ describe("http api", () => {
   it("reports the gateway package version on /health", async () => {
     const res = await fetch(`${base}/health`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; name: string; version: string; protocolVersion: number };
+    const body = (await res.json()) as {
+      ok: boolean;
+      name: string;
+      version: string;
+      protocolVersion: number;
+      commit?: string;
+      startedAt: string;
+    };
     expect(body.ok).toBe(true);
     expect(body.name).toBe("glassys");
     expect(body.version).toBe("0.1.0");
     expect(body.protocolVersion).toBe(PROTOCOL_VERSION);
+    expect(Number.isNaN(Date.parse(body.startedAt))).toBe(false);
+  });
+
+  it("reports the commit the process started on", async () => {
+    const { setRunningCommitForTests } = await import("./build-info.js");
+    setRunningCommitForTests("d".repeat(40));
+    try {
+      const body = (await (await fetch(`${base}/health`)).json()) as { commit?: string };
+      expect(body.commit).toBe("d".repeat(40));
+    } finally {
+      setRunningCommitForTests(undefined);
+    }
   });
 
   it("rejects a short setup password", async () => {

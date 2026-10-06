@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread } from "./adapterOptions";
+import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread, cwdExposesDataDir } from "./adapterOptions";
 
 const cursor: AdapterPublicInfo = {
   id: "cursor",
@@ -97,5 +97,20 @@ describe("adapterKeyConfigured", () => {
         "claude",
       ),
     ).toBe(true);
+  });
+});
+
+describe("cwdExposesDataDir", () => {
+  const dataDir = "/home/op/glassys/data";
+  it("warns when the workspace contains the data dir and nothing sandboxes the agent", () => {
+    expect(cwdExposesDataDir({ cwd: "/home/op", dataDir, sandbox: false, sandboxSupported: true })).toBe(true);
+    expect(cwdExposesDataDir({ cwd: "/home/op/", dataDir, sandbox: true, sandboxSupported: false })).toBe(true);
+    expect(cwdExposesDataDir({ cwd: "/", dataDir, sandbox: false, sandboxSupported: false })).toBe(true);
+  });
+  it("stays quiet with a sandbox or a workspace elsewhere", () => {
+    expect(cwdExposesDataDir({ cwd: "/home/op", dataDir, sandbox: true, sandboxSupported: true })).toBe(false);
+    expect(cwdExposesDataDir({ cwd: "/home/op/stacks", dataDir, sandbox: false, sandboxSupported: false })).toBe(false);
+    expect(cwdExposesDataDir({ cwd: "/home/op/glassys/data2", dataDir, sandbox: false, sandboxSupported: false })).toBe(false);
+    expect(cwdExposesDataDir({ cwd: "/home/op", dataDir: undefined, sandbox: false, sandboxSupported: false })).toBe(false);
   });
 });

@@ -96,6 +96,24 @@ describe("registerHostHandlers autoRun", () => {
     }
   });
 
+  it("refuses the Glassys data dir even inside the workspace", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-"));
+    const data = join(dir, "glassys", "data");
+    await mkdir(data, { recursive: true });
+    await writeFile(join(data, "secrets.json"), "{}");
+    await writeFile(join(dir, "notes.txt"), "ok");
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true }, [data]);
+    try {
+      await expect(map.get("fs/read_text_file")?.({ path: "glassys/data/secrets.json" })).rejects.toThrow(/denied/);
+      await expect(map.get("fs/write_text_file")?.({ path: join(data, "x"), content: "" })).rejects.toThrow(/denied/);
+      expect(() => map.get("terminal/create")?.({ command: "cat", args: [join(data, "secrets.json")] })).toThrow(/denied/);
+      await expect(map.get("fs/read_text_file")?.({ path: "notes.txt" })).resolves.toEqual({ content: "ok" });
+    } finally {
+      cleanup();
+    }
+  });
+
   it("wait_for_exit returns when the child has already exited", async () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-acp-term-"));
     const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
