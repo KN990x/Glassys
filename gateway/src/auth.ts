@@ -94,6 +94,14 @@ async function withVerifySlot<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Whether `password` is the operator password (false when none is set yet). */
+export async function verifyOperatorPassword(password: string): Promise<boolean> {
+  if (!password || password.length > MAX_OPERATOR_PASSWORD) return false;
+  const { operatorPasswordHash } = await loadSecrets();
+  if (!operatorPasswordHash) return false;
+  return withVerifySlot(() => verifyPassword(password, operatorPasswordHash));
+}
+
 export async function loginWithPassword(password: string): Promise<string | null> {
   if (!password || password.length > MAX_OPERATOR_PASSWORD) return null;
   const { operatorPasswordHash } = await loadSecrets();

@@ -183,13 +183,6 @@ export async function archiveLiveThread(agentId: string | null, agent?: AgentCon
   return withThreads(() => archiveLiveThreadUnlocked(agentId, agent));
 }
 
-export async function openEmptyThread(): Promise<ThreadMeta> {
-  return withThreads(async () => {
-    const cfg = await loadConfig();
-    return createEmptyThread(cfg.agent, null);
-  });
-}
-
 /**
  * Move off the live thread: archive it and open an empty one — unless it is
  * still empty. An empty live thread is rebound to the current config and kept:

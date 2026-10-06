@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { AdapterCapabilities, RedactedConfig } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
-import { optionBool, optionString, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
+import { optionBool, optionString, sandboxState, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
+import { SandboxModeSelect } from "./SandboxModeSelect";
 import { operatorError } from "../operatorError";
 import { useConfirm } from "./ConfirmDialog";
 import { PopAnchor, Popover } from "./Popover";
@@ -32,7 +33,11 @@ export function PermissionChip({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const visible = Boolean(
-    caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode" || caps?.toolConfirmation === "none",
+    caps?.sandbox ||
+      caps?.sandboxModes?.length ||
+      caps?.autoRun ||
+      caps?.toolConfirmation === "permission-mode" ||
+      caps?.toolConfirmation === "none",
   );
 
   if (!caps || !visible) return null;
@@ -48,8 +53,16 @@ export function PermissionChip({
       : caps.toolConfirmation === "permission-mode"
         ? t(`wizard.exec.permission.${mode === "dontAsk" ? "dontAsk" : mode === "acceptEdits" ? "acceptEdits" : "bypass"}`)
         : t("chip.unattended");
-  const sandboxPart = caps.sandbox ? (sandbox ? t("chip.sandboxOn") : t("chip.sandboxOff")) : "";
-  const tone = riskTone({ autoRun, sandbox, sandboxSupported: Boolean(caps.sandbox) });
+  const sandboxMode = optionString(config.agent.options, "sandboxMode", "");
+  const sandboxPart = caps.sandboxModes?.length
+    ? t(`settings.sandboxMode.${sandboxMode && caps.sandboxModes.includes(sandboxMode) ? sandboxMode : "default"}`)
+    : caps.sandbox
+      ? sandbox
+        ? t("chip.sandboxOn")
+        : t("chip.sandboxOff")
+      : "";
+  const sandboxed = sandboxState(caps, config.agent.options);
+  const tone = riskTone({ autoRun, sandbox: sandboxed.on, sandboxSupported: sandboxed.supported });
   const glyph = tone === "ok" ? <IconShield /> : tone === "warn" ? <IconShieldAlert /> : <IconShieldOff />;
 
   async function patch(options: Record<string, unknown>) {
@@ -87,6 +100,16 @@ export function PermissionChip({
       >
         <div className="pop-section">
           <p className="eyebrow">{t("wizard.step.execution")}</p>
+          {caps.sandboxModes?.length ? (
+            <label>
+              {t("settings.sandboxMode")}
+              <SandboxModeSelect
+                modes={caps.sandboxModes}
+                value={sandboxMode}
+                onChange={(mode) => void patch(setOption(config.agent.options, "sandboxMode", mode))}
+              />
+            </label>
+          ) : null}
           {caps.sandbox && (
             <Switch
               checked={sandbox}

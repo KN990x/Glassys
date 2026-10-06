@@ -77,6 +77,7 @@ export function Settings({
   const [browsing, setBrowsing] = useState(!focusSection);
   const [draft, setDraft] = useState(config);
   const [password, setPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
   const [saved, setSaved] = useState("");
@@ -299,6 +300,10 @@ export function Settings({
       setError(t("setup.short"));
       return;
     }
+    if (password && !currentPassword) {
+      setError(t("settings.currentPasswordRequired"));
+      return;
+    }
     if (password && password.length > 256) {
       setError(t("setup.long"));
       return;
@@ -320,6 +325,7 @@ export function Settings({
             ? { adapter: draft.agent.adapter, value: null }
             : undefined,
         operatorPassword: password || undefined,
+        currentPassword: password ? currentPassword : undefined,
       });
       onConfig(next);
       setDraft(next);
@@ -327,6 +333,7 @@ export function Settings({
       setClearKey(false);
       const rotatedPassword = Boolean(password);
       setPassword("");
+      setCurrentPassword("");
       setSaved(t("settings.saved"));
       await loadModels(next.agent.adapter);
       setAuth(await api.adapterStatus(next.agent.adapter).catch(() => null));
@@ -542,6 +549,8 @@ export function Settings({
                   caps={caps}
                   password={password}
                   setPassword={setPassword}
+                  currentPassword={currentPassword}
+                  setCurrentPassword={setCurrentPassword}
                   notifyNote={notifyNote}
                   enableNotify={enableNotify}
                   onLogout={() => {
@@ -603,6 +612,7 @@ export function Settings({
                   setApiKey("");
                   setClearKey(false);
                   setPassword("");
+                  setCurrentPassword("");
                   revertPreview();
                 }}
               >

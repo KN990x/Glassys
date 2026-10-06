@@ -48,6 +48,7 @@ import {
   setPinnedCwds,
 } from "./threads.js";
 import { gcUploads, materializeAttachments } from "./uploads.js";
+import { assertPasswordChangeAllowed } from "./password-change.js";
 import { eventsToMarkdown } from "./transcript-export.js";
 import { notifyFromEvent, resetPushRunFlags } from "./push.js";
 import { bindScheduleRuntime, startSchedules, stopSchedules } from "./schedules.js";
@@ -898,6 +899,7 @@ export async function applyConfigPatch(
   patch: ConfigPatch,
   opts?: { identity?: "auto" | "preserve" },
 ): Promise<{ restart: boolean }> {
+  await assertPasswordChangeAllowed(patch);
   const before = await loadConfig();
   const { config, restart } = await applyPatch(patch);
   invalidateAdapterInfoCache();

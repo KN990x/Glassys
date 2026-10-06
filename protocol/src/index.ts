@@ -106,6 +106,12 @@ export interface AdapterCapabilities {
   /** Adapter can pass image parts natively. Missing/false still allows path-note fallback. */
   attachments?: boolean;
   defaultModel?: { id: string; params: ModelParam[] };
+  /**
+   * The adapter's own sandbox levels, most restrictive first, picked with `agent.options.sandboxMode`.
+   * An empty or missing mode leaves it to the adapter's own config (nothing is overridden).
+   * Adapters with a plain on/off sandbox use `sandbox` instead.
+   */
+  sandboxModes?: string[];
 }
 
 export type AdapterAvailability = { ok: true } | { ok: false; error: string };
@@ -242,6 +248,8 @@ export type ConfigPatch = {
   /** @deprecated Writes secrets.adapters.cursor */
   cursorApiKey?: string | null;
   operatorPassword?: string;
+  /** Required with `operatorPassword` once one is set: a session alone cannot replace the password. */
+  currentPassword?: string;
 };
 
 export interface MessageAttachment {

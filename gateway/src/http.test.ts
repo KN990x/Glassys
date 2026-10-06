@@ -147,6 +147,31 @@ describe("http api", () => {
     expect((await fetch(`${base}/api/auth/me`, { headers: auth })).status).toBe(401);
   });
 
+  it("changes the operator password only with the current one", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const put = (body: unknown) =>
+      fetch(`${base}/api/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+    expect((await put({ operatorPassword: "password2" })).status).toBe(403);
+    expect((await put({ operatorPassword: "password2", currentPassword: "wrong-one" })).status).toBe(403);
+    expect((await put({ operatorPassword: "password2", currentPassword: "password1" })).status).toBe(200);
+    const relog = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password2" }),
+    });
+    expect(relog.status).toBe(200);
+  });
+
   it("answers a malformed path escape with 400, not 500", async () => {
     await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
     const login = await fetch(`${base}/api/auth/login`, {

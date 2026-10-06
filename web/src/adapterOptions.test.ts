@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread, cwdExposesDataDir } from "./adapterOptions";
+import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread, cwdExposesDataDir, sandboxState } from "./adapterOptions";
 
 const cursor: AdapterPublicInfo = {
   id: "cursor",
@@ -112,5 +112,20 @@ describe("cwdExposesDataDir", () => {
     expect(cwdExposesDataDir({ cwd: "/home/op/stacks", dataDir, sandbox: false, sandboxSupported: false })).toBe(false);
     expect(cwdExposesDataDir({ cwd: "/home/op/glassys/data2", dataDir, sandbox: false, sandboxSupported: false })).toBe(false);
     expect(cwdExposesDataDir({ cwd: "/home/op", dataDir: undefined, sandbox: false, sandboxSupported: false })).toBe(false);
+  });
+});
+
+describe("sandboxState", () => {
+  const codex = { sandbox: false, sandboxModes: ["read-only", "workspace-write", "danger-full-access"] };
+  it("counts a Codex level short of full access as sandboxed", () => {
+    expect(sandboxState(codex, { sandboxMode: "workspace-write" })).toEqual({ supported: true, on: true });
+    expect(sandboxState(codex, { sandboxMode: "danger-full-access" })).toEqual({ supported: true, on: false });
+  });
+  it("does not count a level left to the adapter's config", () => {
+    expect(sandboxState(codex, {})).toEqual({ supported: true, on: false });
+  });
+  it("keeps the plain on/off sandbox", () => {
+    expect(sandboxState({ sandbox: true }, { sandbox: true })).toEqual({ supported: true, on: true });
+    expect(sandboxState({ sandbox: false }, { sandbox: true })).toEqual({ supported: false, on: false });
   });
 });

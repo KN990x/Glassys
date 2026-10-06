@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const calls: Array<{ kind: "start" | "resume"; id?: string; model?: string }> = [];
+const sandboxes: Array<string | undefined> = [];
 
 vi.mock("@openai/codex-sdk", () => {
   class FakeThread {
@@ -10,12 +11,14 @@ vi.mock("@openai/codex-sdk", () => {
     }
   }
   class Codex {
-    startThread(opts: { model?: string }) {
+    startThread(opts: { model?: string; sandboxMode?: string }) {
       calls.push({ kind: "start", model: opts.model });
+      sandboxes.push(opts.sandboxMode);
       return new FakeThread(null);
     }
-    resumeThread(id: string, opts: { model?: string }) {
+    resumeThread(id: string, opts: { model?: string; sandboxMode?: string }) {
       calls.push({ kind: "resume", id, model: opts.model });
+      sandboxes.push(opts.sandboxMode);
       return new FakeThread(id);
     }
   }
@@ -54,5 +57,20 @@ describe("codex model switch", () => {
       { kind: "start", model: "gpt-5.6-sol" },
       { kind: "start", model: "gpt-5.6-terra" },
     ]);
+  });
+});
+
+describe("codex sandbox mode", () => {
+  it("passes the operator's pick and leaves Codex's config alone otherwise", async () => {
+    sandboxes.length = 0;
+    await codexAdapter.create({ ...opts, options: { sandboxMode: "workspace-write" } });
+    await codexAdapter.create({ ...opts, options: {} });
+    await codexAdapter.create({ ...opts, options: { sandboxMode: "yolo" } });
+    expect(sandboxes).toEqual(["workspace-write", undefined, undefined]);
+  });
+
+  it("drops an unknown mode from the saved config", () => {
+    const agent = { adapter: "codex", cwd: "/tmp", model: "", modelParams: [], options: { sandboxMode: "yolo" } };
+    expect(codexAdapter.normalizeConfig!(agent).options).toEqual({});
   });
 });

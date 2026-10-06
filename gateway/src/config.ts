@@ -151,7 +151,14 @@ export async function saveConfig(cfg: GlassysConfig): Promise<void> {
 export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysConfig; restart: boolean }> {
   return withConfigLock(async () => {
     const before = await loadConfigUnlocked();
-    const { cursorApiKey, operatorPassword, adapterApiKey: adapterKey, ...rest } = stripOperatorRestricted(patch);
+    const {
+      cursorApiKey,
+      operatorPassword,
+      adapterApiKey: adapterKey,
+      currentPassword: _currentPassword,
+      ...rest
+    } = stripOperatorRestricted(patch);
+    void _currentPassword; /* checked in runtime.applyConfigPatch, before this runs */
     if (rest.agent !== undefined && !isObj(rest.agent)) {
       throw new HttpError(400, "agent must be an object");
     }
@@ -244,6 +251,8 @@ export function identityOptions(adapter: string, options: Record<string, unknown
       return { permissionMode: o.permissionMode, autoRun: o.autoRun };
     case "acp":
       return { command: o.command, args: o.args, registryId: o.registryId, autoRun: o.autoRun };
+    case "codex":
+      return { sandboxMode: o.sandboxMode };
     default:
       return {};
   }

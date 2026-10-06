@@ -20,11 +20,25 @@ export const CODEX_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "gpt-5.6-luna", displayName: "GPT-5.6 Luna" },
 ];
 
+/** Codex's sandbox levels, most restrictive first (`--sandbox`). */
+export const CODEX_SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"] as const;
+type CodexSandboxMode = (typeof CODEX_SANDBOX_MODES)[number];
+
+/** The operator's pick, or undefined to leave it to ~/.codex/config.toml (Codex's own default). */
+export function codexSandboxMode(options: Record<string, unknown> | undefined): CodexSandboxMode | undefined {
+  const raw = options?.sandboxMode;
+  return typeof raw === "string" && (CODEX_SANDBOX_MODES as readonly string[]).includes(raw)
+    ? (raw as CodexSandboxMode)
+    : undefined;
+}
+
 function threadOpts(opts: AdapterCreateOptions) {
+  const sandboxMode = codexSandboxMode(opts.options);
   return {
     workingDirectory: opts.cwd,
     skipGitRepoCheck: true,
     ...(opts.model ? { model: opts.model } : {}),
+    ...(sandboxMode ? { sandboxMode } : {}),
   };
 }
 
@@ -124,10 +138,13 @@ export const codexAdapter: Adapter = {
     auth: { kind: "cli-binary", envNames: ["CODEX_API_KEY", "OPENAI_API_KEY"] },
     defaultModel: { id: "gpt-5.6-sol", params: [] },
     liveCatalog: false,
+    sandboxModes: [...CODEX_SANDBOX_MODES],
   },
 
   normalizeConfig(agent: AgentConfig): AgentConfig {
-    return { ...agent, model: agent.model || "gpt-5.6-sol" };
+    const options = { ...(agent.options ?? {}) };
+    if (!codexSandboxMode(options)) delete options.sandboxMode;
+    return { ...agent, model: agent.model || "gpt-5.6-sol", options };
   },
 
   async listModels() {

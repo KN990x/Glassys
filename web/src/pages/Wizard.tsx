@@ -20,6 +20,7 @@ import { ReachabilityCard } from "../components/Reachability";
 import { cwdExposesDataDir, defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { Callout, StatusBadge } from "../components/Primitives";
+import { SandboxModeSelect } from "../components/SandboxModeSelect";
 import { Switch } from "../components/Switch";
 import { GlassysMark, IconCheck } from "../components/Icon";
 
@@ -30,6 +31,7 @@ export function wizardStepIds(caps?: {
   discover?: boolean;
   settingSources?: boolean;
   sandbox?: boolean;
+  sandboxModes?: string[];
   autoRun?: boolean;
   toolConfirmation?: string;
 }): StepId[] {
@@ -37,7 +39,7 @@ export function wizardStepIds(caps?: {
   if (caps?.models !== false) s.push("model");
   if (caps?.discover) s.push("acp");
   if (caps?.settingSources) s.push("rules");
-  if (caps?.sandbox || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
+  if (caps?.sandbox || caps?.sandboxModes?.length || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
   return s;
 }
 
@@ -612,6 +614,17 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
           {id === "execution" && (
             <div className="stack">
               <p>{t("wizard.exec.body")}</p>
+              {caps?.sandboxModes?.length ? (
+                <label>
+                  {t("settings.sandboxMode")}
+                  <SandboxModeSelect
+                    modes={caps.sandboxModes}
+                    value={optionString(options, "sandboxMode", "")}
+                    onChange={(mode) => setOptions(setOption(options, "sandboxMode", mode))}
+                  />
+                  <span className="muted">{t("settings.sandboxModeHint")}</span>
+                </label>
+              ) : null}
               {caps?.sandbox && (
                 <Switch
                   checked={optionBool(options, "sandbox", false)}

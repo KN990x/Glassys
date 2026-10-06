@@ -9,6 +9,8 @@ export function SessionTab({
   caps,
   password,
   setPassword,
+  currentPassword,
+  setCurrentPassword,
   notifyNote,
   enableNotify,
   onLogout,
@@ -18,6 +20,8 @@ export function SessionTab({
   caps?: AdapterCapabilities;
   password: string;
   setPassword: (value: string) => void;
+  currentPassword: string;
+  setCurrentPassword: (value: string) => void;
   notifyNote: string;
   enableNotify: (on: boolean) => Promise<void>;
   onLogout: () => void;
@@ -74,6 +78,18 @@ export function SessionTab({
             onChange={(e) => setPassword(e.target.value)}
           />
         </SettingRow>
+        {/* Asked only once a new password is typed: a session alone cannot replace it. */}
+        {password && (
+          <SettingRow label={t("settings.currentPassword")} hint={t("settings.currentPasswordHint")} htmlFor="set-current-password">
+            <input
+              id="set-current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+          </SettingRow>
+        )}
         <SettingRow label={t("settings.logoutRow")} hint={t("settings.logoutHint")}>
           <button type="button" className="ghost" onClick={onLogout}>
             {t("settings.logout")}

@@ -16,8 +16,9 @@ import { SdkLoginControls } from "../../components/SdkLogin";
 import { WorkspacePicker } from "../../components/WorkspacePicker";
 import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } from "../../components/Primitives";
 import { Switch } from "../../components/Switch";
+import { SandboxModeSelect } from "../../components/SandboxModeSelect";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { cwdExposesDataDir, optionBool, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
+import { cwdExposesDataDir, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
 
 export function AgentTab({
@@ -72,7 +73,8 @@ export function AgentTab({
   const caps = currentAdapter?.capabilities;
   const autoRun = optionBool(draft.agent.options, "autoRun", true);
   const sandbox = optionBool(draft.agent.options, "sandbox", false);
-  const tone = riskTone({ autoRun, sandbox, sandboxSupported: Boolean(caps?.sandbox) });
+  const sandboxed = sandboxState(caps, draft.agent.options);
+  const tone = riskTone({ autoRun, sandbox: sandboxed.on, sandboxSupported: sandboxed.supported });
 
   return (
     <>
@@ -166,6 +168,18 @@ export function AgentTab({
       )}
 
       <SettingGroup title={t("wizard.step.execution")} hint={t("settings.executionHint")}>
+        {caps?.sandboxModes?.length ? (
+          <SettingRow label={t("settings.sandboxMode")} htmlFor="set-sandbox-mode" hint={t("settings.sandboxModeHint")}>
+            <SandboxModeSelect
+              id="set-sandbox-mode"
+              modes={caps.sandboxModes}
+              value={optionString(draft.agent.options, "sandboxMode", "")}
+              onChange={(mode) =>
+                setDraft({ ...draft, agent: { ...draft.agent, options: setOption(draft.agent.options, "sandboxMode", mode) } })
+              }
+            />
+          </SettingRow>
+        ) : null}
         {caps?.sandbox && (
           <SettingRow label={t("wizard.exec.sandbox")} hint={t("settings.sandboxHint")}>
             <Switch

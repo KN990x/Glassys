@@ -1,4 +1,4 @@
-import { optionBool, optionString, optionStringArray, type AdapterPublicInfo } from "@glassys/protocol";
+import { optionBool, optionString, optionStringArray, type AdapterCapabilities, type AdapterPublicInfo } from "@glassys/protocol";
 
 export { optionBool, optionString, optionStringArray };
 
@@ -89,4 +89,21 @@ export function cwdExposesDataDir(input: { cwd: string; dataDir?: string; sandbo
   if (cwd === "/" || cwd === data) return true;
   const sepChar = data.includes("\\") && !data.includes("/") ? "\\" : "/";
   return data.startsWith(cwd + sepChar) || cwd.startsWith(data + sepChar);
+}
+
+/**
+ * Whether the agent runs sandboxed, for the risk glyph: a plain on/off sandbox, or an adapter
+ * sandbox level short of full access. A level left to the adapter's own config is unknown here,
+ * so it does not count as sandboxed.
+ */
+export function sandboxState(
+  caps: Pick<AdapterCapabilities, "sandbox" | "sandboxModes"> | undefined,
+  options: Record<string, unknown> | undefined,
+): { supported: boolean; on: boolean } {
+  if (caps?.sandboxModes?.length) {
+    const mode = optionString(options, "sandboxMode", "");
+    return { supported: true, on: mode !== "" && mode !== "danger-full-access" && caps.sandboxModes.includes(mode) };
+  }
+  if (caps?.sandbox) return { supported: true, on: optionBool(options, "sandbox", false) };
+  return { supported: false, on: false };
 }

@@ -30,6 +30,8 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Too many push subscriptions": "error.tooManyPush",
   "Too many pinned workspaces": "error.tooManyPins",
   "Notification permission denied": "settings.notifyDenied",
+  "current password is incorrect": "error.currentPassword",
+  "too many attempts": "error.tooManyAttempts",
 };
 
 export function operatorError(message: string, t: (key: string) => string): string {

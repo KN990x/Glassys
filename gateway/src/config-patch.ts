@@ -3,7 +3,7 @@ import type { ConfigPatch } from "@glassys/protocol";
 /** The config sections an API/WS patch may change. */
 const PATCHABLE = ["space", "onboarding", "agent", "display", "session", "prompts"] as const;
 /** Fields of a patch that are not config sections but are handled separately (secrets). */
-const SECRET_FIELDS = ["adapterApiKey", "cursorApiKey", "operatorPassword"] as const;
+const SECRET_FIELDS = ["adapterApiKey", "cursorApiKey", "operatorPassword", "currentPassword"] as const;
 
 /**
  * Bind, origins, and edge auth are yaml/env only — API/WS patches must not change them. Anything

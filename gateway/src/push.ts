@@ -207,11 +207,28 @@ async function defaultSend(sub: PushSubscriptionRecord, payload: string, vapid: 
   }
 }
 
+/** Every streamed event passes through here; only these can notify. */
+function mayNotify(event: ServerMessage): boolean {
+  switch (event.type) {
+    case "run.done":
+    case "run.error":
+    case "run.cancelled":
+    case "run.stalled":
+      return true;
+    case "tool.end":
+      return Boolean(event.denied);
+    default:
+      return false;
+  }
+}
+
 export async function notifyFromEvent(event: ServerMessage): Promise<void> {
   if (event.type === "run.start") {
     deniedThisRun = false;
     return;
   }
+  /* Before any I/O: a stream is hundreds of deltas, and each one used to read config.yaml. */
+  if (!mayNotify(event)) return;
   const cfg = await loadConfig();
   const note = payloadFor(event, cfg.space.locale || "en");
   if (!note) return;

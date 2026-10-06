@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { access, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -100,5 +100,16 @@ describe("web push", () => {
     });
     await notifyFromEvent({ type: "run.done" });
     expect(sent.some((body) => body.includes("terminado"))).toBe(true);
+  });
+});
+
+describe("push on streamed events", () => {
+  it("does no I/O for events that never notify", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-push-io-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    await notifyFromEvent({ type: "text.delta", text: "a" });
+    await notifyFromEvent({ type: "thinking.delta", text: "b" });
+    // loadConfig() would have created config.yaml on its first read.
+    await expect(access(join(dir, "config.yaml"))).rejects.toThrow();
   });
 });
