@@ -147,6 +147,18 @@ describe("http api", () => {
     expect((await fetch(`${base}/api/auth/me`, { headers: auth })).status).toBe(401);
   });
 
+  it("answers a malformed path escape with 400, not 500", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const res = await fetch(`${base}/api/threads/%E0/export`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(res.status).toBe(400);
+  });
+
   it("serializes password attempts per address and turns a pile-up away with 429", async () => {
     const { setLoginBaseDelayForTests, resetLoginLimitForTests, LOGIN_MAX_WAITING } = await import("./login-limit.js");
     resetLoginLimitForTests();

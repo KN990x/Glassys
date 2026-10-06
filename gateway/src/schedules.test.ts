@@ -195,4 +195,27 @@ describe("schedules", () => {
     await tickSchedulesForTests();
     expect(applied).toEqual([dir]);
   });
+
+  it("fires a cron slot once even when the timer lands just before it", async () => {
+    const enqueued: string[] = [];
+    // A clock 100ms short of the next whole minute.
+    const nextMinute = Math.ceil((Date.now() + 1000) / 60_000) * 60_000;
+    const offset = nextMinute - 100 - Date.now();
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+      now: () => Date.now() + offset,
+    });
+    await createSchedule({ text: "every minute", cwd: dir, cron: "* * * * *" });
+    await tickSchedulesForTests();
+    await tickSchedulesForTests();
+    expect(enqueued).toEqual(["every minute"]);
+  });
 });

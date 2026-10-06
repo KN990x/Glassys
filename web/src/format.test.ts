@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { isMessageId } from "@glassys/protocol";
 import {
+  newMessageId,
   blockMatchesQuery,
   cwdBasename,
   formatBytes,
@@ -56,5 +58,14 @@ describe("host formats", () => {
     expect(formatUptime(45 * 60)).toBe("45m");
     expect(formatUptime(3 * 3600 + 20 * 60)).toBe("3h 20m");
     expect(formatUptime(12 * 86400 + 4 * 3600)).toBe("12d 4h");
+  });
+});
+
+describe("newMessageId", () => {
+  it("makes a gateway-valid v4 UUID without randomUUID (plain HTTP on a LAN address)", () => {
+    const insecure = { getRandomValues: <T extends ArrayBufferView>(a: T) => crypto.getRandomValues(a as never) as T };
+    const ids = new Set(Array.from({ length: 50 }, () => newMessageId(insecure as never)));
+    expect(ids.size).toBe(50);
+    for (const id of ids) expect(isMessageId(id)).toBe(true);
   });
 });

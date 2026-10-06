@@ -300,6 +300,12 @@ async function tickSchedules(): Promise<void> {
   try {
     const due = await soonestDue();
     if (due && due.at <= nowMs() + 250) {
+      /*
+       * Never fire ahead of the slot: re-arming from a moment still before it finds that same cron
+       * slot again, and the message went out twice.
+       */
+      const early = due.at - nowMs();
+      if (early > 0) await new Promise((r) => setTimeout(r, early));
       await fireJob(due.job);
     }
   } finally {

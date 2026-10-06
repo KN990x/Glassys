@@ -21,7 +21,7 @@ import { reduceTranscript, replay, type Block } from "../transcript";
 import { Composer } from "../components/Composer";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError, shouldSubmitOnEnter } from "../operatorError";
-import { blockMatchesQuery, formatElapsed, slashQuery } from "../format";
+import { blockMatchesQuery, formatElapsed, newMessageId, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette } from "../components/CommandPalette";
 import { buildPaletteItems } from "./chatPalette";
@@ -776,7 +776,7 @@ export function Chat({
     if (!sendRef.current({
       type: "user.message",
       text: value,
-      id: crypto.randomUUID(),
+      id: newMessageId(),
       attachments: drafts.length ? drafts : undefined,
     })) {
       setSendError(t("chat.sendFailed"));

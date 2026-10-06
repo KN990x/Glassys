@@ -386,7 +386,12 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
     (Boolean(adapter.shouldResume) && usableAgentId(state.agentId)
       ? await adapter.shouldResume!(state.agentId, opts)
       : false);
-  if (canResume && usableAgentId(state.agentId) && runtime.fingerprint === null) {
+  /*
+   * Also when this same identity's session closed under us (its process died, a hung run was
+   * abandoned): the thread keeps its agent and the next send resumes it. After an identity
+   * change the rotation above has already cleared the stored agent.
+   */
+  if (canResume && usableAgentId(state.agentId)) {
     try {
       session = await adapter.resume(state.agentId, opts);
       runtime.fingerprint = fp;

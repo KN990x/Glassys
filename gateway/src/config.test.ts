@@ -28,6 +28,17 @@ describe("config patch", () => {
     expect(next.security).toBeUndefined();
   });
 
+  it("drops keys that are not config sections, keeps the secret fields", () => {
+    const next = stripOperatorRestricted({
+      session: { stallSeconds: 60 },
+      operatorPassword: "correct horse battery",
+      secrets: { operatorPassword: { configured: true } },
+      dataDir: "/srv/glassys/data",
+      restartRequired: true,
+    } as never) as Record<string, unknown>;
+    expect(Object.keys(next).sort()).toEqual(["operatorPassword", "session"]);
+  });
+
   it("rejects an unknown adapter id", async () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
     process.env.GLASSYS_DATA_DIR = dir;

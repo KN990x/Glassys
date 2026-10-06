@@ -85,8 +85,13 @@ function parseModel(model: string): unknown {
   return { modelID: model };
 }
 
-async function eventStream(client: OcClient): Promise<AsyncIterable<unknown>> {
-  const sub = await client.event.subscribe();
+/**
+ * OpenCode picks the project (sessions, config, event bus) from the `directory` query of every
+ * request and falls back to the server process's cwd, which is the Glassys clone. Every call
+ * about a session therefore names the workspace.
+ */
+async function eventStream(client: OcClient, directory: string): Promise<AsyncIterable<unknown>> {
+  const sub = await client.event.subscribe({ query: { directory } } as never);
   if (sub && typeof sub === "object" && "stream" in sub) {
     return (sub as { stream: AsyncIterable<unknown> }).stream;
   }
@@ -165,6 +170,7 @@ class OpencodeSession implements AdapterSession {
     private client: OcClient,
     private model: string,
     private pump: EventPump,
+    private directory: string,
   ) {}
 
   static async connect(opts: AdapterCreateOptions, sessionId?: string): Promise<OpencodeSession> {
@@ -202,8 +208,8 @@ class OpencodeSession implements AdapterSession {
         id = sessionIdFrom(created);
       }
       if (!id) throw new AdapterError("OpenCode did not return a session id", "startup");
-      const pump = new EventPump(await eventStream(bundle.client));
-      return new OpencodeSession(id, bundle.client, opts.model, pump);
+      const pump = new EventPump(await eventStream(bundle.client, opts.cwd));
+      return new OpencodeSession(id, bundle.client, opts.model, pump, opts.cwd);
     } catch (err) {
       throw err instanceof AdapterError ? err : new AdapterError(errorMessage(err), "startup");
     }
@@ -222,6 +228,7 @@ class OpencodeSession implements AdapterSession {
       this.pump.drain();
       const prompt = this.client.session.prompt({
         path: { id: this.agentId },
+        query: { directory: this.directory },
         body: {
           parts: [{ type: "text", text: promptText }],
           ...(model ? { model } : {}),
@@ -231,8 +238,11 @@ class OpencodeSession implements AdapterSession {
       let idle = false;
       let failed = false;
       let sawRunEvent = false;
+      let drainArmed = false;
+      /* The prompt call returns when the turn is over; stop waiting out the long idle timeout. */
       const settle = () => {
         promptSettled = true;
+        this.pump.wake();
       };
       prompt.then(settle, settle);
       try {
@@ -256,7 +266,13 @@ class OpencodeSession implements AdapterSession {
             if (failed) break;
             continue;
           }
-          if (next.done || promptSettled) break;
+          if (next.done) break;
+          if (promptSettled) {
+            /* One short window for events that trail the prompt's response, then done. */
+            if (drainArmed) break;
+            drainArmed = true;
+            continue;
+          }
           throw new AdapterError("OpenCode timed out waiting for run events", "run");
         }
         for (const leftover of this.pump.drain()) {
@@ -269,7 +285,7 @@ class OpencodeSession implements AdapterSession {
         }
         if (isCancelled()) {
           try {
-            await this.client.session.abort({ path: { id: this.agentId } } as never);
+            await this.client.session.abort({ path: { id: this.agentId }, query: { directory: this.directory } } as never);
           } catch {
             /* ignore */
           }
@@ -287,6 +303,11 @@ class OpencodeSession implements AdapterSession {
         throw err;
       }
     });
+  }
+
+  /** A dropped event stream would leave every later run blind; the runtime reopens the session. */
+  get closed(): boolean {
+    return this.pump.finished;
   }
 
   async dispose(): Promise<void> {
@@ -330,17 +351,19 @@ export const opencodeAdapter: Adapter = {
     return { ...agent, model: agent.model || "default" };
   },
 
-  async listModels(apiKey?: string) {
+  async listModels(apiKey?: string, cwd?: string) {
     try {
       const bundle = await getSharedServer(apiKey);
       const client = bundle.client as {
         config?: {
-          get?: () => Promise<unknown>;
-          providers?: () => Promise<unknown>;
+          get?: (args?: unknown) => Promise<unknown>;
+          providers?: (args?: unknown) => Promise<unknown>;
         };
       };
-      let models = collectModels(await client.config?.get?.());
-      if (!models.length) models = collectModels(await client.config?.providers?.());
+      /* The workspace's own opencode.json can add providers; ask in its directory. */
+      const args = cwd ? { query: { directory: cwd } } : undefined;
+      let models = collectModels(await client.config?.get?.(args));
+      if (!models.length) models = collectModels(await client.config?.providers?.(args));
       if (!models.length) {
         return { models: FALLBACK, source: "fallback" as const, error: "No providers configured in OpenCode" };
       }

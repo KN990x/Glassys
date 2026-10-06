@@ -15,6 +15,7 @@ const control = vi.hoisted(() => {
     waitError: null as string | null,
     sessionClosed: false,
     creates: 0,
+    resumes: [] as string[],
     hold() {
       this.held = new Promise<void>((resolve) => {
         release = resolve;
@@ -77,7 +78,8 @@ const fakeAdapter: Adapter = {
       },
     };
   },
-  async resume(_id, opts) {
+  async resume(id, opts) {
+    control.resumes.push(id);
     return this.create(opts);
   },
 };
@@ -108,6 +110,7 @@ describe("runtime queue", () => {
     control.waitError = null;
     control.sessionClosed = false;
     control.creates = 0;
+    control.resumes = [];
     dir = await mkdtemp(join(tmpdir(), "glassys-rt-"));
     process.env.GLASSYS_DATA_DIR = dir;
     const cfg = defaultConfig();
@@ -270,6 +273,8 @@ describe("runtime queue", () => {
     await enqueueMessage("two");
     await waitUntil(() => done(2));
     expect(control.creates).toBe(2);
+    /* Same thread, same agent: the dead session is resumed, not replaced by a stranger. */
+    expect(control.resumes).toEqual(["agent-1"]);
   });
 
   it("retracts a queued follow-up without cancelling the in-flight run", async () => {

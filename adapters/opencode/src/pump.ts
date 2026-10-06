@@ -30,6 +30,16 @@ export class EventPump {
     })();
   }
 
+  /** Return a pending next() early, with no event (the caller has news of its own). */
+  wake(): void {
+    while (this.waiters.length) this.waiters.shift()?.();
+  }
+
+  /** The event stream is over (server gone, subscription dropped); nothing more will arrive. */
+  get finished(): boolean {
+    return this.ended;
+  }
+
   abort(): void {
     if (this.abortCtl.signal.aborted) return;
     this.abortCtl.abort();

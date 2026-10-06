@@ -34,8 +34,10 @@ class CodexSession implements AdapterSession {
   agentId: string;
 
   constructor(
+    private client: Codex,
     private thread: ReturnType<Codex["startThread"]>,
     agentId: string,
+    private opts: AdapterCreateOptions,
   ) {
     this.agentId = agentId;
   }
@@ -47,7 +49,24 @@ class CodexSession implements AdapterSession {
         ? client.resumeThread(resumeId, threadOpts(opts))
         : client.startThread(threadOpts(opts));
     const initialId = resumeId && resumeId !== "pending" ? resumeId : thread.id || "pending";
-    return new CodexSession(thread, initialId);
+    return new CodexSession(client, thread, initialId, opts);
+  }
+
+  /**
+   * A Codex thread takes its model when it is opened; a turn cannot override it. A new model
+   * reopens the same thread with it, so the switch is sticky from this send on and the
+   * conversation carries over.
+   */
+  private retarget(model: string): void {
+    if (!model || model === this.opts.model) return;
+    this.opts = { ...this.opts, model };
+    const id = this.thread.id || (this.agentId !== "pending" ? this.agentId : "");
+    this.thread = id ? this.client.resumeThread(id, threadOpts(this.opts)) : this.client.startThread(threadOpts(this.opts));
+  }
+
+  /** The model the next turn runs on (for tests). */
+  get model(): string {
+    return this.opts.model;
   }
 
   async send(
@@ -56,11 +75,11 @@ class CodexSession implements AdapterSession {
     sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
     const prompt = promptWithAttachments(text, sendOpts?.attachments);
+    if (sendOpts?.model) this.retarget(sendOpts.model);
     const runId = randomUUID();
     return pendingRun(runId, async ({ signal, isCancelled }) => {
       try {
-        const extra = sendOpts?.model ? { model: sendOpts.model } : {};
-        const { events } = await this.thread.runStreamed(prompt, { signal, ...extra } as never);
+        const { events } = await this.thread.runStreamed(prompt, { signal });
         let status: "finished" | "error" | "cancelled" = "finished";
         for await (const event of events) {
           if (isCancelled()) return "cancelled";

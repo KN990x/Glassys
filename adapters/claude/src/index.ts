@@ -206,6 +206,12 @@ class ClaudeSession implements AdapterSession {
   agentId: string;
   private model: string;
   private opts: AdapterCreateOptions;
+  /** The Claude process ended, crashed or was closed: nothing will read the next prompt. */
+  private ended = false;
+
+  get closed(): boolean {
+    return this.ended;
+  }
 
   constructor(
     private query: QueryHandle,
@@ -247,6 +253,7 @@ class ClaudeSession implements AdapterSession {
       options: queryOptions(nextOpts, usableSessionId(this.agentId) ? { resume: this.agentId } : {}),
     });
     this.iterator = this.query[Symbol.asyncIterator]();
+    this.ended = false;
   }
 
   async send(
@@ -286,6 +293,7 @@ class ClaudeSession implements AdapterSession {
             } catch {
               /* ignore */
             }
+            this.ended = true;
             return "cancelled";
           }
           if (!pending) {
@@ -300,14 +308,25 @@ class ClaudeSession implements AdapterSession {
           abortTick.abort();
           if (next.kind === "tick") continue;
           pending = null;
-          if (next.v.done) return isCancelled() ? "cancelled" : "finished";
+          if (next.v.done) {
+            this.ended = true;
+            return isCancelled() ? "cancelled" : "finished";
+          }
           const sid = claudeSessionId(next.v.value);
           if (sid) this.agentId = sid;
           for (const event of mapClaudeMessage(next.v.value, tools, mapState)) onEvent(event);
+          /*
+           * A cancelled turn still ends with its own result once the interrupt lands. Read up to
+           * it: returning earlier left that result queued, and the next send took it for its own
+           * answer and finished at once, one turn out of step from then on.
+           */
           if (isClaudeResult(next.v.value)) return claudeRunStatus(isCancelled(), next.v.value);
-          if (isCancelled()) return "cancelled";
         }
         return isCancelled() ? "cancelled" : "finished";
+      } catch (err) {
+        /* The iterator threw: the Claude process is gone. */
+        this.ended = true;
+        throw err;
       } finally {
         stop = true;
         void watch;

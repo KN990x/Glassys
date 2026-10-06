@@ -137,3 +137,16 @@ export function formatElapsed(ms: number): string {
   const rem = s % 60;
   return m > 0 ? `${m}:${String(rem).padStart(2, "0")}` : `${s}s`;
 }
+
+/**
+ * A v4 UUID for a client message id. `crypto.randomUUID` only exists in secure contexts, and an
+ * operator may open Glassys over plain HTTP on a LAN address; `getRandomValues` works everywhere.
+ */
+export function newMessageId(c: Pick<Crypto, "getRandomValues"> & { randomUUID?: () => string } = crypto): string {
+  if (typeof c.randomUUID === "function") return c.randomUUID();
+  const b = c.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6]! & 0x0f) | 0x40;
+  b[8] = (b[8]! & 0x3f) | 0x80;
+  const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

@@ -51,6 +51,15 @@ import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNe
 import { adminUpdateSnapshot, fetchBehind, startUpgrade } from "./admin-update.js";
 import { GATEWAY_VERSION, runningBuild } from "./build-info.js";
 
+/** A malformed escape (`%E0`) in a path is the client's error, not a 500. */
+function decodePathParam(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new HttpError(400, "invalid path");
+  }
+}
+
 class PayloadTooLargeError extends HttpError {
   constructor() {
     super(413, "payload too large");
@@ -494,7 +503,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "PATCH" && path.startsWith("/api/schedules/")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/schedules/".length));
+    const id = decodePathParam(path.slice("/api/schedules/".length));
     const body = (await readJson(req)) as Partial<{
       text: string;
       cwd: string;
@@ -518,7 +527,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "DELETE" && path.startsWith("/api/schedules/")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/schedules/".length));
+    const id = decodePathParam(path.slice("/api/schedules/".length));
     try {
       await deleteSchedule(id);
       send(res, 200, { ok: true });
@@ -555,7 +564,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path.startsWith("/api/threads/") && path.endsWith("/switch")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/threads/".length, -"/switch".length));
+    const id = decodePathParam(path.slice("/api/threads/".length, -"/switch".length));
     try {
       await switchLiveThread(id);
       send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
@@ -571,7 +580,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "PATCH" && path.startsWith("/api/threads/") && !path.endsWith("/switch") && !path.endsWith("/export")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/threads/".length));
+    const id = decodePathParam(path.slice("/api/threads/".length));
     const body = (await readJson(req)) as { title?: string };
     try {
       await renameLiveThread(id, typeof body.title === "string" ? body.title : "");
@@ -588,7 +597,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "GET" && path.startsWith("/api/threads/") && path.endsWith("/export")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/threads/".length, -"/export".length));
+    const id = decodePathParam(path.slice("/api/threads/".length, -"/export".length));
     try {
       const file = await exportLiveThread(id);
       res.writeHead(200, {
@@ -608,7 +617,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "DELETE" && path.startsWith("/api/threads/")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/threads/".length));
+    const id = decodePathParam(path.slice("/api/threads/".length));
     try {
       await deleteLiveThread(id);
       send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
@@ -768,7 +777,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "GET" && path.startsWith("/api/uploads/")) {
     if (!(await requireAuth(req, res))) return true;
-    const id = decodeURIComponent(path.slice("/api/uploads/".length));
+    const id = decodePathParam(path.slice("/api/uploads/".length));
     const file = await readUploadBody(id);
     if (!file) {
       send(res, 404, { error: "not found" });
