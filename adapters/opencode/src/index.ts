@@ -4,9 +4,10 @@ import {
   AdapterError,
   asRecord,
   errorMessage,
+  fixtureRecorder,
   pendingRun,
   promptWithAttachments,
-  requireHostCommand,
+  requireRunnableCommand,
   str,
   type Adapter,
   type AdapterCreateOptions,
@@ -25,6 +26,9 @@ import {
   opencodeSessionId,
 } from "./mapper.js";
 import { EventPump } from "./pump.js";
+
+/** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
+const recordRaw = fixtureRecorder("opencode");
 
 export { EventPump } from "./pump.js";
 
@@ -208,7 +212,7 @@ class OpencodeSession implements AdapterSession {
       bundle = await getSharedServer(opts.apiKey);
     } catch (err) {
       throw new AdapterError(
-        `OpenCode server failed to start: ${errorMessage(err)}. Install the OpenCode CLI on this host.`,
+        `OpenCode server failed to start: ${errorMessage(err)}. Check that \`opencode serve\` runs on this host.`,
         "startup",
       );
     }
@@ -289,6 +293,7 @@ class OpencodeSession implements AdapterSession {
         settle();
       });
       const handle = async (event: unknown) => {
+        recordRaw?.(event);
         if (foreignSession(event, this.agentId)) return;
         const permission = opencodePermission(event);
         if (permission) {
@@ -444,10 +449,7 @@ export const opencodeAdapter: Adapter = {
   },
 
   async probe() {
-    await requireHostCommand(
-      "opencode",
-      "OpenCode CLI is not on PATH. Install the OpenCode CLI on this host.",
-    );
+    await requireRunnableCommand("opencode", ["--version"], "OpenCode");
   },
 
   async create(opts) {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { claudeMapState, claudeRunStatus, claudeSessionId, mapClaudeMessage } from "./mapper.js";
+
+/** A session recorded from the real SDK (GLASSYS_RECORD_FIXTURES) with Claude Code signed out. */
+function recorded(name: string): unknown[] {
+  return readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as unknown);
+}
 
 const stream = (event: Record<string, unknown>) => ({ type: "stream_event", event });
 
@@ -154,5 +163,13 @@ describe("mapClaudeMessage", () => {
     expect(claudeRunStatus(true, { type: "result", subtype: "success" })).toBe("cancelled");
     expect(claudeRunStatus(false, { type: "result", subtype: "error_during_execution", is_error: true })).toBe("error");
     expect(claudeRunStatus(false, { type: "result", subtype: "success" })).toBe("finished");
+  });
+
+  it("reports a signed-out Claude Code once, as the run's error, without empty usage", () => {
+    const state = claudeMapState();
+    const events = recorded("not-logged-in.jsonl").flatMap((m) => mapClaudeMessage(m, state));
+    expect(events).toEqual([{ type: "run.error", message: "Not logged in · Please run /login", phase: "run" }]);
+    const result = recorded("not-logged-in.jsonl").at(-1);
+    expect(claudeRunStatus(false, result)).toBe("error");
   });
 });

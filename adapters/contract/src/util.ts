@@ -43,6 +43,7 @@ export function usageFrom(raw: unknown): { inputTokens?: number; outputTokens?: 
     if (cached !== undefined) inputTokens = (inputTokens ?? 0) + cached;
   }
   const outputTokens = firstNum(rec, OUTPUT_KEYS);
-  if (inputTokens === undefined && outputTokens === undefined) return null;
+  /* A run that never reached the model (a login failure) reports zeros: nothing to show. */
+  if (!inputTokens && !outputTokens) return null;
   return { inputTokens, outputTokens };
 }

@@ -1,15 +1,16 @@
 import { Agent, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
 import {
   AdapterError,
+  fixtureRecorder,
   imagePartsFromAttachments,
   promptWithAttachments,
+  usageFrom,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterEventHandler,
   type AdapterLoginOptions,
   type AdapterRun,
   type AdapterSession,
-  usageFrom,
 } from "@glassys/adapter-contract";
 import { optionBool, optionStringArray, type AgentConfig, type ModelParam, type SettingSource } from "@glassys/protocol";
 import { cursorMapState, mapCursorDelta } from "./mapper.js";
@@ -21,6 +22,9 @@ import {
   cursorFallbackCatalog,
   normalizeCursorConfig,
 } from "./catalog.js";
+
+/** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
+const recordRaw = fixtureRecorder("cursor");
 
 export { AdapterError } from "@glassys/adapter-contract";
 export { wrapSdkError, runResultErrorMessage } from "./errors.js";
@@ -96,6 +100,7 @@ class CursorSession implements AdapterSession {
             }
           : undefined,
         onDelta: ({ update }) => {
+          recordRaw?.(update);
           for (const event of mapCursorDelta(update, mapState)) onEvent(event);
         },
         local: localForSend(this.opts, sendOpts?.force),

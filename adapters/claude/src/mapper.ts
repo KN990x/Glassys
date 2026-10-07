@@ -135,6 +135,9 @@ function mapToolResults(message: Record<string, unknown>, state: ClaudeMapState)
 }
 
 function mapAssistant(message: Record<string, unknown>, state: ClaudeMapState): ServerMessage[] {
+  /* A synthetic message carrying an API error ("authentication_failed"): the result that follows
+     reports it as the run's error; painting its text too said it twice. */
+  if (str(message.error)) return [];
   const inner = asRecord(message.message) ?? message;
   const content = inner.content;
   if (!Array.isArray(content)) {

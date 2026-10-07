@@ -3,6 +3,7 @@ import { Codex } from "@openai/codex-sdk";
 import {
   AdapterError,
   errorMessage,
+  fixtureRecorder,
   pendingRun,
   promptWithAttachments,
   type Adapter,
@@ -12,6 +13,9 @@ import {
 } from "@glassys/adapter-contract";
 import { type AgentConfig, type ModelCatalogItem, type ModelParam } from "@glassys/protocol";
 import { codexMapState, mapCodexJsonl, threadIdFromEvent } from "./mapper.js";
+
+/** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
+const recordRaw = fixtureRecorder("codex");
 
 /** Codex's `model_reasoning_effort`, offered as the `effort` parameter. */
 export const CODEX_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
@@ -150,6 +154,7 @@ class CodexSession implements AdapterSession {
         }
         const tid = threadIdFromEvent(event) || this.thread.id;
         if (tid) this.agentId = tid;
+        recordRaw?.(event);
         for (const ev of mapCodexJsonl(event, state)) {
           onEvent(ev);
           if (ev.type === "run.error") status = "error";

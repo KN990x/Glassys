@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
   AdapterError,
-  PROTECTED_PATH_DENIAL,
   commandTouchesProtectedPath,
   errorMessage,
-  isProtectedPath,
+  fixtureRecorder,
   imagePartsFromAttachments,
+  isProtectedPath,
   pendingRun,
   promptWithAttachments,
+  PROTECTED_PATH_DENIAL,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -15,6 +16,9 @@ import {
 } from "@glassys/adapter-contract";
 import { mergeModelCatalog, optionBool, optionString, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { claudeMapState, claudeRunStatus, claudeSessionId, isClaudeResult, mapClaudeMessage } from "./mapper.js";
+
+/** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
+const recordRaw = fixtureRecorder("claude");
 
 export const CLAUDE_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "opus", displayName: "Opus" },
@@ -332,6 +336,7 @@ class ClaudeSession implements AdapterSession {
         }
         const sid = claudeSessionId(message);
         if (sid) this.agentId = sid;
+        recordRaw?.(message);
         for (const event of mapClaudeMessage(message, mapState)) onEvent(event);
         if (isClaudeResult(message)) {
           this.resumeUnconfirmed = false;

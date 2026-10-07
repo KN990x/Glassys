@@ -61,6 +61,15 @@ Before changing adapters or the protocol:
 
 `pnpm test` builds the shared packages and runs Vitest per package (`pnpm test:run` skips the build). Gateway tests cover onboarding, the FIFO queue, cancel, CORS, and identity. Adapter tests map streams to protocol events, with payloads shaped like the SDK's own types: check a fixture against the `.d.ts` the SDK ships, not against what the mapper happens to read. Do not add live SDK e2e in CI.
 
+Against a real agent, on your machine (it spends the agent's tokens):
+
+```bash
+pnpm build:packages
+node scripts/smoke-adapter.mjs claude --model haiku
+```
+
+It runs the adapter in a temporary workspace, asks the agent to write and edit a file and run a failing command, and checks that tool cards, the diff, the failed shell and the finished run all reach the transcript. With `GLASSYS_RECORD_FIXTURES=<dir>` every adapter (and the gateway) writes the raw SDK events to `<dir>/<adapter>-<time>.jsonl`; a reviewed recording, stripped of host paths, makes the best mapper fixture (see `adapters/claude/src/fixtures/`).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

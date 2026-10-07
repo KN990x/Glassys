@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   AdapterError,
   errorMessage,
+  fixtureRecorder,
   pendingRun,
   promptWithAttachments,
   type Adapter,
@@ -11,6 +12,9 @@ import {
 } from "@glassys/adapter-contract";
 import { type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { mapGeminiChunk } from "./mapper.js";
+
+/** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
+const recordRaw = fixtureRecorder("gemini");
 
 export const GEMINI_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro" },
@@ -76,6 +80,7 @@ class GeminiSession implements AdapterSession {
       try {
         for await (const chunk of this.handle.sendStream(prompt, signal)) {
           if (isCancelled()) return "cancelled";
+          recordRaw?.(chunk);
           for (const ev of mapGeminiChunk(chunk, this.tools)) onEvent(ev);
         }
         return "finished";

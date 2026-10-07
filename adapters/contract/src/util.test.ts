@@ -19,5 +19,6 @@ describe("usageFrom", () => {
   it("is null when there is nothing to report", () => {
     expect(usageFrom(undefined)).toBeNull();
     expect(usageFrom({ unrelated: 1 })).toBeNull();
+    expect(usageFrom({ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 })).toBeNull();
   });
 });

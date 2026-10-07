@@ -10,9 +10,10 @@ export type {
   PromptAttachment,
 } from "./types.js";
 export { extractListedModels, asRecord, errorMessage } from "./list.js";
-export { requireHostCommand } from "./probe.js";
+export { requireHostCommand, requireRunnableCommand } from "./probe.js";
 export { toolKindFromName, diffStats, extractDiff, looksLikeDiff, unifiedFromReplacement, toolDenied, promptWithAttachments, imagePartsFromAttachments } from "./tools.js";
 export { pendingRun } from "./run.js";
 export { str, num, usageFrom } from "./util.js";
 export { unifiedDiff } from "./diff.js";
+export { fixtureRecorder } from "./record.js";
 export { PROTECTED_PATH_DENIAL, isProtectedPath, commandTouchesProtectedPath } from "./protected.js";

@@ -6,15 +6,16 @@ import {
   AdapterError,
   asRecord,
   errorMessage,
+  fixtureRecorder,
   imagePartsFromAttachments,
   pendingRun,
   promptWithAttachments,
   requireHostCommand,
+  usageFrom,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
   type PromptAttachment,
-  usageFrom,
 } from "@glassys/adapter-contract";
 import {
   optionBool,
@@ -27,6 +28,9 @@ import {
 import { JsonRpcStdio, RpcError } from "./rpc.js";
 import { registerHostHandlers } from "./host.js";
 import { acpMapState, mapAcpUpdate } from "./mapper.js";
+
+/** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
+const recordRaw = fixtureRecorder("acp");
 
 const GLASSYS_VERSION = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
@@ -272,6 +276,7 @@ class AcpSession implements AdapterSession {
       /* Tool ids are per turn; a long session must not keep every call it ever made. */
       const state = acpMapState();
       const onUpdate = (params: unknown) => {
+        recordRaw?.(params);
         for (const ev of mapAcpUpdate(params, state)) onEvent(ev);
       };
       const off = this.rpc.onNotification("session/update", onUpdate);
