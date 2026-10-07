@@ -18,7 +18,7 @@ describe("gemini adapter", () => {
   });
 
   it("probe fails when the SDK is not installed", async () => {
-    await expect(geminiAdapter.probe?.()).rejects.toThrow(/Gemini CLI SDK is not available/);
+    await expect(geminiAdapter.probe?.()).rejects.toThrow(/Gemini CLI SDK is not installed.*gemini --acp/);
   });
 
   it("create fails with the same error as probe when the SDK is missing", async () => {
@@ -30,6 +30,6 @@ describe("gemini adapter", () => {
         storeDir: "/tmp",
         options: {},
       }),
-    ).rejects.toThrow(/Gemini CLI SDK is not available/);
+    ).rejects.toThrow(/Gemini CLI SDK is not installed.*gemini --acp/);
   });
 });

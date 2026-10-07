@@ -1,5 +1,6 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, str, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import { HOST_DENIAL_MARK, type HostLedger } from "./host.js";
 
 
 function mapContent(content: unknown): ServerMessage[] {
@@ -14,7 +15,7 @@ function mapContent(content: unknown): ServerMessage[] {
   return [];
 }
 
-function previewFromContent(content: unknown): string | undefined {
+function previewFromContent(content: unknown, ledger?: HostLedger): string | undefined {
   if (typeof content === "string" && content) return content.slice(0, 4000);
   if (!Array.isArray(content)) {
     const rec = asRecord(content);
@@ -29,6 +30,12 @@ function previewFromContent(content: unknown): string | undefined {
     }
     const rec = asRecord(block);
     if (!rec) continue;
+    /* An embedded terminal carries only its id; the host ran it and kept the output. */
+    if (rec.type === "terminal" && typeof rec.terminalId === "string") {
+      const out = ledger?.output.get(rec.terminalId);
+      if (out) parts.push(out);
+      continue;
+    }
     if (typeof rec.text === "string") parts.push(rec.text);
     const nested = asRecord(rec.content);
     if (nested && typeof nested.text === "string") parts.push(nested.text);
@@ -37,24 +44,45 @@ function previewFromContent(content: unknown): string | undefined {
   return joined ? joined.slice(0, 4000) : undefined;
 }
 
-/** Per-turn mapping state: each call's tool name, and how much of its output was already shown. */
-export type AcpMapState = { tools: Map<string, string>; shown: Map<string, string> };
+/**
+ * Per-turn mapping state: each call's tool name, how much of its output was already shown, and
+ * the host's ledger of refused calls and terminal output.
+ */
+export type AcpMapState = { tools: Map<string, string>; shown: Map<string, string>; ledger?: HostLedger };
 
-export function acpMapState(): AcpMapState {
-  return { tools: new Map(), shown: new Map() };
+export function acpMapState(ledger?: HostLedger): AcpMapState {
+  return { tools: new Map(), shown: new Map(), ledger };
+}
+
+/** `rawOutput` is free-form: a string, or a record with the output and maybe an exit code. */
+function rawOutputText(raw: unknown): string | undefined {
+  if (typeof raw === "string") return raw || undefined;
+  const rec = asRecord(raw);
+  if (!rec) return undefined;
+  const joined = [str(rec.output), str(rec.stdout), str(rec.stderr)].filter(Boolean).join("\n");
+  return joined ? joined.slice(0, 4000) : undefined;
+}
+
+function preview(update: Record<string, unknown>, state: AcpMapState): string | undefined {
+  return previewFromContent(update.content, state.ledger) || rawOutputText(update.rawOutput) || str(update.output);
 }
 
 function toolEnd(id: string, status: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage {
   const { diff, stats, truncated } = extractDiff(update);
-  const err = status === "failed" || status === "cancelled" ? str(update.error) || status : undefined;
+  const failed = status === "failed" || status === "cancelled";
+  const output = preview(update, state);
+  const exitCode = num(asRecord(update.rawOutput)?.exitCode) ?? num(asRecord(update.rawOutput)?.exit_code);
+  /* The card already says it failed; a bare "failed" under it says nothing more. */
+  const err = failed ? str(update.error) || (exitCode ? `exit ${exitCode}` : status === "cancelled" ? status : undefined) : undefined;
+  const refused = state.ledger?.denied.delete(id) === true || (failed && Boolean(output?.includes(HOST_DENIAL_MARK)));
   return {
     type: "tool.end",
     callId: id,
     ok: status === "completed",
     kind: toolKindFromName(state.tools.get(id)),
-    outputPreview: previewFromContent(update.content) || str(update.rawOutput) || str(update.output),
+    outputPreview: output,
     error: err,
-    denied: toolDenied(status, err) || undefined,
+    denied: (failed && refused) || toolDenied(status, err) || undefined,
     diff,
     stats,
     truncated,
@@ -66,7 +94,7 @@ function toolEnd(id: string, status: string, update: Record<string, unknown>, st
  * one; content that was rewritten rather than extended has nothing appendable to show.
  */
 function progress(id: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage[] {
-  const full = previewFromContent(update.content) || str(update.rawOutput) || str(update.output);
+  const full = preview(update, state);
   if (!full) return [];
   const before = state.shown.get(id) ?? "";
   state.shown.set(id, full);

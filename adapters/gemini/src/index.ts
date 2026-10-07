@@ -32,12 +32,16 @@ type GeminiAgentCtor = new (opts: Record<string, unknown>) => {
   resumeSession?: (sessionId: string) => GeminiSessionHandle | Promise<GeminiSessionHandle>;
 };
 
+function missingModule(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "ERR_MODULE_NOT_FOUND";
+}
+
 async function loadSdk(): Promise<{ GeminiCliAgent: GeminiAgentCtor }> {
   try {
     return (await import("@google/gemini-cli-sdk")) as { GeminiCliAgent: GeminiAgentCtor };
   } catch (err) {
     throw new AdapterError(
-      `Gemini CLI SDK is not available: ${errorMessage(err)}. @google/gemini-cli-sdk is not on npm yet; until it is, use Gemini through the ACP adapter (pick "Gemini" from its agent list, or run \`gemini --acp\`).`,
+      `${missingModule(err) ? "Gemini CLI SDK is not installed" : `Gemini CLI SDK is not available: ${errorMessage(err)}`}. @google/gemini-cli-sdk is not on npm yet; until it is, use Gemini through the ACP adapter (pick "Gemini" from its agent list, or run \`gemini --acp\`).`,
       "startup",
     );
   }

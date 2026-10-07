@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_ACP_READ_BYTES, acpPermissionChoice, registerHostHandlers, resolveInsideCwd, resolveRealInsideCwd } from "./host.js";
+import { MAX_ACP_READ_BYTES, acpPermissionChoice, hostLedger, registerHostHandlers, resolveInsideCwd, resolveRealInsideCwd } from "./host.js";
 
 describe("resolveRealInsideCwd", () => {
   it("rejects a symlink inside the workspace that points out of it", async () => {
@@ -73,6 +73,28 @@ describe("registerHostHandlers autoRun", () => {
       await expect(map.get("session/request_permission")?.({ toolCall: { kind: "search" } })).resolves.toMatchObject({
         outcome: { outcome: "selected" },
       });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("records the calls it refused and keeps a terminal's output after release", async () => {
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const ledger = hostLedger();
+    const off = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, cwd, { autoRun: false }, [], ledger);
+    await map.get("session/request_permission")?.({ toolCall: { toolCallId: "x1", kind: "execute" } });
+    await map.get("session/request_permission")?.({ toolCall: { toolCallId: "r1", kind: "read" } });
+    off();
+    expect([...ledger.denied]).toEqual(["x1"]);
+
+    const runMap = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-ledger-"));
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void runMap.set(m, fn) }, dir, { autoRun: true }, [], ledger);
+    try {
+      const { terminalId } = (await runMap.get("terminal/create")?.({ command: process.execPath, args: ["-e", "console.log('checking')"] })) as { terminalId: string };
+      await runMap.get("terminal/wait_for_exit")?.({ terminalId });
+      await runMap.get("terminal/release")?.({ terminalId });
+      expect(ledger.output.get(terminalId)).toBe("checking\n");
     } finally {
       cleanup();
     }

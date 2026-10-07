@@ -17,6 +17,13 @@ describe("unifiedDiff", () => {
     expect(diffStats(diff)).toEqual({ add: 2, del: 0 });
   });
 
+  it("writes an absolute path after the a/ b/ prefix without a double slash", () => {
+    expect(unifiedDiff("/srv/app/x.conf", "a\n", "b\n").split("\n").slice(0, 2)).toEqual([
+      "--- a/srv/app/x.conf",
+      "+++ b/srv/app/x.conf",
+    ]);
+  });
+
   it("splits distant changes into separate hunks", () => {
     const old = Array.from({ length: 40 }, (_, i) => `l${i}`).join("\n");
     const next = old.replace("l2\n", "L2\n").replace("l35", "L35");

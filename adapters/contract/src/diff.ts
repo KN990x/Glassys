@@ -57,15 +57,20 @@ function lineOps(a: string[], b: string[]): Op[] {
   return ops;
 }
 
+/** `--- a/x` / `+++ b/x` header; an absolute path keeps one slash after the prefix, not two. */
+export function diffHeader(path: string, created = false): string {
+  const file = (path || "file").replace(/^\/+/, "");
+  return `${created ? "--- /dev/null" : `--- a/${file}`}\n+++ b/${file}`;
+}
+
 /**
  * A unified diff from whole old and new file text. `oldText` null or undefined is a new file.
  * Unchanged regions collapse to `CONTEXT` lines around each hunk.
  */
 export function unifiedDiff(path: string, oldText: string | null | undefined, newText: string): string {
-  const file = path || "file";
   const created = oldText == null;
   const ops = lineOps(splitLines(oldText ?? ""), splitLines(newText));
-  const header = `${created ? "--- /dev/null" : `--- a/${file}`}\n+++ b/${file}`;
+  const header = diffHeader(path, created);
   const changed = ops.map((op, i) => (op.kind === " " ? -1 : i)).filter((i) => i >= 0);
   if (!changed.length) return header;
 

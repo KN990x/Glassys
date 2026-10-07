@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, str, toolDenied, toolKindFromName, unifiedDiff, usageFrom } from "@glassys/adapter-contract";
+import { asRecord, diffHeader, extractDiff, str, toolDenied, toolKindFromName, unifiedDiff, usageFrom } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @anthropic-ai/claude-agent-sdk's sdk.d.ts: `stream_event` carries raw Messages API
@@ -86,7 +86,7 @@ function fromStructuredPatch(path: string, hunks: unknown[]): string | undefined
     if (!hunk || !Array.isArray(hunk.lines)) continue;
     body.push(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`, ...hunk.lines.map(String));
   }
-  return body.length ? `--- a/${path}\n+++ b/${path}\n${body.join("\n")}` : undefined;
+  return body.length ? `${diffHeader(path)}\n${body.join("\n")}` : undefined;
 }
 
 /** A diff from Claude Code's structured tool result (Edit, MultiEdit, Write). */

@@ -26,7 +26,7 @@ import {
   type ModelCatalogItem,
 } from "@glassys/protocol";
 import { JsonRpcStdio, RpcError } from "./rpc.js";
-import { registerHostHandlers } from "./host.js";
+import { type HostLedger, hostLedger, registerHostHandlers } from "./host.js";
 import { acpMapState, mapAcpUpdate } from "./mapper.js";
 
 /** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
@@ -203,6 +203,7 @@ class AcpSession implements AdapterSession {
     model: string,
     /** The agent said it takes image content blocks (promptCapabilities.image). */
     private takesImages: boolean,
+    private ledger: HostLedger,
   ) {
     this.sessionId = sessionId;
     this.model = model;
@@ -215,7 +216,8 @@ class AcpSession implements AdapterSession {
   static async start(opts: AdapterCreateOptions, resumeId?: string): Promise<AcpSession> {
     const { command, args } = commandOf(opts);
     const rpc = new JsonRpcStdio(command, args, opts.cwd, opts.apiKey ? { API_KEY: opts.apiKey } : undefined);
-    const cleanupHost = registerHostHandlers(rpc, opts.cwd, opts.options, opts.protectedPaths);
+    const ledger = hostLedger();
+    const cleanupHost = registerHostHandlers(rpc, opts.cwd, opts.options, opts.protectedPaths, ledger);
     let init: Record<string, unknown> | undefined;
     try {
       init = asRecord(
@@ -251,7 +253,7 @@ class AcpSession implements AdapterSession {
     }
     await applySessionModel(rpc, sessionId, opts.model);
     const promptCaps = asRecord(caps?.promptCapabilities);
-    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model, promptCaps?.image === true);
+    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model, promptCaps?.image === true, ledger);
   }
 
   async send(
@@ -274,7 +276,7 @@ class AcpSession implements AdapterSession {
     }
     return pendingRun(runId, async ({ signal, isCancelled }) => {
       /* Tool ids are per turn; a long session must not keep every call it ever made. */
-      const state = acpMapState();
+      const state = acpMapState(this.ledger);
       const onUpdate = (params: unknown) => {
         recordRaw?.(params);
         for (const ev of mapAcpUpdate(params, state)) onEvent(ev);

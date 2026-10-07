@@ -146,6 +146,23 @@ export function acpPermissionChoice(params: unknown, allow: boolean): { outcome:
 
 export const DEFAULT_TERMINAL_OUTPUT_BYTES = 100_000;
 
+/** Released terminals whose output is kept for the call that embedded them. */
+const KEPT_TERMINAL_OUTPUTS = 32;
+
+/**
+ * What the host did that the agent's own updates may not say. Agents report a refused call as
+ * "failed" or "cancelled" in their own words, and many embed a terminal by id instead of
+ * copying its output into the call.
+ */
+export type HostLedger = { denied: Set<string>; output: Map<string, string> };
+
+/** Every refusal the host itself throws says this, so a call that failed on one reads as denied. */
+export const HOST_DENIAL_MARK = "Glassys denied";
+
+export function hostLedger(): HostLedger {
+  return { denied: new Set(), output: new Map() };
+}
+
 function envFrom(raw: unknown): NodeJS.ProcessEnv | undefined {
   if (!Array.isArray(raw)) return undefined;
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -187,6 +204,7 @@ export function registerHostHandlers(
   cwd: string,
   options: Record<string, unknown>,
   protectedPaths: readonly string[] = [],
+  ledger: HostLedger = hostLedger(),
 ) {
   const autoRun = optionBool(options, "autoRun", true);
 
@@ -206,7 +224,7 @@ export function registerHostHandlers(
   });
 
   rpc.handle("fs/write_text_file", async (params) => {
-    if (!autoRun) throw new Error("Auto-run is off; Glassys denied this write");
+    if (!autoRun) throw new Error(`Auto-run is off; ${HOST_DENIAL_MARK} this write`);
     const rec = asRecord(params) ?? {};
     const path = typeof rec.path === "string" ? rec.path : "";
     const content = typeof rec.content === "string" ? rec.content : "";
@@ -219,7 +237,10 @@ export function registerHostHandlers(
   rpc.handle("session/request_permission", async (params) => {
     if (autoRun) return acpPermissionChoice(params, true);
     const rec = asRecord(params) ?? {};
-    return acpPermissionChoice(params, acpPermissionAllow(rec.toolCall));
+    const allow = acpPermissionAllow(rec.toolCall);
+    const callId = asRecord(rec.toolCall)?.toolCallId;
+    if (!allow && typeof callId === "string") ledger.denied.add(callId);
+    return acpPermissionChoice(params, allow);
   });
 
   const terminals = new Map<string, Terminal>();
@@ -238,7 +259,7 @@ export function registerHostHandlers(
   };
 
   rpc.handle("terminal/create", async (params) => {
-    if (!autoRun) throw new Error("Auto-run is off; Glassys denied this terminal");
+    if (!autoRun) throw new Error(`Auto-run is off; ${HOST_DENIAL_MARK} this terminal`);
     const rec = asRecord(params) ?? {};
     const command = typeof rec.command === "string" ? rec.command : "bash";
     const args = Array.isArray(rec.args) ? rec.args.map(String) : [];
@@ -263,6 +284,9 @@ export function registerHostHandlers(
         term.output = buf.subarray(buf.length - term.limit).toString("utf8").replace(/^�+/, "");
         term.truncated = true;
       } else term.output = next;
+      ledger.output.delete(id);
+      ledger.output.set(id, term.output);
+      if (ledger.output.size > KEPT_TERMINAL_OUTPUTS) ledger.output.delete(ledger.output.keys().next().value!);
     };
     child.stdout?.on("data", append);
     child.stderr?.on("data", append);
