@@ -25,7 +25,6 @@ import {
   drainEmit,
   enqueueMessage,
   listLiveThreads,
-  readTranscript,
   readTranscriptSnapshot,
   snapshotQueue,
   snapshotRuntime,
@@ -248,6 +247,8 @@ async function handleClient(
     trackSocketSession(ws, token);
     if (state.handshakeTimer) clearTimeout(state.handshakeTimer);
     const config = await redacted();
+    /* Buffer broadcasts from here on; the snapshot then says how far it got (lastSeq), and
+       buffered events it already holds are dropped by seq instead of sent twice. */
     hub.add(ws, { buffer: true });
     await drainEmit();
     const snap = await readTranscriptSnapshot();
@@ -257,13 +258,9 @@ async function handleClient(
       type: "transcript.snapshot",
       events: snap.events,
       ...(snap.truncated ? { truncated: true } : {}),
+      lastSeq: snap.lastSeq,
     });
-    await drainEmit();
-    const extra = snap.truncated ? [] : (await readTranscript()).slice(snap.events.length);
-    for (const ev of extra) {
-      hub.send(ws, ev);
-    }
-    for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), extra)) {
+    for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
       hub.send(ws, buffered);
     }
     hub.send(ws, { type: "session", ...snapshotRuntime() });
@@ -273,7 +270,7 @@ async function handleClient(
       threads: await listLiveThreads(),
       currentId: snapshotRuntime().threadId ?? null,
     });
-    for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), [])) {
+    for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
       hub.send(ws, leftover);
     }
     hub.release(ws);

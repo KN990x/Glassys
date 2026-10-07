@@ -78,7 +78,8 @@ describe("protocol v1", () => {
     expect(isPersistedTranscriptEvent({ type: "user.message", text: "x" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "user.retracted", id: "m1" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "run.usage", inputTokens: 1 })).toBe(true);
-    expect(isPersistedTranscriptEvent({ type: "run.stalled", idleMs: 180000 })).toBe(true);
+    /* A stall describes a live moment; replayed later it would warn about a run long over. */
+    expect(isPersistedTranscriptEvent({ type: "run.stalled", idleMs: 180000 })).toBe(false);
     expect(isPersistedTranscriptEvent({ type: "tool.progress", callId: "c1", chunk: "x" })).toBe(false);
     expect(isTranscriptEvent({ type: "queue.snapshot", items: [] } as never)).toBe(false);
     expect(isTranscriptEvent({ type: "threads.snapshot", threads: [], currentId: null } as never)).toBe(false);

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { writeFileAtomic } from "./atomic.js";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -31,6 +31,11 @@ let currentThreadId: string | null = null;
 export function resetLiveThreadCache(): void {
   currentThreadId = null;
   metaCache.clear();
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = null;
+  pending = [];
+  pendingThread = null;
+  seqState = null;
 }
 
 export function liveThreadId(): string | null {
@@ -81,6 +86,14 @@ async function loadMeta(id: string): Promise<ThreadMeta | null> {
   const meta = await readJson<ThreadMeta>(path);
   if (meta) metaCache.set(path, structuredClone(meta));
   return meta;
+}
+
+async function transcriptEmpty(id: string): Promise<boolean> {
+  try {
+    return (await stat(paths.threadTranscript(id))).size === 0;
+  } catch {
+    return true;
+  }
 }
 
 async function readEvents(path: string): Promise<TranscriptEvent[]> {
@@ -165,23 +178,123 @@ export async function ensureLiveThread(): Promise<string> {
   return withThreads(() => ensureLiveThreadUnlocked());
 }
 
-/** Append to the live transcript under the same lock as rotate/switch, so a line never lands in a thread just archived. */
-export async function appendLiveTranscriptLine(line: string): Promise<void> {
+/*
+ * The live transcript is written in batches. Streamed text arrives one token per event; each
+ * used to be its own open/append/close and its own line, so a long answer became thousands of
+ * lines and the reconnect snapshot (the last N events) showed only its tail. Consecutive deltas
+ * of the same kind now merge into one pending line, written when anything else is appended,
+ * after TRANSCRIPT_FLUSH_MS, or before anything reads or moves the live thread.
+ *
+ * Every persisted event also gets `seq`, increasing within the thread. A merged line keeps the
+ * seq of its last delta, so "everything up to seq N" still holds for a snapshot that read it.
+ */
+export const TRANSCRIPT_FLUSH_MS = 100;
+
+let pending: TranscriptEvent[] = [];
+let pendingThread: string | null = null;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+/** Last seq handed out, and the thread it belongs to (read from the file when the thread changes). */
+let seqState: { thread: string; last: number } | null = null;
+let onFlushError: ((err: unknown) => void) | null = null;
+
+/** Who hears about a batch that could not be written (the runtime tells the operator once). */
+export function setTranscriptFlushErrorHandler(handler: ((err: unknown) => void) | null): void {
+  onFlushError = handler;
+}
+
+function mergeable(a: TranscriptEvent, b: TranscriptEvent): boolean {
+  return (a.type === "text.delta" || a.type === "thinking.delta") && a.type === b.type;
+}
+
+async function appendLines(id: string, body: string): Promise<void> {
+  const path = paths.threadTranscript(id);
+  try {
+    await writeFile(path, body, { encoding: "utf8", flag: "a", mode: 0o600 });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    await mkdir(paths.threadDir(id), { recursive: true });
+    await writeFile(path, body, { encoding: "utf8", flag: "a", mode: 0o600 });
+  }
+}
+
+async function flushUnlocked(): Promise<void> {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (!pending.length || !pendingThread) return;
+  const id = pendingThread;
+  const batch = pending;
+  pending = [];
+  await appendLines(id, batch.map((e) => `${JSON.stringify(e)}\n`).join(""));
+}
+
+/** Write whatever the live thread still holds in memory. */
+export async function flushLiveTranscript(): Promise<void> {
+  return withThreads(flushUnlocked);
+}
+
+/** The highest seq in a transcript file, read from its tail (the last lines carry the newest). */
+async function lastSeqInFile(path: string): Promise<number> {
+  let handle;
+  try {
+    handle = await open(path, "r");
+  } catch {
+    return 0;
+  }
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(size, 256 * 1024);
+    const buf = Buffer.alloc(length);
+    await handle.read(buf, 0, length, size - length);
+    const lines = buf.toString("utf8").split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const m = /"seq":(\d+)/.exec(lines[i] ?? "");
+      if (m) return Number(m[1]);
+    }
+    return 0;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function nextSeqUnlocked(id: string): Promise<number> {
+  if (seqState?.thread !== id) seqState = { thread: id, last: await lastSeqInFile(paths.threadTranscript(id)) };
+  seqState.last += 1;
+  return seqState.last;
+}
+
+/**
+ * Stamp an event with the live thread's next seq and queue it for the transcript, under the same
+ * lock as rotate/switch, so it never lands in a thread just archived. Returns the stamped event;
+ * `flushNow` is true when it should reach the disk before the caller moves on.
+ */
+export async function stageLiveEvent(event: TranscriptEvent): Promise<{ event: TranscriptEvent; flushNow: boolean }> {
   return withThreads(async () => {
     const id = await ensureLiveThreadUnlocked();
-    const path = paths.threadTranscript(id);
-    /* One line per streamed token: append straight away, and create the directory only if it is gone. */
-    try {
-      await writeFile(path, line, { encoding: "utf8", flag: "a", mode: 0o600 });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-      await mkdir(paths.threadDir(id), { recursive: true });
-      await writeFile(path, line, { encoding: "utf8", flag: "a", mode: 0o600 });
+    if (pendingThread && pendingThread !== id) await flushUnlocked();
+    pendingThread = id;
+    const stamped = { ...event, seq: await nextSeqUnlocked(id) } as TranscriptEvent;
+    const last = pending[pending.length - 1];
+    if (last && mergeable(last, stamped)) {
+      pending[pending.length - 1] = { ...stamped, text: (last as { text: string }).text + (stamped as { text: string }).text } as TranscriptEvent;
+    } else {
+      pending.push(stamped);
     }
+    const delta = stamped.type === "text.delta" || stamped.type === "thinking.delta";
+    if (delta && !flushTimer) {
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        void withThreads(flushUnlocked).catch((err) => onFlushError?.(err));
+      }, TRANSCRIPT_FLUSH_MS);
+      flushTimer.unref?.();
+    }
+    return { event: stamped, flushNow: !delta };
   });
 }
 
 async function archiveLiveThreadUnlocked(agentId: string | null, agent?: AgentConfig): Promise<ThreadMeta | null> {
+  await flushUnlocked();
   const id = currentThreadId ?? (await loadState()).threadId;
   if (!id) return null;
   const cfgAgent = agent ?? (await loadConfig()).agent;
@@ -218,10 +331,10 @@ async function rotateLiveThreadUnlocked(
   previousAgent?: AgentConfig,
   fresh = false,
 ): Promise<ThreadMeta> {
+  await flushUnlocked();
   const id = await ensureLiveThreadUnlocked();
   const cfg = await loadConfig();
-  const events = await readEvents(paths.threadTranscript(id));
-  if (events.length === 0 && !fresh) {
+  if (!fresh && (await transcriptEmpty(id))) {
     const prev = await loadMeta(id);
     const meta: ThreadMeta = {
       ...metaFromAgent(id, cfg.agent, null, prev?.createdAt),
@@ -286,6 +399,7 @@ export async function loadThread(id: string): Promise<{ meta: ThreadMeta; agent:
 
 export async function activateThread(id: string, agentId: string | null): Promise<ThreadMeta> {
   return withThreads(async () => {
+    await flushUnlocked();
     const meta = await loadMeta(id);
     if (!meta) throw new Error("Thread not found");
     currentThreadId = id;
@@ -326,16 +440,20 @@ export async function addLiveUsage(inputTokens?: number, outputTokens?: number):
   });
 }
 
-export async function refreshLiveTitle(): Promise<void> {
+/**
+ * Title the live thread after its first message. Only the first one names it, so a thread that
+ * already carries a snippet is left alone, without reading its transcript back.
+ */
+export async function refreshLiveTitle(text: string): Promise<void> {
   return withThreads(async () => {
     const id = currentThreadId;
     if (!id) return;
     const meta = await loadMeta(id);
-    if (!meta) return;
-    if (meta.titleManual) return;
-    const events = await readEvents(paths.threadTranscript(id));
-    const next = titleFrom(meta.cwd, events);
-    if (!next || next === meta.title) return;
+    if (!meta || meta.titleManual) return;
+    const base = basename(meta.cwd) || "thread";
+    if (meta.title !== base) return;
+    const next = titleFrom(meta.cwd, [{ type: "user.message", text }]);
+    if (next === meta.title) return;
     await writeMeta({ ...meta, title: next, updatedAt: nowIso() });
   });
 }
@@ -366,6 +484,7 @@ export async function renameThread(id: string, title: string): Promise<ThreadMet
 
 export async function readThreadBundle(id: string): Promise<{ meta: ThreadMeta; events: TranscriptEvent[] } | null> {
   if (!id || id.includes("/") || id.includes("..")) return null;
+  if (id === currentThreadId) await flushLiveTranscript();
   const meta = await loadMeta(id);
   if (!meta) return null;
   return { meta, events: await readEvents(paths.threadTranscript(id)) };

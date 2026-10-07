@@ -53,7 +53,7 @@ describe("threads store", () => {
       `${JSON.stringify({ type: "user.message", text: "hello from ops" })}\n`,
       "utf8",
     );
-    await refreshLiveTitle();
+    await refreshLiveTitle("hello from ops");
     expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Ops box");
   });
 

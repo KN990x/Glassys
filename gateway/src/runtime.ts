@@ -33,6 +33,10 @@ import { createMutex } from "./lock.js";
 import {
   activateThread,
   archiveLiveThread,
+  flushLiveTranscript,
+  refreshLiveTitle,
+  setTranscriptFlushErrorHandler,
+  stageLiveEvent,
   ensureLiveThread,
   listThreads,
   liveThreadId,
@@ -168,19 +172,54 @@ function persistable(event: ServerMessage): TranscriptEvent | null {
   return event;
 }
 
+/** Set while transcript writes fail, so the operator is told once rather than per token. */
+let persistFailing = false;
+
+function reportPersistFailure(err: unknown): void {
+  log("error", "transcript write failed", { error: String(err) });
+  if (persistFailing) return;
+  persistFailing = true;
+  /* Not persisted itself: the transcript is what cannot be written. */
+  hub.broadcast({
+    type: "run.error",
+    message: `Glassys could not save this transcript: ${err instanceof Error ? err.message : String(err)}`,
+    phase: "run",
+  });
+}
+
 async function emit(event: ServerMessage, agentId?: string | null): Promise<void> {
   const done = emitChain.then(async () => {
     if (agentId) await persistAgentId(agentId);
+    let out = event;
+    let flushNow = false;
     const stored = persistable(event);
-    if (stored) await appendTranscript(stored);
+    if (stored) {
+      try {
+        const staged = await stageLiveEvent(stored);
+        out = staged.event;
+        flushNow = staged.flushNow;
+      } catch (err) {
+        reportPersistFailure(err);
+      }
+    }
     if (event.type === "run.usage") {
       const cfg = await loadConfig();
       await addUsageTotals(cfg.agent.adapter, event.inputTokens, event.outputTokens);
       await addLiveUsage(event.inputTokens, event.outputTokens);
       hub.broadcast({ type: "threads.snapshot", threads: await listThreads(), currentId: liveThreadId() });
     }
-    hub.broadcast(event);
-    void notifyFromEvent(event).catch((err) => log("warn", "push notify failed", { error: String(err) }));
+    /* Screens first: a slow or failing disk must not hold back (or swallow) what the agent says. */
+    hub.broadcast(out);
+    if (stored) {
+      try {
+        if (flushNow) await flushLiveTranscript();
+        if (stored.type === "user.message") await refreshLiveTitle(stored.text);
+        persistFailing = false;
+      } catch (err) {
+        reportPersistFailure(err);
+      }
+    }
+    void notifyFromEvent(out).catch((err) => log("warn", "push notify failed", { error: String(err) }));
   });
   emitChain = done.catch((err) => {
     log("error", "emit failed", { error: String(err) });
@@ -351,6 +390,7 @@ async function broadcastTranscriptSnapshot(): Promise<void> {
     type: "transcript.snapshot",
     events: snap.events,
     ...(snap.truncated ? { truncated: true } : {}),
+    lastSeq: snap.lastSeq,
   });
 }
 
@@ -662,6 +702,8 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       const event =
         raw.type === "tool.end" && raw.denied && cancelGeneration !== gen ? { ...raw, denied: undefined } : raw;
       lastEventAt = nowFn();
+      /* Output again: a later silence deserves its own warning. */
+      stalledEmitted = false;
       if (event.type === "run.error") sawRunError = true;
       if (event.type === "thinking.delta" && !thinkingOpen) {
         thinkingOpen = true;
@@ -1089,6 +1131,7 @@ export async function exportLiveThread(id: string): Promise<{ filename: string; 
 
 export async function initRuntime(): Promise<void> {
   shuttingDown = false;
+  setTranscriptFlushErrorHandler(reportPersistFailure);
   await ensureLiveThread();
   const state = await loadState();
   runtime.agentId = usableAgentId(state.agentId) ? state.agentId : null;
@@ -1144,6 +1187,8 @@ export async function shutdownRuntime(): Promise<void> {
   });
   currentRun = null;
   await disposeSession();
+  await flushLiveTranscript().catch((err) => log("error", "transcript flush at shutdown failed", { error: String(err) }));
+  setTranscriptFlushErrorHandler(null);
   runtime.agentId = null;
   runtime.fingerprint = null;
   runtime.identityAgent = null;

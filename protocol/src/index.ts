@@ -319,7 +319,14 @@ export interface ToolEnd {
   denied?: boolean;
 }
 
-export type TranscriptEvent =
+/**
+ * Persisted events carry `seq`, increasing within a thread. A snapshot names the last one it
+ * holds (`lastSeq`), so a client drops anything it has already seen through the snapshot.
+ * Optional: events written by older gateways have none.
+ */
+export type Sequenced = { seq?: number };
+
+export type TranscriptEvent = (
   | { type: "user.message"; text: string; id?: string; attachments?: MessageAttachment[] }
   | { type: "user.retracted"; id: string }
   | { type: "thinking.delta"; text: string }
@@ -334,7 +341,9 @@ export type TranscriptEvent =
   | { type: "run.error"; message: string; phase?: "startup" | "run" }
   | { type: "run.cancelled" }
   | { type: "run.stalled"; idleMs: number }
-  | { type: "run.usage"; inputTokens?: number; outputTokens?: number };
+  | { type: "run.usage"; inputTokens?: number; outputTokens?: number }
+) &
+  Sequenced;
 
 export type ServerMessage =
   /** `commit`: the gateway build this socket talks to; a new one after a reconnect means stale PWA assets. */
@@ -355,7 +364,7 @@ export type ServerMessage =
   | { type: "threads.snapshot"; threads: ThreadSummary[]; currentId: string | null }
   | { type: "config"; config: RedactedConfig }
   | { type: "config.error"; message: string }
-  | { type: "transcript.snapshot"; events: TranscriptEvent[]; truncated?: boolean }
+  | { type: "transcript.snapshot"; events: TranscriptEvent[]; truncated?: boolean; lastSeq?: number }
   | TranscriptEvent;
 
 export function isClientMessage(value: unknown): value is ClientMessage {
@@ -485,14 +494,24 @@ export function isTranscriptEvent(value: ServerMessage): value is TranscriptEven
   );
 }
 
-/** Live UI events that must not be replayed from transcript.jsonl. */
+/**
+ * Events written to transcript.jsonl and replayed on reconnect. The others describe a moment of
+ * a live run (queued, started, streaming tool output, no output for a while) and mean nothing
+ * once it is over.
+ */
 export function isPersistedTranscriptEvent(value: ServerMessage): value is TranscriptEvent {
   return (
     isTranscriptEvent(value) &&
     value.type !== "run.queued" &&
     value.type !== "run.start" &&
+    value.type !== "run.stalled" &&
     value.type !== "tool.progress"
   );
+}
+
+/** Streamed text that is merged into one transcript line per burst. */
+export function isDeltaEvent(value: ServerMessage): value is Extract<TranscriptEvent, { type: "text.delta" | "thinking.delta" }> {
+  return value.type === "text.delta" || value.type === "thinking.delta";
 }
 
 const MESSAGE_ID_RE =

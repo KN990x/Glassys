@@ -10,6 +10,7 @@ describe("transcript snapshot", () => {
     expect(snapshotFromRaw(raw)).toEqual({
       events: [{ type: "user.message", text: "hi", id: "a" }],
       truncated: false,
+      lastSeq: 0,
     });
   });
 
@@ -44,6 +45,47 @@ describe("transcript snapshot", () => {
       expect(whole).toMatchObject({ truncated: false });
       expect(whole.events).toHaveLength(50);
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("names the last seq it read, even past the event cap", () => {
+    const lines = Array.from({ length: TRANSCRIPT_SNAPSHOT_MAX_EVENTS + 2 }, (_, i) =>
+      JSON.stringify({ type: "user.message", text: `m${i}`, seq: i + 1 }),
+    );
+    expect(snapshotFromRaw(`${lines.join("\n")}\n`).lastSeq).toBe(TRANSCRIPT_SNAPSHOT_MAX_EVENTS + 2);
+  });
+});
+
+describe("live transcript batching", () => {
+  it("merges a burst of deltas into one line, numbers every event, and flushes before a read", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-batch-"));
+    process.env.GLASSYS_DATA_DIR = dir;
+    const { resetLiveThreadCache, liveTranscriptPath } = await import("./threads.js");
+    resetLiveThreadCache();
+    const { appendTranscript, readTranscriptSnapshot } = await import("./transcript.js");
+    const { readFile } = await import("node:fs/promises");
+    try {
+      const user = await appendTranscript({ type: "user.message", text: "hi", id: "u1" });
+      const a = await appendTranscript({ type: "text.delta", text: "Hel" });
+      const b = await appendTranscript({ type: "text.delta", text: "lo" });
+      const done = await appendTranscript({ type: "run.done" });
+      expect([user.seq, a.seq, b.seq, done.seq]).toEqual([1, 2, 3, 4]);
+      const lines = (await readFile(liveTranscriptPath(), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+      expect(lines).toEqual([
+        { type: "user.message", text: "hi", id: "u1", seq: 1 },
+        { type: "text.delta", text: "Hello", seq: 3 },
+        { type: "run.done", seq: 4 },
+      ]);
+      /* A pending delta is in the snapshot, and seq continues after a restart reads the file. */
+      await appendTranscript({ type: "text.delta", text: "!" });
+      const snap = await readTranscriptSnapshot();
+      expect(snap.lastSeq).toBe(5);
+      resetLiveThreadCache();
+      const next = await appendTranscript({ type: "run.done" });
+      expect(next.seq).toBe(6);
+    } finally {
+      resetLiveThreadCache();
       await rm(dir, { recursive: true, force: true });
     }
   });

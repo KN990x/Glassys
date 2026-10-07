@@ -39,7 +39,6 @@ describe("transcript reducer", () => {
     const afterStart = reduceTranscript(live, { type: "run.start" });
     expect(afterStart.some((b) => b.kind === "banner")).toBe(false);
     const snap = replay([{ type: "user.message", text: "hi" }, { type: "text.delta", text: "yo" }]);
-    expect(snap.some((b) => b.kind === "banner" && b.tone === "queue")).toBe(false);
     expect(snap.map((b) => b.kind)).toEqual(["user", "text"]);
   });
 
@@ -79,7 +78,31 @@ describe("transcript reducer", () => {
     const usage = reduceTranscript([], { type: "run.usage", inputTokens: 3, outputTokens: 9 });
     expect(usage[0]).toMatchObject({ kind: "usage", inputTokens: 3, outputTokens: 9 });
     const stalled = reduceTranscript([], { type: "run.stalled", idleMs: 180000 });
-    expect(stalled[0]).toMatchObject({ kind: "banner", text: "stalled" });
+    expect(stalled[0]).toMatchObject({ kind: "banner", code: "stalled" });
+  });
+
+  it("clears the stall warning once the agent speaks again or the run ends", () => {
+    const stalled = reduceTranscript([], { type: "run.stalled", idleMs: 180000 });
+    expect(reduceTranscript(stalled, { type: "run.stalled", idleMs: 360000 }).filter((b) => b.kind === "banner")).toHaveLength(1);
+    const resumed = reduceTranscript(stalled, { type: "text.delta", text: "back" });
+    expect(resumed.map((b) => b.kind)).toEqual(["text"]);
+    const ended = reduceTranscript(reduceTranscript([], { type: "text.delta", text: "x" }), { type: "run.stalled", idleMs: 1 });
+    expect(reduceTranscript(ended, { type: "run.done" }).some((b) => b.kind === "banner")).toBe(false);
+  });
+
+  it("applies a batch like the same events one by one", async () => {
+    const { reduceTranscriptBatch } = await import("./transcript");
+    const events = [
+      { type: "user.message", text: "hi", id: "u" },
+      { type: "text.delta", text: "a" },
+      { type: "text.delta", text: "b" },
+      { type: "tool.start", callId: "c", kind: "shell", title: "ls" },
+      { type: "tool.end", callId: "c", ok: true, kind: "shell" },
+      { type: "run.done" },
+    ] as const;
+    const one = events.reduce((acc, e) => reduceTranscript(acc, e), [] as ReturnType<typeof reduceTranscript>);
+    const batched = reduceTranscriptBatch([], [...events]);
+    expect(batched.map(({ id: _id, ...rest }) => rest)).toEqual(one.map(({ id: _id, ...rest }) => rest));
   });
 
   it("closes open thinking on run.done without inventing a duration", () => {

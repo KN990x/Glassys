@@ -56,45 +56,24 @@ describe("hub", () => {
     expect(JSON.parse(sent[1]).text).toBe("y");
   });
 
-  it("flushes leftover persisted deltas that missed the second transcript read", () => {
-    const later = [{ type: "text.delta", text: "from-disk" } as const];
+  it("drops buffered events the snapshot already holds, by seq", () => {
     const buffered: ServerMessage[] = [
-      { type: "text.delta", text: "from-disk" },
-      { type: "text.delta", text: "late-persist" },
-      {
-        type: "session",
-        profileId: PROFILE_ID,
-        agentId: "a1",
-        busy: false,
-      },
+      { type: "text.delta", text: "in-snapshot", seq: 41 },
+      { type: "text.delta", text: " ", seq: 42 },
+      { type: "text.delta", text: " ", seq: 43 },
+      { type: "session", profileId: PROFILE_ID, agentId: "a1", busy: false },
       { type: "run.start", runId: "r1" },
     ];
-    const flushed = flushHandshakeBuffer(buffered, [...later]);
-    expect(flushed.map((m) => m.type)).toEqual(["text.delta", "session", "run.start"]);
-    expect(flushed.some((m) => m.type === "text.delta" && "text" in m && m.text === "late-persist")).toBe(true);
-    expect(flushed.filter((m) => m.type === "text.delta" && "text" in m && m.text === "from-disk")).toHaveLength(0);
-    expect(isHandshakeEphemeral(buffered[2]!)).toBe(true);
+    const flushed = flushHandshakeBuffer(buffered, 42);
+    expect(flushed).toEqual([
+      { type: "text.delta", text: " ", seq: 43 },
+      { type: "session", profileId: PROFILE_ID, agentId: "a1", busy: false },
+      { type: "run.start", runId: "r1" },
+    ]);
+    expect(isHandshakeEphemeral(buffered[3]!)).toBe(true);
   });
 
-  it("keeps two identical leftover deltas that were not already sent", () => {
-    const flushed = flushHandshakeBuffer(
-      [
-        { type: "text.delta", text: " " },
-        { type: "text.delta", text: " " },
-      ],
-      [],
-    );
-    expect(flushed.filter((m) => m.type === "text.delta")).toHaveLength(2);
-  });
-
-  it("drops only as many identical deltas as the snapshot already included", () => {
-    const flushed = flushHandshakeBuffer(
-      [
-        { type: "text.delta", text: " " },
-        { type: "text.delta", text: " " },
-      ],
-      [{ type: "text.delta", text: " " }],
-    );
-    expect(flushed.filter((m) => m.type === "text.delta")).toHaveLength(1);
+  it("sends events without seq, as older writers produced them", () => {
+    expect(flushHandshakeBuffer([{ type: "text.delta", text: "x" }], 10)).toHaveLength(1);
   });
 });

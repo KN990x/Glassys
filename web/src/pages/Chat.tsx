@@ -18,7 +18,7 @@ import { PROTOCOL_VERSION, MAX_ATTACHMENTS, isTranscriptEvent } from "@glassys/p
 import { useT } from "../i18n";
 import { api } from "../api";
 import { openSocket, type ConnState } from "../socket";
-import { reduceTranscript, replay, type Block } from "../transcript";
+import { reduceTranscriptBatch, replay, type Block } from "../transcript";
 import { createEventBatcher } from "../eventBatch";
 import { Composer } from "../components/Composer";
 import { ThreadDrawer } from "../components/ThreadDrawer";
@@ -195,7 +195,9 @@ export function Chat({
 
   useEffect(() => {
     /* One batch per frame; a snapshot replaces the transcript and drops what is pending. */
-    const batcher = createEventBatcher<TranscriptEvent>((batch) => setBlocks((cur) => batch.reduce(reduceTranscript, cur)));
+    const batcher = createEventBatcher<TranscriptEvent>((batch) => setBlocks((cur) => reduceTranscriptBatch(cur, batch)));
+    /* The newest persisted event this screen holds; anything at or below it is a repeat. */
+    let lastSeq = 0;
     const sock = openSocket({
       onState: (s) => {
         if (s === "connecting" || s === "reconnecting") {
@@ -233,6 +235,7 @@ export function Chat({
           setSnapshotReady(true);
           setTranscriptTruncated(Boolean(msg.truncated));
           setBlocks(replay(msg.events));
+          lastSeq = msg.lastSeq ?? 0;
           return;
         }
         if (msg.type === "session") {
@@ -258,6 +261,10 @@ export function Chat({
         if (msg.type === "run.start") setQueued(false);
         if (isTranscriptEvent(msg)) {
           if (!snapshotReadyRef.current) return;
+          if (typeof msg.seq === "number") {
+            if (msg.seq <= lastSeq) return;
+            lastSeq = msg.seq;
+          }
           batcher.push(msg);
         }
       },

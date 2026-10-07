@@ -2,7 +2,7 @@
   "$id": "https://glassys.dev/protocol/v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Glassys protocol v1",
-  "description": "WebSocket message envelope. Discriminate on type. protocolVersion major is 1. Artifact only — the gateway does not validate messages against this schema at runtime.",
+  "description": "WebSocket message envelope. Discriminate on type. protocolVersion major is 1. Persisted transcript events may carry an integer `seq`, increasing within a thread. Artifact only — the gateway does not validate messages against this schema at runtime.",
   "oneOf": [
     { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello" }, "protocolVersion": { "type": "integer" } } },
     { "type": "object", "required": ["type", "token"], "properties": { "type": { "const": "auth" }, "token": { "type": "string" } } },
@@ -14,16 +14,16 @@
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "config.get" } } },
     { "type": "object", "required": ["type", "patch"], "properties": { "type": { "const": "config.set" }, "patch": { "type": "object" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "ping" }, "ts": { "type": "number" } } },
-    { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello.ok" }, "protocolVersion": { "type": "integer" } } },
+    { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello.ok" }, "protocolVersion": { "type": "integer" }, "commit": { "type": "string" } } },
     { "type": "object", "required": ["type", "protocolVersion"], "properties": { "type": { "const": "hello.incompatible" }, "protocolVersion": { "type": "integer" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "auth.ok" } } },
     { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "auth.error" }, "message": { "type": "string" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "pong" }, "ts": { "type": "number" } } },
     { "type": "object", "required": ["type", "config"], "properties": { "type": { "const": "config" }, "config": { "type": "object" } } },
     { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "config.error" }, "message": { "type": "string" } } },
-    { "type": "object", "required": ["type"], "properties": { "type": { "const": "thinking.delta" }, "text": { "type": "string" } } },
+    { "type": "object", "required": ["type", "text"], "properties": { "type": { "const": "thinking.delta" }, "text": { "type": "string" }, "seq": { "type": "integer" } } },
     { "type": "object", "required": ["type", "durationMs"], "properties": { "type": { "const": "thinking.done" }, "durationMs": { "type": "integer" } } },
-    { "type": "object", "required": ["type"], "properties": { "type": { "const": "text.delta" }, "text": { "type": "string" } } },
+    { "type": "object", "required": ["type", "text"], "properties": { "type": { "const": "text.delta" }, "text": { "type": "string" }, "seq": { "type": "integer" } } },
     {
       "type": "object",
       "required": ["type", "callId", "kind", "title"],
@@ -48,6 +48,7 @@
         "diff": { "type": "string" },
         "stats": {
           "type": "object",
+          "required": ["add", "del"],
           "properties": { "add": { "type": "integer" }, "del": { "type": "integer" } }
         },
         "outputPreview": { "type": "string" },
@@ -64,9 +65,9 @@
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.cancelled" } } },
     { "type": "object", "required": ["type", "idleMs"], "properties": { "type": { "const": "run.stalled" }, "idleMs": { "type": "integer" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.usage" }, "inputTokens": { "type": "integer" }, "outputTokens": { "type": "integer" } } },
-    { "type": "object", "required": ["type", "profileId", "busy"], "properties": { "type": { "const": "session" }, "profileId": { "type": "string" }, "agentId": { "type": ["string", "null"] }, "busy": { "type": "boolean" }, "threadId": { "type": "string" }, "runStartedAt": { "type": "number" } } },
+    { "type": "object", "required": ["type", "profileId", "agentId", "busy"], "properties": { "type": { "const": "session" }, "profileId": { "type": "string" }, "agentId": { "type": ["string", "null"] }, "busy": { "type": "boolean" }, "threadId": { "type": "string" }, "runStartedAt": { "type": "number" } } },
     { "type": "object", "required": ["type", "items"], "properties": { "type": { "const": "queue.snapshot" }, "items": { "type": "array" } } },
     { "type": "object", "required": ["type", "threads", "currentId"], "properties": { "type": { "const": "threads.snapshot" }, "threads": { "type": "array" }, "currentId": { "type": ["string", "null"] } } },
-    { "type": "object", "required": ["type", "events"], "properties": { "type": { "const": "transcript.snapshot" }, "events": { "type": "array" }, "truncated": { "type": "boolean" } } }
+    { "type": "object", "required": ["type", "events"], "properties": { "type": { "const": "transcript.snapshot" }, "events": { "type": "array" }, "truncated": { "type": "boolean" }, "lastSeq": { "type": "integer" } } }
   ]
 }

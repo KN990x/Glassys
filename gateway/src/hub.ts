@@ -77,28 +77,17 @@ export function isHandshakeEphemeral(msg: ServerMessage): boolean {
   return !isPersistedTranscriptEvent(msg);
 }
 
-/** After snapshot + later transcript read, send leftover buffer without duplicating persisted events. */
-export function flushHandshakeBuffer(buffered: ServerMessage[], alreadySent: ServerMessage[]): ServerMessage[] {
-  const remaining = new Map<string, number>();
-  for (const ev of alreadySent) {
-    const key = JSON.stringify(ev);
-    remaining.set(key, (remaining.get(key) ?? 0) + 1);
-  }
-  const out: ServerMessage[] = [];
-  for (const msg of buffered) {
-    if (isHandshakeEphemeral(msg)) {
-      out.push(msg);
-      continue;
-    }
-    const raw = JSON.stringify(msg);
-    const left = remaining.get(raw) ?? 0;
-    if (left > 0) {
-      remaining.set(raw, left - 1);
-      continue;
-    }
-    out.push(msg);
-  }
-  return out;
+/**
+ * What a socket that was buffering during its handshake still needs after the snapshot: live-only
+ * events, and persisted ones past `lastSeq` (the snapshot holds the rest). An event without seq
+ * (an older writer) is sent, as before.
+ */
+export function flushHandshakeBuffer(buffered: ServerMessage[], lastSeq: number): ServerMessage[] {
+  return buffered.filter((msg) => {
+    if (isHandshakeEphemeral(msg)) return true;
+    const seq = (msg as { seq?: unknown }).seq;
+    return typeof seq !== "number" || seq > lastSeq;
+  });
 }
 
 export const hub = new Hub();

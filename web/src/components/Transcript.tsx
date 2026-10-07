@@ -290,8 +290,8 @@ const TranscriptRow = memo(function TranscriptRow({
   }
   if (b.kind === "banner") {
     const text =
-      b.text === "cancelled" ? t("status.cancelled") : b.text === "stalled" ? t("chat.stalled") : operatorError(b.text, t);
-    const tone = b.text === "stalled" ? "warn" : b.tone;
+      b.code === "cancelled" ? t("status.cancelled") : b.code === "stalled" ? t("chat.stalled") : operatorError(b.text, t);
+    const tone = b.code === "stalled" ? "warn" : b.tone;
     return (
       <p className={`banner ${tone}`} role={tone === "error" ? "alert" : "status"}>
         <span className="banner-icon" aria-hidden="true">

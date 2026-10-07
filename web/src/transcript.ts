@@ -24,7 +24,8 @@ export type Block =
   | { id: string; kind: "text"; text: string }
   | ToolBlock
   | { id: string; kind: "usage"; inputTokens?: number; outputTokens?: number }
-  | { id: string; kind: "banner"; text: string; tone: "queue" | "error" | "info" };
+  /** `code` names the gateway-defined banners; an error banner carries the message instead. */
+  | { id: string; kind: "banner"; text: string; tone: "error" | "info"; code?: "cancelled" | "stalled" };
 
 let generation = 0;
 let seq = 0;
@@ -58,12 +59,32 @@ function closeOpenTools(blocks: Block[], status: "done" | "stopped"): Block[] {
   return changed ? next : blocks;
 }
 
+/** A stall warning only holds until the agent says something again, or the run ends. */
+function dropStall(blocks: Block[]): Block[] {
+  return blocks.some((b) => b.kind === "banner" && b.code === "stalled")
+    ? blocks.filter((b) => !(b.kind === "banner" && b.code === "stalled"))
+    : blocks;
+}
+
 function closeOpenWork(blocks: Block[], status: "done" | "stopped"): Block[] {
-  return closeOpenThinking(closeOpenTools(blocks, status));
+  return dropStall(closeOpenThinking(closeOpenTools(blocks, status)));
 }
 
 export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block[] {
-  const next = blocks.slice();
+  return applyEvent(blocks.slice(), event);
+}
+
+/** A batch of events with one copy of the block list, not one per event. */
+export function reduceTranscriptBatch(blocks: Block[], events: TranscriptEvent[]): Block[] {
+  let next = blocks.slice();
+  for (const event of events) next = applyEvent(next, event);
+  return next;
+}
+
+/** Apply one event to `next`, which the caller owns; returns it or a replacement. */
+function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
+  const tail = next[next.length - 1];
+  if (event.type !== "run.stalled" && tail?.kind === "banner" && tail.code === "stalled") next.pop();
   const last = next[next.length - 1];
 
   switch (event.type) {
@@ -172,19 +193,19 @@ export function reduceTranscript(blocks: Block[], event: TranscriptEvent): Block
       return next;
     }
     case "run.queued":
-      return next;
     case "run.start":
-      return next.filter((b) => !(b.kind === "banner" && b.tone === "queue"));
+      return next;
     case "run.error":
       next.push({ id: nid("err"), kind: "banner", text: event.message, tone: "error" });
       return closeOpenWork(next, "stopped");
     case "run.cancelled":
-      next.push({ id: nid("c"), kind: "banner", text: "cancelled", tone: "info" });
+      next.push({ id: nid("c"), kind: "banner", text: "", tone: "info", code: "cancelled" });
       return closeOpenWork(next, "stopped");
     case "run.done":
       return closeOpenWork(next, "done");
     case "run.stalled":
-      next.push({ id: nid("stall"), kind: "banner", text: "stalled", tone: "info" });
+      if (next.some((b) => b.kind === "banner" && b.code === "stalled")) return next;
+      next.push({ id: nid("stall"), kind: "banner", text: "", tone: "info", code: "stalled" });
       return next;
     case "run.usage":
       next.push({ id: nid("use"), kind: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens });
@@ -216,5 +237,5 @@ function findTool(blocks: Block[], callId: string): number {
 export function replay(events: TranscriptEvent[]): Block[] {
   generation += 1;
   seq = 0;
-  return events.reduce<Block[]>((acc, ev) => reduceTranscript(acc, ev), []);
+  return reduceTranscriptBatch([], events);
 }
