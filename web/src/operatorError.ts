@@ -32,6 +32,7 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Too many push subscriptions": "error.tooManyPush",
   "Too many pinned workspaces": "error.tooManyPins",
   "Notification permission denied": "settings.notifyDenied",
+  "Push subscribe failed": "error.pushSubscribe",
   "current password is incorrect": "error.currentPassword",
   "too many attempts": "error.tooManyAttempts",
   "setup code required": "setup.codeWrong",

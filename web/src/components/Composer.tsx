@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useId, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { MAX_ATTACHMENTS } from "@glassys/protocol";
 import type {
   AdapterCapabilities,
@@ -82,6 +82,9 @@ function attachableFile(file: File): boolean {
 export function Composer(props: ComposerProps) {
   const t = useT();
   const [dragging, setDragging] = useState(false);
+  /* The slash list is driven from the textarea, which points screen readers at it. */
+  const slashListId = useId();
+  const [slashActive, setSlashActive] = useState<string | undefined>();
   const {
     config,
     onConfig,
@@ -216,6 +219,10 @@ export function Composer(props: ComposerProps) {
             value={text}
             placeholder={t("chat.placeholderHint")}
             aria-label={t("chat.placeholder")}
+            aria-autocomplete="list"
+            aria-expanded={slashOpen}
+            aria-controls={slashOpen ? slashListId : undefined}
+            aria-activedescendant={slashOpen ? slashActive : undefined}
             enterKeyHint="send"
             onChange={(e) => {
               const next = e.target.value;
@@ -248,6 +255,8 @@ export function Composer(props: ComposerProps) {
               query={slashQuery(text) ?? ""}
               items={templatePaletteItems(templates, t, onTemplate)}
               onClose={() => setSlashOpen(false)}
+              listId={slashListId}
+              onActiveId={setSlashActive}
             />
           )}
 

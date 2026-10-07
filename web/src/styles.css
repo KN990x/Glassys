@@ -414,6 +414,8 @@ label {
 }
 label > input, label > select, label > textarea { color: var(--text); font-size: var(--fs-base); }
 label > .field-hint { font-size: var(--fs-xs); }
+/* Headings take focus only to be announced; they are not controls. */
+h2[tabindex="-1"]:focus { outline: none; }
 
 /* ---------------------------------------------------------------------------
    Text utilities

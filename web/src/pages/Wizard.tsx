@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -81,6 +81,16 @@ export function wizardCredentialReady(input: {
 export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; onDone: () => void; onConfig: (c: RedactedConfig) => void }) {
   const t = useT();
   const [step, setStep] = useState(0);
+  /* A new step moves focus to its heading, so a screen reader announces where the operator is. */
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    headingRef.current?.focus();
+  }, [step]);
   const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
   const [adaptersReady, setAdaptersReady] = useState(false);
   const [adapterId, setAdapterId] = useState(config.agent.adapter || "cursor");
@@ -203,6 +213,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
 
   async function next() {
     if (submitting) return;
+    const from = step;
     setError("");
     if (!adaptersReady || !adapters.length) {
       setError(t("wizard.adapters.loading"));
@@ -337,7 +348,8 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         onDone();
         return;
       }
-      setStep((s) => Math.min(s + 1, steps.length - 1));
+      /* From the step this save belonged to, not wherever the operator is now. */
+      setStep(Math.min(from + 1, steps.length - 1));
     } catch (err) {
       setError(operatorError(err instanceof Error ? err.message : String(err), t));
     } finally {
@@ -406,7 +418,9 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
             <p className="eyebrow">
               {t("wizard.title")} · <span className="nums">{step + 1}/{steps.length}</span>
             </p>
-            <h2>{t(`wizard.step.${id}`)}</h2>
+            <h2 ref={headingRef} tabIndex={-1}>
+              {t(`wizard.step.${id}`)}
+            </h2>
           </div>
 
           {id === "adapter" && (
@@ -673,7 +687,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               type="button"
               className={`ghost${step === 0 ? " reserved" : ""}`}
               onClick={() => setStep((s) => s - 1)}
-              disabled={step === 0}
+              disabled={step === 0 || submitting}
             >
               {t("wizard.back")}
             </button>

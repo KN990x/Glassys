@@ -21,7 +21,7 @@ export function formatRelativeShort(iso: string, now = Date.now(), locale = "en"
   const then = Date.parse(iso);
   if (!Number.isFinite(then)) return "";
   const sec = Math.max(0, Math.round((now - then) / 1000));
-  if (sec < 60) return locale.startsWith("es") ? "ahora" : "now";
+  if (sec < 60) return new Intl.RelativeTimeFormat(locale.startsWith("es") ? "es" : "en", { numeric: "auto" }).format(0, "second");
   if (sec < 3600) return `${Math.floor(sec / 60)}m`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
   if (sec < 86400 * 7) return `${Math.floor(sec / 86400)}d`;

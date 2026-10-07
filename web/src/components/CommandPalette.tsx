@@ -34,6 +34,8 @@ export function CommandPalette({
   onQuery,
   inline,
   hideSearch,
+  listId: givenListId,
+  onActiveId,
 }: {
   open: boolean;
   query: string;
@@ -42,11 +44,16 @@ export function CommandPalette({
   onQuery?: (q: string) => void;
   inline?: boolean;
   hideSearch?: boolean;
+  /** For an inline list driven by another field (the composer): the id it points aria-controls at. */
+  listId?: string;
+  /** The active option's id, for that field's aria-activedescendant. */
+  onActiveId?: (id: string | undefined) => void;
 }) {
   const t = useT();
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listId = useId();
+  const ownListId = useId();
+  const listId = givenListId ?? ownListId;
   const optionId = (i: number) => `${listId}-opt-${i}`;
   const filtered = useMemo(() => filterPaletteItems(items, query), [items, query]);
   const ids = paletteItemIds(filtered);
@@ -58,6 +65,19 @@ export function CommandPalette({
   useEffect(() => {
     if (open && !hideSearch) inputRef.current?.focus();
   }, [open, hideSearch]);
+
+  /* The modal palette hands focus back to whatever had it when it opened. */
+  useEffect(() => {
+    if (!open || inline) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [open, inline]);
+
+  useEffect(() => {
+    onActiveId?.(open && filtered[active] ? optionId(active) : undefined);
+  }, [open, active, filtered, onActiveId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -76,7 +96,7 @@ export function CommandPalette({
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActive((n) => Math.min(filtered.length - 1, n + 1));
+        setActive((n) => Math.max(0, Math.min(filtered.length - 1, n + 1)));
         return;
       }
       if (e.key === "ArrowUp") {
