@@ -118,6 +118,29 @@ export function previewNextRun(job: ScheduleJob, from = new Date()): string | nu
   }
 }
 
+type ScheduleInput = Partial<Pick<ScheduleJob, "text" | "cwd" | "threadId" | "cron" | "at" | "enabled">>;
+
+/**
+ * The fields a client may set, type-checked. Anything else in the body (an `id`, `createdAt`,
+ * run bookkeeping) is ignored; a wrong type is a 400, not a TypeError on `.trim()`.
+ */
+export function scheduleInput(body: unknown): ScheduleInput {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "invalid json");
+  const raw = body as Record<string, unknown>;
+  const out: ScheduleInput = {};
+  for (const key of ["text", "cwd", "threadId", "cron", "at"] as const) {
+    const v = raw[key];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== "string") throw new HttpError(400, `${key} must be a string`);
+    out[key] = v;
+  }
+  if (raw.enabled !== undefined) {
+    if (typeof raw.enabled !== "boolean") throw new HttpError(400, "enabled must be a boolean");
+    out.enabled = raw.enabled;
+  }
+  return out;
+}
+
 export async function createSchedule(input: {
   text: string;
   cwd: string;
@@ -151,10 +174,8 @@ export async function createSchedule(input: {
   return job;
 }
 
-export async function patchSchedule(
-  id: string,
-  patch: Partial<Pick<ScheduleJob, "text" | "cwd" | "threadId" | "cron" | "at" | "enabled">>,
-): Promise<ScheduleJob> {
+export async function patchSchedule(id: string, raw: unknown): Promise<ScheduleJob> {
+  const patch = scheduleInput(raw);
   const updated = await withSchedules(async () => {
     const jobs = await readJobs();
     const idx = jobs.findIndex((j) => j.id === id);

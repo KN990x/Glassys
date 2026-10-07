@@ -532,3 +532,17 @@ describe("clientIp", () => {
     expect(clientIp(req("::ffff:127.0.0.1"), true)).toBe("127.0.0.1");
   });
 });
+
+describe("schedule input", () => {
+  it("keeps only settable fields and refuses wrong types", async () => {
+    const { scheduleInput } = await import("./schedules.js");
+    expect(scheduleInput({ text: "df -h", cron: "0 6 * * *", id: "stolen", createdAt: "x", enabled: false })).toEqual({
+      text: "df -h",
+      cron: "0 6 * * *",
+      enabled: false,
+    });
+    expect(() => scheduleInput({ text: 5 })).toThrow(/text must be a string/);
+    expect(() => scheduleInput(null)).toThrow(/invalid json/);
+  });
+});
+

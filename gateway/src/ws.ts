@@ -284,7 +284,9 @@ async function handleClient(
 
   switch (msg.type) {
     case "user.message":
-      await enqueueMessage(msg.text, msg.attachments, msg.id);
+      await enqueueMessage(msg.text, msg.attachments, msg.id, "user", (message) =>
+        hub.send(ws, { type: "run.error", message, phase: "startup" }),
+      );
       break;
     case "run.cancel":
       await cancelRun();

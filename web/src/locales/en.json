@@ -324,6 +324,7 @@
   "settings.currentPasswordRequired": "Enter the current password to change it.",
   "error.currentPassword": "The current password is incorrect.",
   "error.passwordFromEnv": "The operator password comes from GLASSYS_OPERATOR_PASSWORD_HASH on this host; change it there.",
+  "error.runInProgress": "A run is in progress. Stop it first; restarting would cut it off.",
   "error.tooManyAttempts": "Too many attempts. Wait a moment and try again.",
   "settings.logout": "Sign out",
   "nav.settings": "Settings",

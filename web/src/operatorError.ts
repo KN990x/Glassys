@@ -1,5 +1,6 @@
 const MESSAGE_KEYS: Record<string, string> = {
   busy: "threads.busy",
+  "a run is in progress": "error.runInProgress",
   unauthorized: "error.unauthorized",
   "invalid json": "error.invalidJson",
   "unknown message": "error.unknownMessage",

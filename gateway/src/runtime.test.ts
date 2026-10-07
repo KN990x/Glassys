@@ -152,9 +152,12 @@ describe("runtime queue", () => {
     cfg.agent.cwd = ws;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     const { enqueueMessage, readTranscript } = await import("./runtime.js");
-    await enqueueMessage("hello");
+    const told: string[] = [];
+    expect(await enqueueMessage("hello", undefined, undefined, "user", (m) => told.push(m))).toBe(false);
+    expect(told).toEqual(["Onboarding is not complete"]);
+    /* A refusal is said to the sender, not written into the conversation. */
     const events = await readTranscript();
-    expect(events.some((e) => e.type === "run.error")).toBe(true);
+    expect(events.some((e) => e.type === "run.error")).toBe(false);
     expect(events.some((e) => e.type === "user.message")).toBe(false);
   });
 
@@ -655,6 +658,42 @@ describe("runtime queue", () => {
     }
   });
 
+  it("refuses to switch to a thread whose folder is gone, without leaving the live one", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = ws;
+    cfg.agent.adapter = "cursor";
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { enqueueMessage, startNewLiveThread, switchLiveThread, listLiveThreads, readTranscript, drainEmit } =
+      await import("./runtime.js");
+    const { liveThreadId } = await import("./threads.js");
+    await enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+    await drainEmit();
+    await startNewLiveThread();
+    const live = liveThreadId();
+    const archived = (await listLiveThreads()).find((t) => t.title.includes("one"))!;
+    const { rm } = await import("node:fs/promises");
+    await rm(ws, { recursive: true, force: true });
+    await expect(switchLiveThread(archived.id)).rejects.toMatchObject({ status: 400 });
+    expect(liveThreadId()).toBe(live);
+  });
+
+  it("replaces agent options when the adapter changes instead of merging the old ones in", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = ws;
+    cfg.agent.adapter = "cursor";
+    cfg.agent.options = { sandbox: true, settingSources: ["project"], autoRun: true };
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { applyPatch } = await import("./config.js");
+    const { config } = await applyPatch({ agent: { adapter: "claude", options: { autoRun: false } } });
+    expect(config.agent.options).not.toHaveProperty("sandbox");
+    expect(config.agent.options).not.toHaveProperty("settingSources");
+    /* Adapters are mocked here, so only the replacement shows (no adapter normalization). */
+    expect(config.agent.options).toEqual({ autoRun: false });
+  });
+
   it("resumes after switchLiveThread even when resumeOnStart is false", async () => {
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
@@ -931,15 +970,16 @@ describe("runtime queue", () => {
     }
   });
 
-  it("emits run.error when enqueue retries are exhausted while rotating", async () => {
+  it("tells the sender the gateway is busy when enqueue retries are exhausted while rotating", async () => {
     const { enqueueMessage, readTranscript, setRotatingForTests, setEnqueueRotatingRetriesForTests } =
       await import("./runtime.js");
     setRotatingForTests(true);
     setEnqueueRotatingRetriesForTests(3);
-    const queued = await enqueueMessage("blocked");
+    const told: string[] = [];
+    const queued = await enqueueMessage("blocked", undefined, undefined, "user", (m) => told.push(m));
     expect(queued).toBe(false);
+    expect(told).toEqual(["Gateway is busy, try again"]);
     const events = await readTranscript();
-    expect(events.some((e) => e.type === "run.error" && "message" in e && /busy/i.test(String(e.message)))).toBe(true);
-    expect(events.some((e) => e.type === "user.message")).toBe(false);
+    expect(events.some((e) => e.type === "user.message" || e.type === "run.error")).toBe(false);
   });
 });

@@ -103,6 +103,8 @@ let startAbort: AbortController | null = null;
 let sessionInFlight: Promise<AdapterSession> | null = null;
 const waitErrors = new WeakMap<AdapterRun, unknown>();
 const withQueueLock = createMutex();
+/** Consecutive processQueue crashes, for its retry backoff. */
+let queueCrashes = 0;
 
 class RunAborted extends Error {
   constructor() {
@@ -474,16 +476,25 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
 }
 
 async function performIdentityReset(): Promise<void> {
+  /* `rotating` for the whole reset: a message sent meanwhile waits instead of landing in the
+     thread being archived and then starting a second rotation of its own. */
   const go = await withQueueLock(async () => {
-    if (!pendingIdentityReset) return false;
+    if (!pendingIdentityReset || rotating) return false;
     pendingIdentityReset = false;
+    rotating = true;
     return true;
   });
   if (!go) return;
-  const previousAgentId = runtime.agentId;
-  await disposeSession();
-  await rotateToNewThread(previousAgentId);
-  await restoreQueuedUserMessages();
+  try {
+    const previousAgentId = runtime.agentId;
+    await disposeSession();
+    await rotateToNewThread(previousAgentId);
+    await restoreQueuedUserMessages();
+  } finally {
+    await withQueueLock(async () => {
+      rotating = false;
+    });
+  }
 }
 
 async function finishIdentityResetIfIdle(): Promise<void> {
@@ -517,6 +528,9 @@ function delay(ms: number): Promise<"timeout"> {
 }
 
 async function abandonTimedOutRun(): Promise<"cancelled"> {
+  /* The run ignored its cancel: dropping the session is the only way left to stop it. Its wait()
+     is still pending inside waitRun, which swallows whatever it settles with. */
+  log("warn", "run did not stop after cancel; disposing its session", { timeoutMs: runCancelTimeoutMs });
   await disposeSession();
   return "cancelled";
 }
@@ -640,6 +654,7 @@ async function processQueue(): Promise<void> {
         return false;
       });
       if (!more) {
+        queueCrashes = 0;
         await broadcastSession();
         await broadcastQueue();
         return;
@@ -662,7 +677,10 @@ async function processQueue(): Promise<void> {
     } catch (emitErr) {
       log("error", "emit after processQueue crash failed", { error: String(emitErr) });
     }
-    void processQueue().catch((next) => log("error", "processQueue", { error: String(next) }));
+    /* Try again, but not in a tight loop if whatever crashed it keeps failing. */
+    queueCrashes += 1;
+    const wait = Math.min(30_000, 250 * 2 ** Math.min(queueCrashes - 1, 7));
+    setTimeout(() => void processQueue().catch((next) => log("error", "processQueue", { error: String(next) })), wait).unref?.();
   }
 }
 
@@ -758,6 +776,11 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       await emit({ type: "run.error", message: "Attachments could not be read", phase: "startup" });
       return;
     }
+    /* Copying attachments takes a moment; a cancel during it must not still start the run. */
+    if (cancelGeneration !== gen) {
+      await emit({ type: "run.cancelled" });
+      return;
+    }
     const sendOpts = {
       model: cfg.agent.model,
       modelParams: cfg.agent.modelParams,
@@ -778,8 +801,15 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
         run = await abortable(sending, starting.signal);
       } catch (err) {
         if (err instanceof RunAborted) {
-          /* send() may still start the run after we stopped waiting; stop it as soon as it does. */
-          void sending.then((late) => late.cancel()).catch(() => undefined);
+          /* send() may still start the run after we stopped waiting; stop it as soon as it does,
+             and wait for it, as every run is waited on. */
+          void sending
+            .then(async (late) => {
+              log("info", "cancelling a run that started after its cancel", { agentId: handle.agentId, runId: late.id });
+              await late.cancel().catch(() => undefined);
+              await late.wait().catch(() => undefined);
+            })
+            .catch(() => undefined);
         }
         throw err;
       }
@@ -833,23 +863,28 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
   }
 }
 
+/**
+ * Queue a message. A refusal (queue full, onboarding not done) is told to `onReject`, the client
+ * that sent it: it is not part of the conversation, so it is neither saved nor pushed to every
+ * device as a failed run.
+ */
 export async function enqueueMessage(
   text: string,
   attachments?: MessageAttachment[],
   clientId?: string,
   source: "user" | "schedule" = "user",
+  onReject?: (message: string) => void,
 ): Promise<boolean> {
+  const reject = (message: string) => {
+    if (onReject) onReject(message);
+    else log("warn", "message refused", { message, source });
+    return false;
+  };
   const trimmed = text.trim();
   if (!trimmed && !attachments?.length) return false;
-  if (attachments && attachments.length > MAX_ATTACHMENTS) {
-    await emit({ type: "run.error", message: "Too many attachments", phase: "startup" });
-    return false;
-  }
+  if (attachments && attachments.length > MAX_ATTACHMENTS) return reject("Too many attachments");
   const cfg = await loadConfig();
-  if (!cfg.onboarding.completed) {
-    await emit({ type: "run.error", message: "Onboarding is not complete", phase: "startup" });
-    return false;
-  }
+  if (!cfg.onboarding.completed) return reject("Onboarding is not complete");
 
   for (let attempt = 0; attempt < enqueueRotatingRetries; attempt++) {
     const prepared = await withQueueLock(async () => {
@@ -862,10 +897,7 @@ export async function enqueueMessage(
       return { kind: "ok" as const, id, generation: identityGeneration };
     });
     if (prepared.kind === "skip") return false;
-    if (prepared.kind === "full") {
-      await emit({ type: "run.error", message: "Queue is full", phase: "startup" });
-      return false;
-    }
+    if (prepared.kind === "full") return reject("Queue is full");
     if (prepared.kind === "retry") {
       await new Promise((r) => setTimeout(r, 25));
       continue;
@@ -908,8 +940,7 @@ export async function enqueueMessage(
     void processQueue().catch((err) => log("error", "processQueue", { error: String(err) }));
     return true;
   }
-  await emit({ type: "run.error", message: "Gateway is busy, try again", phase: "startup" });
-  return false;
+  return reject("Gateway is busy, try again");
 }
 
 export async function cancelQueued(id: string): Promise<void> {
@@ -944,15 +975,30 @@ export async function cancelRun(): Promise<void> {
   }
 }
 
+/**
+ * Config changes and thread moves (new, switch, delete, open workspace) one at a time: a cwd
+ * change arriving mid-switch used to be overwritten by the switch, or archive the thread the
+ * switch had just opened. A switch applies its thread's config under the same turn.
+ */
+const withThreadOps = createMutex();
+
 export async function applyConfigPatch(
   patch: ConfigPatch,
   opts?: { identity?: "auto" | "preserve" },
 ): Promise<{ restart: boolean }> {
+  if (opts?.identity === "preserve") return applyConfigPatchUnlocked(patch, opts);
+  return withThreadOps(() => applyConfigPatchUnlocked(patch, opts));
+}
+
+async function applyConfigPatchUnlocked(
+  patch: ConfigPatch,
+  opts?: { identity?: "auto" | "preserve"; replaceAgentOptions?: boolean },
+): Promise<{ restart: boolean }> {
   await assertPasswordChangeAllowed(patch);
   const before = await loadConfig();
-  const { config, restart } = await applyPatch(patch);
+  const { config, restart } = await applyPatch(patch, { replaceAgentOptions: opts?.replaceAgentOptions });
   invalidateAdapterInfoCache();
-  if (config.agent.cwd) await rememberCwd(config.agent.cwd);
+  if (config.agent.cwd && config.agent.cwd !== before.agent.cwd) await rememberCwd(config.agent.cwd);
   if (opts?.identity !== "preserve") {
     const identityChanged = agentFingerprint(before) !== agentFingerprint(config);
     if (identityChanged) {
@@ -1011,6 +1057,10 @@ export async function listLiveThreads() {
 }
 
 export async function startNewLiveThread(opts?: { fresh?: boolean }): Promise<void> {
+  return withThreadOps(() => startNewLiveThreadUnlocked(opts));
+}
+
+async function startNewLiveThreadUnlocked(opts?: { fresh?: boolean }): Promise<void> {
   await beginIdleThreadOp();
   try {
     const previous = runtime.agentId;
@@ -1033,9 +1083,24 @@ export async function startNewLiveThread(opts?: { fresh?: boolean }): Promise<vo
 }
 
 export async function switchLiveThread(id: string): Promise<void> {
+  return withThreadOps(() => switchLiveThreadUnlocked(id));
+}
+
+async function switchLiveThreadUnlocked(id: string): Promise<void> {
   assertThreadId(id);
   await ensureLiveThread();
   const same = liveThreadId() === id;
+  if (!same) {
+    /* Check the target before tearing anything down: a thread whose adapter is gone or whose
+       folder was removed used to fail only after the live thread was archived and disposed. */
+    const target = await loadThread(id);
+    if (!target) throw new HttpError(404, "Thread not found");
+    const cwd = await validateCwd(target.agent.cwd);
+    if (!cwd.ok) throw new HttpError(400, cwd.error);
+    const adapter = getAdapter(target.agent.adapter);
+    const available = await probeAdapter(adapter, target.agent.options);
+    if (!available.ok) throw new HttpError(400, available.error);
+  }
   const start = await withQueueLock(async () => {
     if (runtime.busy || processing || currentRun || rotating) throw new HttpError(409, "busy");
     if (same) return false;
@@ -1052,7 +1117,7 @@ export async function switchLiveThread(id: string): Promise<void> {
     await archiveLiveThread(runtime.agentId);
     await disposeSession();
     runtime.fingerprint = null;
-    await applyConfigPatch({ agent: loaded.agent }, { identity: "preserve" });
+    await applyConfigPatchUnlocked({ agent: loaded.agent }, { identity: "preserve", replaceAgentOptions: true });
     await activateThread(id, loaded.meta.agentId);
     runtime.agentId = loaded.meta.agentId;
     await broadcastTranscriptSnapshot();
@@ -1065,11 +1130,15 @@ export async function switchLiveThread(id: string): Promise<void> {
 }
 
 export async function deleteLiveThread(id: string): Promise<void> {
+  return withThreadOps(() => deleteLiveThreadUnlocked(id));
+}
+
+async function deleteLiveThreadUnlocked(id: string): Promise<void> {
   assertThreadId(id);
   await ensureLiveThread();
   const wasLive = liveThreadId() === id;
   // A new thread even if the deleted one was empty: it cannot be kept live.
-  if (wasLive) await startNewLiveThread({ fresh: true });
+  if (wasLive) await startNewLiveThreadUnlocked({ fresh: true });
   try {
     await removeThread(id);
   } catch (err) {
@@ -1097,19 +1166,23 @@ export async function renameLiveThread(id: string, title: string): Promise<void>
 }
 
 export async function openWorkspace(cwd: string): Promise<void> {
-  const check = await validateCwd(cwd);
-  if (!check.ok) throw new HttpError(400, check.error);
-  const cfg = await loadConfig();
-  if (cfg.agent.cwd === cwd) return;
-  const threads = await listThreads();
-  const match = threads
-    .filter((t) => t.cwd === cwd)
-    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
-  if (match.length) {
-    await switchLiveThread(match[0]!.id);
-    return;
-  }
-  await applyConfigPatch({ agent: { cwd } });
+  return withThreadOps(async () => {
+    const check = await validateCwd(cwd);
+    if (!check.ok) throw new HttpError(400, check.error);
+    const cfg = await loadConfig();
+    if (cfg.agent.cwd === cwd) return;
+    /* Either way the live thread is left; a run in it is the operator's to stop, not this route's. */
+    if (runtimeBusy()) throw new HttpError(409, "busy");
+    const threads = await listThreads();
+    const match = threads
+      .filter((t) => t.cwd === cwd)
+      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+    if (match.length) {
+      await switchLiveThreadUnlocked(match[0]!.id);
+      return;
+    }
+    await applyConfigPatchUnlocked({ agent: { cwd } });
+  });
 }
 
 export async function pinWorkspaces(pins: string[]): Promise<string[]> {
@@ -1155,6 +1228,9 @@ export async function initRuntime(): Promise<void> {
     liveCwd: async () => (await loadConfig()).agent.cwd,
     switchThread: (id) => switchLiveThread(id),
     applyCwd: async (cwd) => {
+      /* The folder may be gone since the job was saved; fail the job, not the live thread. */
+      const check = await validateCwd(cwd);
+      if (!check.ok) throw new HttpError(400, check.error);
       await applyConfigPatch({ agent: { cwd } });
     },
   });
@@ -1296,14 +1372,6 @@ export async function discoverAdapter(adapterId: string): Promise<AdapterDiscove
   const adapter = getAdapter(adapterId);
   if (!adapter.discover) return [];
   return adapter.discover();
-}
-
-export async function cursorLogin(): Promise<{ url?: string }> {
-  return adapterLogin("cursor");
-}
-
-export async function cursorAuthStatus(): Promise<{ loggedIn: boolean; email?: string; apiKeyConfigured: boolean }> {
-  return adapterAuthStatus("cursor");
 }
 
 export { readTranscript, readTranscriptSnapshot };

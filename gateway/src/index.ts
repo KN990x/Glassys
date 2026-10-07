@@ -71,11 +71,20 @@ async function main(): Promise<void> {
   });
 
   let shuttingDown = false;
+  /** Longer than a run's cancel timeout (15s) plus its grace, shorter than systemd's 90s stop timeout. */
+  const SHUTDOWN_DEADLINE_MS = 30_000;
   const shutdown = async (exitCode = 0) => {
     if (shuttingDown) return;
     shuttingDown = true;
     log("info", "shutting down");
-    await shutdownRuntime();
+    /* A vendor login or agent start that ignores its abort must not keep the process up until
+       the service manager kills it: give the orderly path a deadline, then exit anyway. */
+    const deadline = setTimeout(() => {
+      log("warn", "shutdown deadline passed; exiting", { ms: SHUTDOWN_DEADLINE_MS });
+      process.exit(exitCode);
+    }, SHUTDOWN_DEADLINE_MS);
+    deadline.unref();
+    await shutdownRuntime().catch((err) => log("error", "runtime shutdown failed", { error: String(err) }));
     await closeWs(wss);
     await new Promise<void>((resolve) => {
       server.close(() => resolve());

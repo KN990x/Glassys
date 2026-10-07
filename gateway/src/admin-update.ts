@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import { chmod, readFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { createMutex } from "./lock.js";
 import { PROTOCOL_VERSION } from "@glassys/protocol";
 import { writeFileAtomic } from "./atomic.js";
 import { GATEWAY_VERSION, repoRoot, runningBuild } from "./build-info.js";
@@ -102,24 +103,38 @@ export async function currentUpgradeStatus(): Promise<UpgradeStatus> {
   return next;
 }
 
-export function detectService(env = process.env, platform = process.platform): ServiceKind {
+/** What the probe found for this process (it does not change while the gateway runs). */
+let detected: ServiceKind | null = null;
+
+async function exitsZero(cmd: string, args: string[]): Promise<boolean> {
+  try {
+    await execFileAsync(cmd, args, { timeout: 2000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Which service manager runs this gateway. Asynchronous: this used to be spawnSync on the request
+ * path, which froze the event loop (and every token being streamed) for up to two seconds.
+ */
+export async function detectService(env = process.env, platform = process.platform): Promise<ServiceKind> {
   if (detectOverride) return detectOverride;
   if (env.GLASSYS_SERVICE === "1") {
     if (platform === "darwin") return "launchd";
     if (platform === "linux") return "systemd";
   }
-  if (platform === "darwin") {
-    const printed = spawnSync("launchctl", ["print", `gui/${process.getuid?.() ?? 0}/${SERVICE_LABEL}`], {
-      encoding: "utf8",
-      timeout: 2000,
-    });
-    if (printed.status === 0) return "launchd";
+  const cacheable = env === process.env && platform === process.platform;
+  if (cacheable && detected) return detected;
+  let kind: ServiceKind = "none";
+  if (platform === "darwin" && (await exitsZero("launchctl", ["print", `gui/${process.getuid?.() ?? 0}/${SERVICE_LABEL}`]))) {
+    kind = "launchd";
+  } else if (platform === "linux" && (await exitsZero("systemctl", ["--user", "cat", SYSTEMD_UNIT]))) {
+    kind = "systemd";
   }
-  if (platform === "linux") {
-    const cat = spawnSync("systemctl", ["--user", "cat", SYSTEMD_UNIT], { encoding: "utf8", timeout: 2000 });
-    if (cat.status === 0) return "systemd";
-  }
-  return "none";
+  if (cacheable) detected = kind;
+  return kind;
 }
 
 async function git(args: string[], timeout = GIT_TIMEOUT_MS): Promise<string> {
@@ -221,7 +236,7 @@ export async function adminUpdateSnapshot(): Promise<{
     protocolVersion: PROTOCOL_VERSION,
     ...(gitInfo ? { git: gitInfo } : {}),
     running: runningBuild(),
-    service: detectService(),
+    service: await detectService(),
     ...(upgrading.phase !== "idle" ? { upgrading } : {}),
   };
 }
@@ -232,8 +247,15 @@ export function setUpgradeSpawnForTests(fn: typeof spawn | null): void {
   spawnUpgrade = fn ?? spawn;
 }
 
+/** One upgrade start at a time: two requests both read "idle" and both spawned a script. */
+const withUpgradeStart = createMutex();
+
 export async function startUpgrade(): Promise<void> {
-  const service = detectService();
+  return withUpgradeStart(startUpgradeUnlocked);
+}
+
+async function startUpgradeUnlocked(): Promise<void> {
+  const service = await detectService();
   if (service === "none") {
     throw new HttpError(409, "Upgrade from the PWA needs the user service (pnpm run service:install). Use pnpm run service:upgrade in the clone.");
   }

@@ -207,3 +207,16 @@ describe("config patch", () => {
     }
   });
 });
+
+describe("config patch validation", () => {
+  it("refuses wrong types, drops unknown keys, and replaces options on an adapter change", async () => {
+    const { assertPatchTypes } = await import("./config.js");
+    expect(() => assertPatchTypes({ session: { resumeOnStart: "no" } })).toThrow(/session.resumeOnStart must be a boolean/);
+    expect(() => assertPatchTypes({ agent: { cwd: 123 } })).toThrow(/agent.cwd must be a string/);
+    expect(() => assertPatchTypes({ agent: { modelParams: [{ id: "effort" }] } })).toThrow(/modelParams/);
+    expect(() => assertPatchTypes({ display: [] })).toThrow(/display must be an object/);
+    const patch: Record<string, unknown> = { space: { name: "box", legacyKey: 1 } };
+    assertPatchTypes(patch);
+    expect(patch.space).toEqual({ name: "box" });
+  });
+});

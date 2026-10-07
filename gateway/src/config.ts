@@ -148,7 +148,60 @@ export async function saveConfig(cfg: GlassysConfig): Promise<void> {
   await writeFileAtomic(paths.config(), YAML.stringify(toWrite));
 }
 
-export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysConfig; restart: boolean }> {
+/** Sections a patch may set, checked key by key against the defaults' types. */
+const TYPED_SECTIONS = ["space", "onboarding", "display", "session"] as const;
+
+function kindOf(v: unknown): string {
+  if (Array.isArray(v)) return "array";
+  if (v === null) return "null";
+  return typeof v;
+}
+
+/**
+ * Refuse a patch whose values have the wrong type for their key ("resumeOnStart": "no" was stored
+ * and read as true; "cwd": 123 reached path functions and threw). Keys the config does not have
+ * are dropped rather than written to config.yaml; a client echoing an old key back still saves.
+ */
+export function assertPatchTypes(patch: Record<string, unknown>): void {
+  const defaults = defaultConfig() as unknown as Record<string, Record<string, unknown>>;
+  for (const section of TYPED_SECTIONS) {
+    const value = patch[section];
+    if (value === undefined) continue;
+    if (!isObj(value)) throw new HttpError(400, `${section} must be an object`);
+    const known: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value)) {
+      if (v === undefined || !(key in defaults[section]!)) continue;
+      known[key] = v;
+      const want = kindOf(defaults[section]![key]);
+      if (kindOf(v) !== want) throw new HttpError(400, `${section}.${key} must be ${want === "array" ? "a list" : `a ${want}`}`);
+    }
+    patch[section] = known;
+  }
+  const agent = patch.agent;
+  if (agent === undefined) return;
+  if (!isObj(agent)) throw new HttpError(400, "agent must be an object");
+  for (const key of ["adapter", "cwd", "model"] as const) {
+    if (agent[key] !== undefined && typeof agent[key] !== "string") throw new HttpError(400, `agent.${key} must be a string`);
+  }
+  if (agent.options !== undefined && !isObj(agent.options)) throw new HttpError(400, "agent.options must be an object");
+  if (
+    agent.modelParams !== undefined &&
+    (!Array.isArray(agent.modelParams) ||
+      !agent.modelParams.every((p) => isObj(p) && typeof p.id === "string" && typeof p.value === "string"))
+  ) {
+    throw new HttpError(400, "agent.modelParams must be a list of { id, value }");
+  }
+}
+
+/**
+ * `replaceAgentOptions`: the patch's agent options are the whole set (a thread switch restores
+ * exactly what the thread ran with). Changing adapter always replaces them: options are opaque
+ * per adapter, and Cursor's sandbox key has no business in a Claude config.
+ */
+export async function applyPatch(
+  patch: ConfigPatch,
+  opts: { replaceAgentOptions?: boolean } = {},
+): Promise<{ config: GlassysConfig; restart: boolean }> {
   return withConfigLock(async () => {
     const before = await loadConfigUnlocked();
     const {
@@ -159,13 +212,11 @@ export async function applyPatch(patch: ConfigPatch): Promise<{ config: GlassysC
       ...rest
     } = stripOperatorRestricted(patch);
     void _currentPassword; /* checked in runtime.applyConfigPatch, before this runs */
-    if (rest.agent !== undefined && !isObj(rest.agent)) {
-      throw new HttpError(400, "agent must be an object");
-    }
-    if (rest.space !== undefined && !isObj(rest.space)) {
-      throw new HttpError(400, "space must be an object");
-    }
+    assertPatchTypes(rest as Record<string, unknown>);
     const after = deepMerge(before, rest);
+    const nextAgent = rest.agent as Partial<GlassysConfig["agent"]> | undefined;
+    const adapterChanged = typeof nextAgent?.adapter === "string" && nextAgent.adapter !== before.agent.adapter;
+    if (nextAgent && (opts.replaceAgentOptions || adapterChanged)) after.agent.options = { ...(nextAgent.options ?? {}) };
     const migrated = migrateLegacyAgent({ agent: after.agent }, after.agent);
     after.agent = migrated.agent;
     if (after.agent.adapter && !tryGetAdapter(after.agent.adapter)) {

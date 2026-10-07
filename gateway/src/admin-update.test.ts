@@ -31,14 +31,14 @@ describe("admin update", () => {
     setPidAliveForTests(null);
   });
 
-  it("treats GLASSYS_SERVICE=1 as the user service", () => {
-    expect(detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("launchd");
-    expect(detectService({ GLASSYS_SERVICE: "1" }, "linux")).toBe("systemd");
+  it("treats GLASSYS_SERVICE=1 as the user service", async () => {
+    expect(await detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("launchd");
+    expect(await detectService({ GLASSYS_SERVICE: "1" }, "linux")).toBe("systemd");
   });
 
-  it("honors the test override", () => {
+  it("honors the test override", async () => {
     setDetectServiceForTests("none");
-    expect(detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("none");
+    expect(await detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("none");
   });
 
   it("rejects upgrade when the working tree is dirty", async () => {

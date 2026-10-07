@@ -48,11 +48,14 @@ export function snapshotLoginJob(adapterId: string): {
   return { url: job.url, status: job.status, error: job.error };
 }
 
+/** How long a cancelled login may take to notice its abort before it is left behind. */
+export const LOGIN_CANCEL_WAIT_MS = 5_000;
+
 export async function cancelLoginJob(): Promise<void> {
   const current = job;
   if (!current) return;
   current.abort.abort();
-  await current.done;
+  await Promise.race([current.done.catch(() => undefined), new Promise((r) => setTimeout(r, LOGIN_CANCEL_WAIT_MS).unref())]);
 }
 
 export async function startLoginJob(
@@ -114,7 +117,9 @@ export async function startLoginJob(
       throw err;
     },
   );
-  void done.finally(() => resolveDone());
+  /* finally() passes a rejection on; the outcome race below reports it, this copy must not
+     surface as an unhandled rejection. */
+  done.finally(() => resolveDone()).catch(() => undefined);
 
   type Outcome =
     | { kind: "url"; url: string }

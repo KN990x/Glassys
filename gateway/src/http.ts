@@ -27,8 +27,6 @@ import {
   adapterAuthStatus,
   adapterLogin,
   adapterLoginCancel,
-  cursorAuthStatus,
-  cursorLogin,
   cwdErrorInPatch,
   deleteLiveThread,
   discoverAdapter,
@@ -40,7 +38,9 @@ import {
   pinWorkspaces,
   renameLiveThread,
   startNewLiveThread,
+  runtimeBusy,
   switchLiveThread,
+  validateCwd,
 } from "./runtime.js";
 import { loadState } from "./state.js";
 import { listWorkspaces } from "./workspaces.js";
@@ -49,7 +49,15 @@ import { liveThreadId } from "./threads.js";
 import { readGitContext } from "./host-git.js";
 import { hostCapabilities, hostOverview, listDir, listServices, previewFile, readLogs } from "./host-probe.js";
 import { ensureVapidKeys, removePushSubscription, savePushSubscription } from "./push.js";
-import { createSchedule, deleteSchedule, listSchedules, patchSchedule, previewNextRun, scheduleTimezone } from "./schedules.js";
+import {
+  createSchedule,
+  deleteSchedule,
+  listSchedules,
+  patchSchedule,
+  previewNextRun,
+  scheduleInput,
+  scheduleTimezone,
+} from "./schedules.js";
 import { adminUpdateSnapshot, fetchBehind, startUpgrade } from "./admin-update.js";
 import { GATEWAY_VERSION, runningBuild } from "./build-info.js";
 
@@ -295,6 +303,10 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   if (method === "PUT" && path === "/api/config") {
     if (!(await requireAuth(req, res))) return true;
     const patch = (await readJson(req)) as ConfigPatch;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      send(res, 400, { error: "invalid json" });
+      return true;
+    }
     const cwdError = await cwdErrorInPatch(patch);
     if (cwdError) {
       send(res, 400, { error: cwdError });
@@ -384,27 +396,13 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     return true;
   }
 
-  if (method === "GET" && path === "/api/auth/cursor-status") {
-    // Alias of GET /api/auth/adapter-status?adapter=cursor
-    if (!(await requireAuth(req, res))) return true;
-    send(res, 200, await cursorAuthStatus());
-    return true;
-  }
-
-  if (method === "POST" && path === "/api/auth/cursor-login") {
-    // Alias of POST /api/auth/adapter-login { adapter: "cursor" }
-    if (!(await requireAuth(req, res))) return true;
-    try {
-      const result = await cursorLogin();
-      send(res, 200, { ok: true, configured: true, url: result.url });
-    } catch (err) {
-      send(res, 500, { error: publicErrorMessage(err, "cursor login failed") });
-    }
-    return true;
-  }
-
   if (method === "POST" && path === "/api/admin/restart") {
     if (!(await requireAuth(req, res))) return true;
+    /* A restart ends the run in flight; the operator stops it first (or sends ?force=1). */
+    if (runtimeBusy() && url.searchParams.get("force") !== "1") {
+      send(res, 409, { error: "a run is in progress" });
+      return true;
+    }
     send(res, 202, { ok: true, restarting: true });
     setTimeout(() => void requestRestart(), 50);
     return true;
@@ -432,6 +430,10 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/admin/upgrade") {
     if (!(await requireAuth(req, res))) return true;
+    if (runtimeBusy() && url.searchParams.get("force") !== "1") {
+      send(res, 409, { error: "a run is in progress" });
+      return true;
+    }
     try {
       await startUpgrade();
       send(res, 202, { ok: true, upgrading: true });
@@ -493,19 +495,16 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/schedules") {
     if (!(await requireAuth(req, res))) return true;
-    const body = (await readJson(req)) as {
-      text?: string;
-      cwd?: string;
-      threadId?: string;
-      cron?: string;
-      at?: string;
-      enabled?: boolean;
-    };
     try {
+      const body = scheduleInput(await readJson(req));
       const cfg = await loadConfig();
+      /* The workspace the job will move the agent to when it fires: check it now, not then. */
+      const cwd = body.cwd || cfg.agent.cwd;
+      const cwdCheck = await validateCwd(cwd);
+      if (!cwdCheck.ok) throw new HttpError(400, cwdCheck.error);
       const job = await createSchedule({
-        text: String(body.text || ""),
-        cwd: String(body.cwd || cfg.agent.cwd),
+        text: body.text ?? "",
+        cwd,
         threadId: body.threadId,
         cron: body.cron,
         at: body.at,
@@ -525,15 +524,12 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   if (method === "PATCH" && path.startsWith("/api/schedules/")) {
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/schedules/".length));
-    const body = (await readJson(req)) as Partial<{
-      text: string;
-      cwd: string;
-      threadId: string;
-      cron: string;
-      at: string;
-      enabled: boolean;
-    }>;
     try {
+      const body = scheduleInput(await readJson(req));
+      if (body.cwd !== undefined) {
+        const cwdCheck = await validateCwd(body.cwd);
+        if (!cwdCheck.ok) throw new HttpError(400, cwdCheck.error);
+      }
       const job = await patchSchedule(id, body);
       send(res, 200, { ...job, nextRun: previewNextRun(job) });
     } catch (err) {
