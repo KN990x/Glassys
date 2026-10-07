@@ -1,109 +1,168 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
+/*
+ * Shapes, from @opencode-ai/sdk's types.gen: parts carry `sessionID` and `messageID`; a tool part
+ * is `{ callID, tool, state }` with state `pending | running | completed | error`; a message's
+ * role, error and token counts arrive on `message.updated` as `properties.info`.
+ */
+
+/** Per-run mapping state. */
+export type OpencodeMapState = {
+  /** Tool calls seen, with whether their path/command has been shown yet. */
+  tools: Map<string, { name: string; located: boolean }>;
+  /** Last full text of each text/reasoning part, to turn snapshots into deltas. */
+  snapshots: Map<string, string>;
+  /** Shown output of each running tool. */
+  output: Map<string, string>;
+  /** Role of each message id, so the operator's own prompt is not echoed as agent text. */
+  roles: Map<string, string>;
+  /** Assistant messages whose usage was already reported. */
+  billed: Set<string>;
+};
+
+export function opencodeMapState(): OpencodeMapState {
+  return { tools: new Map(), snapshots: new Map(), output: new Map(), roles: new Map(), billed: new Set() };
 }
 
-function partType(part: Record<string, unknown>): string {
-  return str(part.type) || str(part.kind) || "";
-}
+const PREVIEW_CHARS = 4000;
 
-function snapshotDelta(
-  snapshots: Map<string, string>,
+function textDelta(
+  state: OpencodeMapState,
   id: string,
   text: string,
+  delta: string | undefined,
   kind: "text" | "thinking",
 ): ServerMessage[] {
-  const prev = snapshots.get(id) ?? "";
-  if (!text || text === prev) return [];
-  snapshots.set(id, text);
-  const delta = text.startsWith(prev) ? text.slice(prev.length) : text;
-  if (!delta) return [];
-  return [{ type: kind === "thinking" ? "thinking.delta" : "text.delta", text: delta }];
+  const prev = state.snapshots.get(id) ?? "";
+  state.snapshots.set(id, text);
+  /* Prefer the event's own delta; only diff snapshots when it has none. */
+  const next = delta ?? (text.startsWith(prev) ? text.slice(prev.length) : "");
+  if (!next) return [];
+  return [{ type: kind === "thinking" ? "thinking.delta" : "text.delta", text: next }];
 }
 
-function mapPart(partRaw: unknown, tools: Map<string, string>, snapshots: Map<string, string>): ServerMessage[] {
-  const part = asRecord(partRaw);
-  if (!part) return [];
-  const type = partType(part);
-  if (type === "text" || type === "output-text") {
-    const text = str(part.text) || str(part.delta) || str(asRecord(part.content)?.text);
-    const id = str(part.id) || str(part.callID) || "text";
-    return text ? snapshotDelta(snapshots, id, text, "text") : [];
+/** OpenCode puts edit diffs in the tool state's metadata. */
+function toolDiff(toolState: Record<string, unknown>) {
+  const metadata = asRecord(toolState.metadata);
+  const found = extractDiff(metadata ?? {});
+  return found.diff ? found : extractDiff(toolState);
+}
+
+function mapToolPart(part: Record<string, unknown>, state: OpencodeMapState): ServerMessage[] {
+  const id = str(part.callID) || str(part.id) || "tool";
+  const name = str(part.tool) || "tool";
+  const toolState = asRecord(part.state) ?? {};
+  const status = str(toolState.status);
+  const input = asRecord(toolState.input) ?? {};
+  const path = str(input.filePath) || str(input.path) || str(input.file_path);
+  const command = str(input.command);
+  const out: ServerMessage[] = [];
+  const seen = state.tools.get(id);
+  /* The first event is often `pending` with empty input; refine the card once the input arrives. */
+  if (!seen || (!seen.located && (path || command))) {
+    state.tools.set(id, { name, located: Boolean(path || command) });
+    out.push({
+      type: "tool.start",
+      callId: id,
+      kind: toolKindFromName(name),
+      title: str(toolState.title) || command || path || name,
+      path,
+      command,
+    });
   }
-  if (type === "reasoning" || type === "thinking") {
-    const text = str(part.text) || str(part.delta);
-    const id = str(part.id) || "thinking";
-    return text ? snapshotDelta(snapshots, id, text, "thinking") : [];
+  const output = str(toolState.output) ?? str(asRecord(toolState.metadata)?.output);
+  if (status === "running" && output) {
+    const prev = state.output.get(id) ?? "";
+    state.output.set(id, output);
+    if (output.startsWith(prev) && output.length > prev.length) {
+      out.push({ type: "tool.progress", callId: id, chunk: output.slice(prev.length) });
+    }
   }
-    if (type === "tool" || type === "tool_call" || type === "tool-call") {
-    const id = str(part.callID) || str(part.callId) || str(part.id) || "tool";
-    const name = str(part.tool) || str(part.name) || "tool";
-    const recState = asRecord(part.state);
-    const state = str(recState?.status) || str(part.status) || str(recState?.type);
-    const ended = state === "completed" || state === "error" || state === "failed" || state === "cancelled";
-    const input = asRecord(part.input) ?? asRecord(recState?.input) ?? recState ?? part;
-    const path = str(input?.path) || str(input?.file_path) || str(input?.filePath) || str(part.path);
-    const command = str(input?.command) || str(part.command);
-    const out: ServerMessage[] = [];
-    if (!tools.has(id)) {
-      tools.set(id, name);
-      out.push({
-        type: "tool.start",
-        callId: id,
-        kind: toolKindFromName(name),
-        title: name,
-        path,
-        command,
-      });
-    }
-    const output = str(recState?.output) || str(part.output);
-    if (output && !ended) {
-      const key = `tool:${id}`;
-      const prev = snapshots.get(key) ?? "";
-      if (output !== prev) {
-        const delta = output.startsWith(prev) ? output.slice(prev.length) : output;
-        snapshots.set(key, output);
-        if (delta) out.push({ type: "tool.progress", callId: id, chunk: delta });
-      }
-    }
-    if (ended) {
-      const kind = toolKindFromName(tools.get(id) || name);
-      const err =
-        state === "error" || state === "failed" ? str(recState?.error) || "Tool failed" : undefined;
-      const denied = toolDenied(state, err) || undefined;
-      const { diff, stats, truncated } = extractDiff(part.state ?? part);
-      out.push({
-        type: "tool.end",
-        callId: id,
-        ok: !err && state !== "cancelled",
-        kind,
-        outputPreview: output?.slice(0, 4000),
-        error: err,
-        denied,
-        diff,
-        stats,
-        truncated,
-      });
-    }
-    return out;
+  if (status === "completed" || status === "error") {
+    state.output.delete(id);
+    const err = status === "error" ? str(toolState.error) || "Tool failed" : undefined;
+    const { diff, stats, truncated } = toolDiff(toolState);
+    out.push({
+      type: "tool.end",
+      callId: id,
+      ok: !err,
+      kind: toolKindFromName(name),
+      outputPreview: output?.slice(0, PREVIEW_CHARS),
+      error: err,
+      denied: toolDenied(undefined, err) || undefined,
+      diff,
+      stats,
+      truncated,
+    });
   }
+  return out;
+}
+
+function mapPart(part: Record<string, unknown>, delta: string | undefined, state: OpencodeMapState): ServerMessage[] {
+  const messageId = str(part.messageID);
+  if (messageId && state.roles.get(messageId) === "user") return [];
+  const type = str(part.type) || "";
+  if (type === "text") {
+    if (part.synthetic === true || part.ignored === true) return [];
+    return textDelta(state, str(part.id) || "text", typeof part.text === "string" ? part.text : "", delta, "text");
+  }
+  if (type === "reasoning") {
+    return textDelta(state, str(part.id) || "reasoning", typeof part.text === "string" ? part.text : "", delta, "thinking");
+  }
+  if (type === "tool") return mapToolPart(part, state);
   return [];
+}
+
+/** An OpenCode error object (`{ name, data: { message } }`) in the operator's words. */
+export function opencodeErrorMessage(error: unknown): string | undefined {
+  const rec = asRecord(error);
+  if (!rec) return str(error);
+  return str(asRecord(rec.data)?.message) ?? str(rec.message) ?? str(rec.name);
+}
+
+/** The operator's own cancel ends the message with this; it is not a failure. */
+function isAbort(error: unknown): boolean {
+  return asRecord(error)?.name === "MessageAbortedError";
+}
+
+function mapMessageInfo(info: Record<string, unknown>, state: OpencodeMapState): ServerMessage[] {
+  const id = str(info.id);
+  const role = str(info.role);
+  if (id && role) state.roles.set(id, role);
+  if (role !== "assistant" || !id) return [];
+  const out: ServerMessage[] = [];
+  if (info.error && !isAbort(info.error)) {
+    out.push({ type: "run.error", message: opencodeErrorMessage(info.error) || "Run failed", phase: "run" });
+  }
+  const completed = num(asRecord(info.time)?.completed);
+  const tokens = asRecord(info.tokens);
+  if (completed && tokens && !state.billed.has(id)) {
+    state.billed.add(id);
+    const cache = asRecord(tokens.cache) ?? {};
+    const input = (num(tokens.input) ?? 0) + (num(cache.read) ?? 0) + (num(cache.write) ?? 0);
+    const output = num(tokens.output);
+    if (input || output) out.push({ type: "run.usage", inputTokens: input || undefined, outputTokens: output });
+  }
+  return out;
 }
 
 export function opencodeSessionId(event: unknown): string | undefined {
   const rec = asRecord(event);
   if (!rec) return undefined;
   const props = asRecord(rec.properties) ?? rec;
-  return str(rec.sessionID) || str(rec.sessionId) || str(props.sessionID) || str(props.sessionId);
+  return (
+    str(asRecord(props.part)?.sessionID) ||
+    str(asRecord(props.info)?.sessionID) ||
+    str(props.sessionID) ||
+    str(rec.sessionID)
+  );
 }
 
 /** Map an OpenCode SSE/SDK event to Glassys protocol events. */
 export function mapOpencodeEvent(
   event: unknown,
-  tools = new Map<string, string>(),
-  snapshots = new Map<string, string>(),
+  state: OpencodeMapState = opencodeMapState(),
   sessionId?: string,
 ): ServerMessage[] {
   if (sessionId) {
@@ -113,54 +172,28 @@ export function mapOpencodeEvent(
   const rec = asRecord(event);
   if (!rec) return [];
   const type = str(rec.type) || "";
-  const props = asRecord(rec.properties) ?? rec;
-  if (type === "message.part.updated" || type === "session.next.text.delta" || type.endsWith("text.delta")) {
-    const part = props.part ?? props;
-    const text = str(asRecord(part)?.text) || str(props.delta) || str(props.text);
-    const id = str(asRecord(part)?.id) || str(props.id) || type;
-    if (text && (type.includes("reason") || asRecord(part)?.type === "reasoning")) {
-      return snapshotDelta(snapshots, id, text, "thinking");
-    }
-    if (text) return snapshotDelta(snapshots, id, text, "text");
-    return mapPart(part, tools, snapshots);
+  const props = asRecord(rec.properties) ?? {};
+  if (type === "message.updated") {
+    const info = asRecord(props.info);
+    return info ? mapMessageInfo(info, state) : [];
   }
-  if (type.includes("reasoning")) {
-    const text = str(props.delta) || str(props.text);
-    return text ? snapshotDelta(snapshots, "reasoning", text, "thinking") : [];
+  if (type === "message.part.updated") {
+    const part = asRecord(props.part);
+    return part ? mapPart(part, str(props.delta), state) : [];
   }
-  if (type === "session.idle" || type === "session.idle.updated") return [];
-  if (type === "session.usage" || type.endsWith(".usage")) {
-    const usage = asRecord(props.usage) ?? asRecord(props.tokens) ?? asRecord(rec.usage) ?? props;
-    const inputTokens =
-      typeof usage.input_tokens === "number"
-        ? usage.input_tokens
-        : typeof usage.inputTokens === "number"
-          ? usage.inputTokens
-          : typeof usage.input === "number"
-            ? usage.input
-            : undefined;
-    const outputTokens =
-      typeof usage.output_tokens === "number"
-        ? usage.output_tokens
-        : typeof usage.outputTokens === "number"
-          ? usage.outputTokens
-          : typeof usage.output === "number"
-            ? usage.output
-            : undefined;
-    if (inputTokens == null && outputTokens == null) return [];
-    return [{ type: "run.usage", inputTokens, outputTokens }];
+  if (type === "session.error") {
+    if (isAbort(props.error)) return [];
+    return [{ type: "run.error", message: opencodeErrorMessage(props.error) || "Run failed", phase: "run" }];
   }
-  if (type === "session.error" || type === "error") {
-    return [{ type: "run.error", message: str(props.message) || str(props.error) || "Run failed", phase: "run" }];
-  }
-  if (props.part) return mapPart(props.part, tools, snapshots);
   return [];
 }
 
 export function isOpencodeIdle(event: unknown): boolean {
   const rec = asRecord(event);
   const type = rec ? str(rec.type) : "";
-  return type === "session.idle" || type === "session.idle.updated";
+  if (type === "session.idle") return true;
+  /* Newer servers report idleness as a status change. */
+  return type === "session.status" && asRecord(asRecord(rec?.properties)?.status)?.type === "idle";
 }
 
 /** Leftover idle from a previous prompt must not end the next send. */
@@ -170,6 +203,15 @@ export function isStaleOpencodeIdle(event: unknown, sawRunEvent: boolean, prompt
 
 export function isOpencodeError(event: unknown): boolean {
   const rec = asRecord(event);
-  const type = rec ? str(rec.type) : "";
-  return type === "session.error" || type === "error";
+  if (rec?.type !== "session.error") return false;
+  return !isAbort(asRecord(rec.properties)?.error);
+}
+
+/** A permission request: OpenCode's "ask" policy, waiting for an answer nobody is there to give. */
+export function opencodePermission(event: unknown): { id: string; title?: string; callId?: string } | null {
+  const rec = asRecord(event);
+  if (rec?.type !== "permission.updated") return null;
+  const props = asRecord(rec.properties) ?? {};
+  const id = str(props.id);
+  return id ? { id, title: str(props.title), callId: str(props.callID) } : null;
 }

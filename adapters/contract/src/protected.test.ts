@@ -43,3 +43,10 @@ describe("commandTouchesProtectedPath", () => {
     expect(commandTouchesProtectedPath("ls ./data", clone, [data])).toBe(true);
   });
 });
+
+describe("isProtectedPath sibling names", () => {
+  it("treats an entry named like ..foo inside the directory as inside it", () => {
+    expect(isProtectedPath("/srv/data/..cache/x", "/", ["/srv/data"])).toBe(true);
+    expect(isProtectedPath("/srv/other", "/", ["/srv/data"])).toBe(false);
+  });
+});

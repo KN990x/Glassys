@@ -9,9 +9,10 @@ import {
   type AdapterLoginOptions,
   type AdapterRun,
   type AdapterSession,
+  usageFrom,
 } from "@glassys/adapter-contract";
 import { optionBool, optionStringArray, type AgentConfig, type ModelParam, type SettingSource } from "@glassys/protocol";
-import { mapCursorDelta } from "./mapper.js";
+import { cursorMapState, mapCursorDelta } from "./mapper.js";
 import { runResultErrorMessage, wrapSdkError } from "./errors.js";
 import {
   CURSOR_DEFAULT_MODEL,
@@ -84,6 +85,7 @@ class CursorSession implements AdapterSession {
       mimeType: p.mime,
     }));
     const prompt = images.length ? { text: promptText, images } : promptText;
+    const mapState = cursorMapState();
     let run: Awaited<ReturnType<typeof this.agent.send>>;
     try {
       run = await this.agent.send(prompt, {
@@ -94,12 +96,13 @@ class CursorSession implements AdapterSession {
             }
           : undefined,
         onDelta: ({ update }) => {
-          for (const event of mapCursorDelta(update)) onEvent(event);
+          for (const event of mapCursorDelta(update, mapState)) onEvent(event);
         },
         local: localForSend(this.opts, sendOpts?.force),
       });
     } catch (err) {
-      wrapSdkError(err, "run");
+      /* send() threw: the run never started, so this is a startup failure, not a run that failed. */
+      wrapSdkError(err, "startup");
     }
 
     return {
@@ -113,14 +116,8 @@ class CursorSession implements AdapterSession {
       wait: async () => {
         try {
           const result = await run.wait();
-          const usage = result && typeof result === "object" ? (result as { usage?: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } }).usage : undefined;
-          if (usage) {
-            const inputTokens = usage.inputTokens ?? usage.promptTokens;
-            const outputTokens = usage.outputTokens ?? usage.completionTokens;
-            if (inputTokens || outputTokens) {
-              onEvent({ type: "run.usage", inputTokens, outputTokens });
-            }
-          }
+          const usage = usageFrom(result && typeof result === "object" ? (result as { usage?: unknown }).usage : undefined);
+          if (usage && (usage.inputTokens || usage.outputTokens)) onEvent({ type: "run.usage", ...usage });
           if (result.status === "cancelled") return "cancelled";
           if (result.status === "error") {
             onEvent({ type: "run.error", message: runResultErrorMessage(result), phase: "run" });

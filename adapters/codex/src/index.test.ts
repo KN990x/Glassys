@@ -2,23 +2,35 @@ import { describe, expect, it, vi } from "vitest";
 
 const calls: Array<{ kind: "start" | "resume"; id?: string; model?: string }> = [];
 const sandboxes: Array<string | undefined> = [];
+const efforts: Array<string | undefined> = [];
+/* Scripted turns: each runStreamed consumes the next list of events. */
+const scripted: unknown[][] = [];
+const inputs: unknown[] = [];
 
 vi.mock("@openai/codex-sdk", () => {
   class FakeThread {
     constructor(public id: string | null) {}
-    async runStreamed() {
-      return { events: (async function* () {})() };
+    async runStreamed(input: unknown) {
+      inputs.push(input);
+      const events = scripted.shift() ?? [];
+      return {
+        events: (async function* () {
+          for (const e of events) yield e;
+        })(),
+      };
     }
   }
   class Codex {
-    startThread(opts: { model?: string; sandboxMode?: string }) {
+    startThread(opts: { model?: string; sandboxMode?: string; modelReasoningEffort?: string }) {
       calls.push({ kind: "start", model: opts.model });
       sandboxes.push(opts.sandboxMode);
+      efforts.push(opts.modelReasoningEffort);
       return new FakeThread(null);
     }
-    resumeThread(id: string, opts: { model?: string; sandboxMode?: string }) {
+    resumeThread(id: string, opts: { model?: string; sandboxMode?: string; modelReasoningEffort?: string }) {
       calls.push({ kind: "resume", id, model: opts.model });
       sandboxes.push(opts.sandboxMode);
+      efforts.push(opts.modelReasoningEffort);
       return new FakeThread(id);
     }
   }
@@ -72,5 +84,40 @@ describe("codex sandbox mode", () => {
   it("drops an unknown mode from the saved config", () => {
     const agent = { adapter: "codex", cwd: "/tmp", model: "", modelParams: [], options: { sandboxMode: "yolo" } };
     expect(codexAdapter.normalizeConfig!(agent).options).toEqual({});
+  });
+});
+
+describe("codex effort, images and lost threads", () => {
+  it("opens the thread with the operator's effort and reopens it when effort changes", async () => {
+    efforts.length = 0;
+    const session = await codexAdapter.create({ ...opts, modelParams: [{ id: "effort", value: "high" }] });
+    await (await session.send("hi", () => undefined, { model: "gpt-5.6-sol", modelParams: [{ id: "effort", value: "low" }] } as never)).wait();
+    expect(efforts).toEqual(["high", "low"]);
+  });
+
+  it("sends image attachments as local_image input", async () => {
+    inputs.length = 0;
+    const session = await codexAdapter.create(opts);
+    const attachments = [{ path: "/w/.glassys-uploads/1-a.png", mime: "image/png", name: "a.png" }];
+    await (await session.send("look", () => undefined, { attachments })).wait();
+    expect(inputs.at(-1)).toEqual([
+      expect.objectContaining({ type: "text" }),
+      { type: "local_image", path: "/w/.glassys-uploads/1-a.png" },
+    ]);
+  });
+
+  it("starts a new thread and resends when the stored one is gone", async () => {
+    calls.length = 0;
+    scripted.push(
+      [{ type: "turn.failed", error: { message: "no rollout found for thread id old" } }],
+      [{ type: "thread.started", thread_id: "new" }, { type: "item.completed", item: { id: "a", type: "agent_message", text: "fresh" } }, { type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 1, reasoning_output_tokens: 0 } }],
+    );
+    const session = await codexAdapter.resume("old", opts);
+    const events: Array<{ type: string }> = [];
+    const run = await session.send("hi", (e) => events.push(e));
+    expect(await run.wait()).toBe("finished");
+    expect(calls.map((c) => c.kind)).toEqual(["resume", "start"]);
+    expect(events.filter((e) => e.type === "run.error")).toEqual([]);
+    expect(session.agentId).toBe("new");
   });
 });

@@ -1,7 +1,34 @@
 [
   { "type": "thinking-delta", "text": "Inspect the repo" },
   { "type": "thinking-completed", "thinkingDurationMs": 800 },
-  { "type": "tool-call-started", "callId": "1", "toolCall": { "name": "read", "args": { "path": "README.md" } } },
-  { "type": "tool-call-completed", "callId": "1", "toolCall": { "name": "read", "result": { "contents": "# hi" } } },
+  { "type": "tool-call-started", "callId": "1", "toolCall": { "type": "read", "args": { "path": "README.md" } } },
+  {
+    "type": "tool-call-completed",
+    "callId": "1",
+    "toolCall": { "type": "read", "args": { "path": "README.md" }, "result": { "status": "success", "value": { "content": "# hi", "totalLines": 1 } } }
+  },
+  { "type": "tool-call-started", "callId": "2", "toolCall": { "type": "shell", "args": { "command": "false" } } },
+  { "type": "shell-output-delta", "event": { "case": "start", "value": {} } },
+  { "type": "shell-output-delta", "event": { "case": "stderr", "value": { "data": "boom\n" } } },
+  { "type": "shell-output-delta", "event": { "case": "exit", "value": { "code": 1, "cwd": "/w", "aborted": false } } },
+  {
+    "type": "tool-call-completed",
+    "callId": "2",
+    "toolCall": {
+      "type": "shell",
+      "args": { "command": "false" },
+      "result": { "status": "success", "value": { "exitCode": 1, "signal": "", "stdout": "", "stderr": "boom\n", "executionTime": 4 } }
+    }
+  },
+  { "type": "tool-call-started", "callId": "3", "toolCall": { "type": "edit", "args": { "path": "src/a.ts" } } },
+  {
+    "type": "tool-call-completed",
+    "callId": "3",
+    "toolCall": {
+      "type": "edit",
+      "args": { "path": "src/a.ts" },
+      "result": { "status": "success", "value": { "linesAdded": 1, "linesRemoved": 1, "diffString": "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new" } }
+    }
+  },
   { "type": "text-delta", "text": "This repo is Glassys." }
 ]

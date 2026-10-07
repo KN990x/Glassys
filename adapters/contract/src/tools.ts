@@ -1,5 +1,9 @@
 import type { ToolKind } from "@glassys/protocol";
 import { asRecord } from "./list.js";
+import { diffStats, unifiedDiff } from "./diff.js";
+import { str } from "./util.js";
+
+export { diffStats };
 
 export function toolKindFromName(name: string | undefined): ToolKind {
   const n = (name ?? "").toLowerCase().replace(/[_-]/g, "");
@@ -18,32 +22,13 @@ export function toolKindFromName(name: string | undefined): ToolKind {
   return "other";
 }
 
-export function diffStats(diff: string): { add: number; del: number } {
-  let add = 0;
-  let del = 0;
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@")) continue;
-    if (line.startsWith("+")) add += 1;
-    else if (line.startsWith("-")) del += 1;
-  }
-  return { add, del };
-}
-
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
-}
-
 export function looksLikeDiff(text: string): boolean {
   return /^(diff --git |--- |\+\+\+ |@@ )/m.test(text);
 }
 
-export function unifiedFromReplacement(path: string, oldText: string, newText: string): string {
-  const file = path || "file";
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-  const oldBody = oldLines.map((line) => `-${line}`).join("\n");
-  const newBody = newLines.map((line) => `+${line}`).join("\n");
-  return `--- a/${file}\n+++ b/${file}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n${oldBody}\n${newBody}`;
+/** Whole-file replacement as a unified diff (diffed line by line, not one big hunk). */
+export function unifiedFromReplacement(path: string, oldText: string | null | undefined, newText: string): string {
+  return unifiedDiff(path, oldText, newText);
 }
 
 /** Pull a unified diff out of an SDK payload when the vendor already provided one. */
@@ -79,7 +64,7 @@ export function extractDiff(value: unknown): { diff?: string; stats?: { add: num
   const type = str(rec.type);
   if (type === "diff") {
     const path = str(rec.path) || "file";
-    const oldText = typeof rec.oldText === "string" ? rec.oldText : "";
+    const oldText = typeof rec.oldText === "string" ? rec.oldText : null;
     const newText = typeof rec.newText === "string" ? rec.newText : "";
     const unified = unifiedFromReplacement(path, oldText, newText);
     return { diff: unified, stats: diffStats(unified), truncated: truncated || undefined };
@@ -87,17 +72,21 @@ export function extractDiff(value: unknown): { diff?: string; stats?: { add: num
   return truncated ? { truncated: true } : {};
 }
 
+/**
+ * Whether a tool call was refused by a permission policy (Auto-review, auto-run off, a deny
+ * rule). A call cut short by the operator's cancel is not a denial.
+ */
 export function toolDenied(status?: string, error?: string): boolean {
   const s = (status || "").toLowerCase();
   const e = (error || "").toLowerCase();
   return (
     s === "denied" ||
     s === "rejected" ||
-    s === "cancelled" ||
     e.includes("denied") ||
+    e.includes("not allowed") ||
+    e.includes("rejected permission") ||
     e.includes("auto-review") ||
-    e.includes("auto review") ||
-    e.includes("cancelled")
+    e.includes("auto review")
   );
 }
 

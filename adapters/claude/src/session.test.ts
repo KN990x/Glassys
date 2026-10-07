@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 /* A scripted Claude process: each prompt it reads yields the messages queued for that turn. */
 const turns: unknown[][] = [];
 let interrupted = 0;
+const started: Array<Record<string, unknown>> = [];
+const modelsSet: string[] = [];
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
-  query: ({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+  query: ({ prompt, options }: { prompt: AsyncIterable<unknown>; options: Record<string, unknown> }) => {
+    started.push(options);
     const out = (async function* () {
       for await (const _msg of prompt) {
         void _msg;
@@ -22,6 +25,9 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
         interrupted += 1;
       },
       close: () => undefined,
+      setModel: async (model?: string) => {
+        if (model) modelsSet.push(model);
+      },
       [Symbol.asyncIterator]: () => out,
     };
   },
@@ -64,5 +70,44 @@ describe("claude session", () => {
     const run = await session.send("one", () => undefined);
     expect(await run.wait()).toBe("finished");
     expect(session.closed).toBe(true);
+  });
+
+  it("starts a new conversation and resends when the stored one is gone", async () => {
+    turns.push(
+      [{ type: "result", subtype: "error_during_execution", is_error: true, errors: ["No conversation found with session ID: old"] }],
+      [text("fresh answer"), result()],
+    );
+    const session = await claudeAdapter.resume("old", opts);
+    expect(started.at(-1)).toMatchObject({ resume: "old" });
+    const events: Array<{ type: string; text?: string }> = [];
+    const run = await session.send("hello", (e) => events.push(e as { type: string; text?: string }));
+    expect(await run.wait()).toBe("finished");
+    expect(started.at(-1)?.resume).toBeUndefined();
+    expect(events.filter((e) => e.type === "run.error")).toEqual([]);
+    expect(events.map((e) => e.text).join("")).toContain("fresh answer");
+    expect(session.agentId).toBe("s1");
+    await session.dispose();
+  });
+
+  it("switches model in place instead of restarting the process", async () => {
+    turns.push([text("ok"), result()]);
+    const session = await claudeAdapter.create(opts);
+    const before = started.length;
+    const run = await session.send("hi", () => undefined, { model: "opus" });
+    expect(await run.wait()).toBe("finished");
+    expect(modelsSet.at(-1)).toBe("opus");
+    expect(started.length).toBe(before);
+    await session.dispose();
+  });
+
+  it("never bypasses permissions when auto-run is off", async () => {
+    const { claudePermissionMode } = await import("./index.js");
+    expect(claudePermissionMode({ autoRun: false, permissionMode: "bypassPermissions" })).toBe("dontAsk");
+    expect(claudePermissionMode({ autoRun: false, permissionMode: "plan" })).toBe("plan");
+    expect(claudePermissionMode({ autoRun: true })).toBe("bypassPermissions");
+    expect(claudeAdapter.normalizeConfig?.({ adapter: "claude", cwd: "/", model: "", modelParams: [], options: { autoRun: false, permissionMode: "bypassPermissions" } }).options).toMatchObject({
+      autoRun: false,
+      permissionMode: "dontAsk",
+    });
   });
 });

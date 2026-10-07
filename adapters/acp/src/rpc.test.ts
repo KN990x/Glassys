@@ -52,12 +52,37 @@ describe("JsonRpcStdio stderr", () => {
     await rpc.close();
   });
 
-  it("round-trips JSON-RPC with Content-Length framing", async () => {
+  it("speaks NDJSON first, as ACP agents never write before initialize", async () => {
     const rpc = new JsonRpcStdio(
       process.execPath,
       [
         "-e",
         `
+        const rl = require("readline").createInterface({ input: process.stdin });
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { ok: true } }) + "\\n");
+        });
+        `,
+      ],
+      process.cwd(),
+    );
+    await expect(rpc.request("initialize", {}, 3000)).resolves.toEqual({ ok: true });
+    await rpc.close();
+  });
+
+  it("switches to Content-Length framing when the agent writes it", async () => {
+    const rpc = new JsonRpcStdio(
+      process.execPath,
+      [
+        "-e",
+        `
+        const frame = (obj) => {
+          const payload = Buffer.from(JSON.stringify(obj));
+          process.stdout.write("Content-Length: " + payload.length + "\\r\\n\\r\\n");
+          process.stdout.write(payload);
+        };
+        frame({ jsonrpc: "2.0", method: "hello", params: {} });
         let buf = Buffer.alloc(0);
         process.stdin.on("data", (chunk) => {
           buf = Buffer.concat([buf, chunk]);
@@ -69,16 +94,36 @@ describe("JsonRpcStdio stderr", () => {
           const start = split + 4;
           if (buf.length < start + len) return;
           const msg = JSON.parse(buf.subarray(start, start + len).toString("utf8"));
-          const res = JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { ok: true } });
-          const payload = Buffer.from(res);
-          process.stdout.write("Content-Length: " + payload.length + "\\r\\n\\r\\n");
-          process.stdout.write(payload);
+          frame({ jsonrpc: "2.0", id: msg.id, result: { ok: true } });
         });
         `,
       ],
       process.cwd(),
     );
-    await expect(rpc.request("initialize", {})).resolves.toEqual({ ok: true });
+    const greeted = new Promise((resolve) => rpc.onNotification("hello", resolve));
+    await greeted;
+    await expect(rpc.request("initialize", {}, 3000)).resolves.toEqual({ ok: true });
+    await rpc.close();
+  });
+
+  it("answers an unknown agent request with method-not-found", async () => {
+    const rpc = new JsonRpcStdio(
+      process.execPath,
+      [
+        "-e",
+        `
+        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 7, method: "x/unknown", params: {} }) + "\\n");
+        const rl = require("readline").createInterface({ input: process.stdin });
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          if (msg.id === 7) process.stdout.write(JSON.stringify({ jsonrpc: "2.0", method: "seen", params: msg.error }) + "\\n");
+        });
+        `,
+      ],
+      process.cwd(),
+    );
+    const seen = await new Promise((resolve) => rpc.onNotification("seen", resolve));
+    expect(seen).toMatchObject({ code: -32601 });
     await rpc.close();
   });
 });

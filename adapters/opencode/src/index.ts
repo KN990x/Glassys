@@ -13,7 +13,16 @@ import {
   type PromptAttachment,
 } from "@glassys/adapter-contract";
 import { type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
-import { isOpencodeError, isOpencodeIdle, isStaleOpencodeIdle, mapOpencodeEvent, opencodeSessionId } from "./mapper.js";
+import {
+  isOpencodeError,
+  isOpencodeIdle,
+  isStaleOpencodeIdle,
+  mapOpencodeEvent,
+  opencodeErrorMessage,
+  opencodeMapState,
+  opencodePermission,
+  opencodeSessionId,
+} from "./mapper.js";
 import { EventPump } from "./pump.js";
 
 export { EventPump } from "./pump.js";
@@ -33,6 +42,10 @@ function str(v: unknown): string | undefined {
 let envLock = Promise.resolve();
 let sharedServer: Promise<OcBundle> | null = null;
 let sharedKey = "";
+/** Set when a session's event stream ended on its own: the `opencode serve` child is likely gone. */
+let serverSuspect = false;
+/** Runs in flight on the shared server; a key change must not pull it out from under them. */
+let activeRuns = 0;
 
 async function withApiKey<T>(apiKey: string | undefined, fn: () => Promise<T>): Promise<T> {
   let release!: () => void;
@@ -58,7 +71,10 @@ async function withApiKey<T>(apiKey: string | undefined, fn: () => Promise<T>): 
 
 async function getSharedServer(apiKey?: string): Promise<OcBundle> {
   const key = apiKey ?? "";
-  if (sharedServer && sharedKey !== key) await closeSharedServer();
+  /* A new key applies once nothing is running on the old server. */
+  const keyChanged = sharedServer !== null && sharedKey !== key && activeRuns === 0;
+  if (sharedServer && (keyChanged || (serverSuspect && activeRuns === 0))) await closeSharedServer();
+  serverSuspect = false;
   if (!sharedServer) {
     sharedKey = key;
     sharedServer = withApiKey(apiKey, () =>
@@ -70,6 +86,19 @@ async function getSharedServer(apiKey?: string): Promise<OcBundle> {
     });
   }
   return sharedServer;
+}
+
+/**
+ * The SDK client returns `{ error }` instead of throwing (heyapi's `throwOnError` is off), so a
+ * failed call looks like success unless every result is checked.
+ */
+export async function checked<T = unknown>(call: Promise<T>): Promise<T> {
+  const result = await call;
+  const rec = asRecord(result);
+  if (rec && rec.error !== undefined && rec.error !== null) {
+    throw new Error(opencodeErrorMessage(rec.error) || JSON.stringify(rec.error));
+  }
+  return result;
 }
 
 function sessionIdFrom(created: unknown): string | undefined {
@@ -153,11 +182,10 @@ export function collectModels(raw: unknown): ModelCatalogItem[] {
     }
     return models;
   }
-  const map = rec ? ((rec.provider ?? rec.providers ?? rec) as unknown) : unwrapped;
-  const mapRec = asRecord(map) ?? {};
+  /* Only an explicit provider map: any other object (a whole config) is not a model list. */
+  const mapRec = asRecord(rec?.provider) ?? asRecord(rec?.providers) ?? {};
   for (const [providerId, val] of Object.entries(mapRec)) {
-    if (providerId === "provider" || providerId === "providers" || providerId === "data") continue;
-    addProviderModels(models, providerId, asRecord(val)?.models ?? val);
+    addProviderModels(models, providerId, asRecord(val)?.models);
   }
   return models;
 }
@@ -168,8 +196,6 @@ function foreignSession(event: unknown, sessionId: string): boolean {
 }
 
 class OpencodeSession implements AdapterSession {
-  private tools = new Map<string, string>();
-  private snapshots = new Map<string, string>();
 
   constructor(
     readonly agentId: string,
@@ -197,24 +223,30 @@ class OpencodeSession implements AdapterSession {
           id = undefined;
         } else {
           try {
-            await get({
-              path: { id },
-              query: { directory: opts.cwd },
-            });
+            await checked(
+              get({
+                path: { id },
+                query: { directory: opts.cwd },
+              }),
+            );
           } catch (err) {
             throw new AdapterError(`OpenCode session could not be resumed: ${errorMessage(err)}`, "startup");
           }
         }
       }
       if (!id) {
-        const created = await bundle.client.session.create({
-          body: { title: "Glassys" },
-          query: { directory: opts.cwd },
-        } as never);
+        const created = await checked(
+          bundle.client.session.create({
+            body: { title: "Glassys" },
+            query: { directory: opts.cwd },
+          } as never),
+        );
         id = sessionIdFrom(created);
       }
       if (!id) throw new AdapterError("OpenCode did not return a session id", "startup");
-      const pump = new EventPump(await eventStream(bundle.client, opts.cwd));
+      const pump = new EventPump(await eventStream(bundle.client, opts.cwd), () => {
+        serverSuspect = true;
+      });
       return new OpencodeSession(id, bundle.client, opts.model, pump, opts.cwd);
     } catch (err) {
       throw err instanceof AdapterError ? err : new AdapterError(errorMessage(err), "startup");
@@ -232,15 +264,20 @@ class OpencodeSession implements AdapterSession {
     const promptText = promptWithAttachments(text, sendOpts?.attachments);
     return pendingRun(runId, async ({ signal, isCancelled }) => {
       this.pump.drain();
-      const prompt = this.client.session.prompt({
-        path: { id: this.agentId },
-        query: { directory: this.directory },
-        body: {
-          parts: [{ type: "text", text: promptText }],
-          ...(model ? { model } : {}),
-        },
-      } as never);
+      activeRuns += 1;
+      const state = opencodeMapState();
+      const prompt = checked(
+        this.client.session.prompt({
+          path: { id: this.agentId },
+          query: { directory: this.directory },
+          body: {
+            parts: [{ type: "text", text: promptText }],
+            ...(model ? { model } : {}),
+          },
+        } as never),
+      );
       let promptSettled = false;
+      let promptError: unknown;
       let idle = false;
       let failed = false;
       let sawRunEvent = false;
@@ -250,20 +287,33 @@ class OpencodeSession implements AdapterSession {
         promptSettled = true;
         this.pump.wake();
       };
-      prompt.then(settle, settle);
+      prompt.then(settle, (err) => {
+        promptError = err;
+        settle();
+      });
+      const handle = async (event: unknown) => {
+        if (foreignSession(event, this.agentId)) return;
+        const permission = opencodePermission(event);
+        if (permission) {
+          /* Glassys has no one to ask: refuse, as Cursor's Auto-review and Claude's dontAsk do. */
+          await this.reject(permission.id);
+          return;
+        }
+        const mapped = mapOpencodeEvent(event, state, this.agentId);
+        if (mapped.length) sawRunEvent = true;
+        for (const ev of mapped) {
+          onEvent(ev);
+          if (ev.type === "run.error") failed = true;
+        }
+        if (isOpencodeError(event)) failed = true;
+      };
       try {
         while (!isCancelled()) {
           const waitMs = promptSettled ? OPENCODE_DRAIN_MS : OPENCODE_IDLE_MS;
           const next = await this.pump.next(waitMs, signal);
           if (isCancelled()) break;
           if (next.event) {
-            const mapped = mapOpencodeEvent(next.event, this.tools, this.snapshots, this.agentId);
-            if (mapped.length) sawRunEvent = true;
-            for (const ev of mapped) {
-              onEvent(ev);
-              if (ev.type === "run.error") failed = true;
-            }
-            if (isOpencodeError(next.event) && !foreignSession(next.event, this.agentId)) failed = true;
+            await handle(next.event);
             if (isOpencodeIdle(next.event) && !foreignSession(next.event, this.agentId)) {
               if (isStaleOpencodeIdle(next.event, sawRunEvent, promptSettled)) continue;
               idle = true;
@@ -283,32 +333,49 @@ class OpencodeSession implements AdapterSession {
         }
         for (const leftover of this.pump.drain()) {
           if (isCancelled()) break;
-          for (const ev of mapOpencodeEvent(leftover, this.tools, this.snapshots, this.agentId)) {
-            onEvent(ev);
-            if (ev.type === "run.error") failed = true;
-          }
-          if (isOpencodeError(leftover) && !foreignSession(leftover, this.agentId)) failed = true;
+          await handle(leftover);
         }
         if (isCancelled()) {
           try {
-            await this.client.session.abort({ path: { id: this.agentId }, query: { directory: this.directory } } as never);
+            await checked(this.client.session.abort({ path: { id: this.agentId }, query: { directory: this.directory } } as never));
           } catch {
             /* ignore */
           }
           await Promise.race([prompt.catch(() => undefined), new Promise((r) => setTimeout(r, OPENCODE_DRAIN_MS))]);
           return "cancelled";
         }
-        try {
-          await prompt;
-        } catch (err) {
-          if (!idle && !failed) throw new AdapterError(errorMessage(err), "run");
+        await prompt.catch(() => undefined);
+        if (promptError !== undefined && !failed) {
+          /* A rejected prompt (bad model, auth) produces no events; say why instead of "finished". */
+          if (idle && sawRunEvent) return "finished";
+          throw new AdapterError(errorMessage(promptError), "run");
         }
         return failed ? "error" : "finished";
       } catch (err) {
         if (isCancelled()) return "cancelled";
         throw err;
+      } finally {
+        activeRuns -= 1;
       }
     });
+  }
+
+  private async reject(permissionId: string): Promise<void> {
+    const reply = (this.client as unknown as {
+      postSessionIdPermissionsPermissionId?: (args: unknown) => Promise<unknown>;
+    }).postSessionIdPermissionsPermissionId;
+    if (!reply) return;
+    try {
+      await checked(
+        reply.call(this.client, {
+          path: { id: this.agentId, permissionID: permissionId },
+          query: { directory: this.directory },
+          body: { response: "reject" },
+        }),
+      );
+    } catch {
+      /* the tool part still ends with its own error */
+    }
   }
 
   /** A dropped event stream would leave every later run blind; the runtime reopens the session. */
@@ -368,8 +435,8 @@ export const opencodeAdapter: Adapter = {
       };
       /* The workspace's own opencode.json can add providers; ask in its directory. */
       const args = cwd ? { query: { directory: cwd } } : undefined;
-      let models = collectModels(await client.config?.get?.(args));
-      if (!models.length) models = collectModels(await client.config?.providers?.(args));
+      /* The authenticated providers, not the raw config: a config without `provider` is not a model list. */
+      const models = collectModels(await checked(client.config?.providers?.(args) ?? Promise.resolve(undefined)));
       if (!models.length) {
         return { models: FALLBACK, source: "fallback" as const, error: "No providers configured in OpenCode" };
       }

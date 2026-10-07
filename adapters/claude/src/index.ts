@@ -14,7 +14,7 @@ import {
   type PromptAttachment,
 } from "@glassys/adapter-contract";
 import { mergeModelCatalog, optionBool, optionString, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
-import { claudeRunStatus, claudeSessionId, isClaudeResult, mapClaudeMessage } from "./mapper.js";
+import { claudeMapState, claudeRunStatus, claudeSessionId, isClaudeResult, mapClaudeMessage } from "./mapper.js";
 
 export const CLAUDE_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "opus", displayName: "Opus" },
@@ -25,6 +25,7 @@ export const CLAUDE_STATIC_CATALOG: ModelCatalogItem[] = [
 type QueryHandle = {
   interrupt?: () => Promise<void>;
   close?: () => void;
+  setModel?: (model?: string) => Promise<void>;
   supportedModels?: () => Promise<Array<{ value?: string; displayName?: string; id?: string; name?: string }>>;
   [Symbol.asyncIterator]: () => AsyncIterator<unknown>;
 };
@@ -99,27 +100,6 @@ class PromptQueue {
   }
 }
 
-function waitUntil(pred: () => boolean, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearInterval(timer);
-      signal.removeEventListener("abort", done);
-      resolve();
-    };
-    const timer = setInterval(() => {
-      if (pred()) done();
-    }, 50);
-    if (signal.aborted || pred()) {
-      done();
-      return;
-    }
-    signal.addEventListener("abort", done);
-  });
-}
-
 function usableSessionId(id: string | undefined): id is string {
   return Boolean(id) && id !== "pending";
 }
@@ -185,10 +165,19 @@ function protectedPathHooks(opts: AdapterCreateOptions) {
   };
 }
 
+/**
+ * The permission mode Claude runs under. Auto-run off never yields `bypassPermissions`, whatever
+ * mode was stored: that pairing would let every tool run while Settings says auto-run is off.
+ */
+export function claudePermissionMode(options: Record<string, unknown> | undefined): string {
+  const autoRun = optionBool(options, "autoRun", true);
+  const stored = optionString(options, "permissionMode", "");
+  if (!autoRun) return stored && stored !== "bypassPermissions" ? stored : "dontAsk";
+  return stored || "bypassPermissions";
+}
+
 function queryOptions(opts: AdapterCreateOptions, extra: Record<string, unknown> = {}) {
-  const autoRun = optionBool(opts.options, "autoRun", true);
-  const permissionMode =
-    optionString(opts.options, "permissionMode", "") || (autoRun ? "bypassPermissions" : "dontAsk");
+  const permissionMode = claudePermissionMode(opts.options);
   return {
     ...protectedPathHooks(opts),
     cwd: opts.cwd,
@@ -201,13 +190,17 @@ function queryOptions(opts: AdapterCreateOptions, extra: Record<string, unknown>
   };
 }
 
+/** What Claude Code says when asked to resume a conversation it does not have. */
+const MISSING_SESSION = /no conversation found|session.*not found/i;
+
 class ClaudeSession implements AdapterSession {
-  private tools = new Map<string, string>();
   agentId: string;
   private model: string;
   private opts: AdapterCreateOptions;
   /** The Claude process ended, crashed or was closed: nothing will read the next prompt. */
   private ended = false;
+  /** Started with `resume` and no turn has gone through yet: a missing session shows up here. */
+  private resumeUnconfirmed: boolean;
 
   get closed(): boolean {
     return this.ended;
@@ -223,20 +216,22 @@ class ClaudeSession implements AdapterSession {
     this.agentId = agentId;
     this.model = opts.model || "sonnet";
     this.opts = opts;
+    this.resumeUnconfirmed = usableSessionId(agentId);
   }
 
   static async start(opts: AdapterCreateOptions, resumeId?: string): Promise<ClaudeSession> {
     const sdk = await loadSdk();
     const queue = new PromptQueue();
+    const resume = usableSessionId(resumeId) ? resumeId : undefined;
     const query = sdk.query({
       prompt: queue,
-      options: queryOptions(opts, resumeId ? { resume: resumeId } : {}),
+      options: queryOptions(opts, resume ? { resume } : {}),
     });
-    return new ClaudeSession(query, resumeId && usableSessionId(resumeId) ? resumeId : "", queue, query[Symbol.asyncIterator](), opts);
+    return new ClaudeSession(query, resume ?? "", queue, query[Symbol.asyncIterator](), opts);
   }
 
-  private async retarget(model: string): Promise<void> {
-    if (model === this.model) return;
+  /** Replace the Claude process, resuming this conversation unless `fresh`. */
+  private async restart(opts: AdapterCreateOptions, fresh = false): Promise<void> {
     this.queue.close();
     try {
       this.query.close?.();
@@ -244,16 +239,31 @@ class ClaudeSession implements AdapterSession {
       /* ignore */
     }
     const sdk = await loadSdk();
-    const nextOpts = { ...this.opts, model };
-    this.opts = nextOpts;
-    this.model = model;
+    this.opts = opts;
     this.queue = new PromptQueue();
+    if (fresh) this.agentId = "";
     this.query = sdk.query({
       prompt: this.queue,
-      options: queryOptions(nextOpts, usableSessionId(this.agentId) ? { resume: this.agentId } : {}),
+      options: queryOptions(opts, usableSessionId(this.agentId) ? { resume: this.agentId } : {}),
     });
     this.iterator = this.query[Symbol.asyncIterator]();
     this.ended = false;
+  }
+
+  /** Switch model in place when the SDK can; otherwise restart the process on the new model. */
+  private async retarget(model: string): Promise<void> {
+    if (model === this.model) return;
+    this.model = model;
+    if (this.query.setModel && !this.ended) {
+      try {
+        await this.query.setModel(model);
+        this.opts = { ...this.opts, model };
+        return;
+      } catch {
+        /* fall back to a restart */
+      }
+    }
+    await this.restart({ ...this.opts, model });
   }
 
   async send(
@@ -263,75 +273,79 @@ class ClaudeSession implements AdapterSession {
   ) {
     if (sendOpts?.model) await this.retarget(sendOpts.model);
     const id = randomUUID();
-    this.queue.push(text, sendOpts?.attachments);
+    return pendingRun(id, async ({ signal, isCancelled }) => {
+      const first = await this.turn(text, sendOpts?.attachments, onEvent, signal, isCancelled, this.resumeUnconfirmed);
+      if (first !== "missing-session") return first;
+      /* The stored conversation is gone (pruned, another machine): start a new one and send again. */
+      await this.restart(this.opts, true);
+      const retry = await this.turn(text, sendOpts?.attachments, onEvent, signal, isCancelled, false);
+      return retry === "missing-session" ? "error" : retry;
+    });
+  }
+
+  /**
+   * One prompt, read up to its result. A cancelled turn still ends with its own result once the
+   * interrupt lands; returning earlier left that result queued, and the next send took it for its
+   * own answer and finished at once, one turn out of step from then on.
+   */
+  private async turn(
+    text: string,
+    attachments: PromptAttachment[] | undefined,
+    onEvent: Parameters<AdapterSession["send"]>[1],
+    signal: AbortSignal,
+    isCancelled: () => boolean,
+    probeResume: boolean,
+  ): Promise<"finished" | "error" | "cancelled" | "missing-session"> {
+    this.queue.push(text, attachments);
     const query = this.query;
     const iterator = this.iterator;
-    const tools = this.tools;
-    return pendingRun(id, async ({ isCancelled }) => {
-      let stop = false;
-      let cancelledAt = 0;
-      const watch = (async () => {
-        while (!isCancelled() && !stop) await new Promise((r) => setTimeout(r, 50));
-        if (!isCancelled()) return;
-        cancelledAt = Date.now();
-        try {
-          await query.interrupt?.();
-        } catch {
-          /* ignore */
-        }
-      })();
-      const cancelExpired = () =>
-        isCancelled() && cancelledAt > 0 && Date.now() - cancelledAt > CLAUDE_CANCEL_TIMEOUT_MS;
-      /* An async iterator takes one next() at a time; a tick must not start a second one. */
-      let pending: Promise<{ kind: "msg"; v: Awaited<ReturnType<typeof iterator.next>> }> | null = null;
-      try {
-        const mapState = { sawStreamEvent: false };
-        while (!stop) {
-          if (cancelExpired()) {
-            try {
-              query.close?.();
-            } catch {
-              /* ignore */
-            }
-            this.ended = true;
-            return "cancelled";
-          }
-          if (!pending) {
-            pending = iterator.next().then((v) => ({ kind: "msg" as const, v }));
-            pending.catch(() => undefined);
-          }
-          const abortTick = new AbortController();
-          const next = await Promise.race([
-            pending,
-            waitUntil(() => stop || cancelExpired(), abortTick.signal).then(() => ({ kind: "tick" as const })),
-          ]);
-          abortTick.abort();
-          if (next.kind === "tick") continue;
-          pending = null;
-          if (next.v.done) {
-            this.ended = true;
-            return isCancelled() ? "cancelled" : "finished";
-          }
-          const sid = claudeSessionId(next.v.value);
-          if (sid) this.agentId = sid;
-          for (const event of mapClaudeMessage(next.v.value, tools, mapState)) onEvent(event);
-          /*
-           * A cancelled turn still ends with its own result once the interrupt lands. Read up to
-           * it: returning earlier left that result queued, and the next send took it for its own
-           * answer and finished at once, one turn out of step from then on.
-           */
-          if (isClaudeResult(next.v.value)) return claudeRunStatus(isCancelled(), next.v.value);
-        }
-        return isCancelled() ? "cancelled" : "finished";
-      } catch (err) {
-        /* The iterator threw: the Claude process is gone. */
-        this.ended = true;
-        throw err;
-      } finally {
-        stop = true;
-        void watch;
-      }
+    const mapState = claudeMapState();
+    let expireTimer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<"expired">((resolve) => {
+      const onAbort = () => {
+        void query.interrupt?.().catch(() => undefined);
+        expireTimer = setTimeout(() => resolve("expired"), CLAUDE_CANCEL_TIMEOUT_MS);
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
     });
+    try {
+      for (;;) {
+        const next = await Promise.race([iterator.next(), expired]);
+        if (next === "expired") {
+          try {
+            query.close?.();
+          } catch {
+            /* ignore */
+          }
+          this.ended = true;
+          return "cancelled";
+        }
+        if (next.done) {
+          this.ended = true;
+          return isCancelled() ? "cancelled" : "finished";
+        }
+        const message = next.value;
+        if (probeResume && isClaudeResult(message)) {
+          const errors = (message as { errors?: unknown }).errors;
+          if (Array.isArray(errors) && errors.some((e) => MISSING_SESSION.test(String(e)))) return "missing-session";
+        }
+        const sid = claudeSessionId(message);
+        if (sid) this.agentId = sid;
+        for (const event of mapClaudeMessage(message, mapState)) onEvent(event);
+        if (isClaudeResult(message)) {
+          this.resumeUnconfirmed = false;
+          return claudeRunStatus(isCancelled(), message);
+        }
+      }
+    } catch (err) {
+      /* The iterator threw: the Claude process is gone. */
+      this.ended = true;
+      if (probeResume && MISSING_SESSION.test(errorMessage(err))) return "missing-session";
+      throw err;
+    } finally {
+      if (expireTimer) clearTimeout(expireTimer);
+    }
   }
 
   async dispose(): Promise<void> {
@@ -401,9 +415,9 @@ export const claudeAdapter: Adapter = {
       ...agent,
       model: agent.model || "sonnet",
       options: {
-        autoRun: optionBool(agent.options, "autoRun", true),
-        permissionMode: optionString(agent.options, "permissionMode", optionBool(agent.options, "autoRun", true) ? "bypassPermissions" : "dontAsk"),
         ...agent.options,
+        autoRun: optionBool(agent.options, "autoRun", true),
+        permissionMode: claudePermissionMode(agent.options),
       },
     };
   },

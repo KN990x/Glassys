@@ -7,7 +7,8 @@ export class EventPump {
   private readonly abortCtl = new AbortController();
   private readonly iterator: AsyncIterator<unknown>;
 
-  constructor(stream: AsyncIterable<unknown>) {
+  /** `onEnd` fires when the stream ends on its own (not through `abort()`). */
+  constructor(stream: AsyncIterable<unknown>, onEnd?: () => void) {
     const iterator = stream[Symbol.asyncIterator]();
     this.iterator = iterator;
     void (async () => {
@@ -24,8 +25,10 @@ export class EventPump {
       } catch {
         /* subscribe ended */
       } finally {
+        const unexpected = !this.abortCtl.signal.aborted;
         this.ended = true;
         while (this.waiters.length) this.waiters.shift()?.();
+        if (unexpected) onEnd?.();
       }
     })();
   }

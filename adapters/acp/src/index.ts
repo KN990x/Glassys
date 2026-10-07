@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import {
   AdapterError,
@@ -13,6 +14,7 @@ import {
   type AdapterCreateOptions,
   type AdapterSession,
   type PromptAttachment,
+  usageFrom,
 } from "@glassys/adapter-contract";
 import {
   optionBool,
@@ -22,9 +24,11 @@ import {
   type AgentConfig,
   type ModelCatalogItem,
 } from "@glassys/protocol";
-import { JsonRpcStdio } from "./rpc.js";
+import { JsonRpcStdio, RpcError } from "./rpc.js";
 import { registerHostHandlers } from "./host.js";
-import { mapAcpUpdate } from "./mapper.js";
+import { acpMapState, mapAcpUpdate } from "./mapper.js";
+
+const GLASSYS_VERSION = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Agent default" }];
 export const ACP_CANCEL_TIMEOUT_MS = 20_000;
@@ -38,38 +42,53 @@ function commandOf(opts: AdapterCreateOptions): { command: string; args: string[
   return { command, args };
 }
 
+/** How long a setup-side request (model switch, authenticate) may take before the run gives up on it. */
+export const ACP_CONTROL_TIMEOUT_MS = 30_000;
+
+/** Ask the agent to use `model`. Agents without model selection keep their own default. */
 async function applySessionModel(rpc: JsonRpcStdio, sessionId: string, model: string): Promise<void> {
   if (!model || model === "default") return;
   try {
-    await rpc.request("session/set_model", { sessionId, modelId: model });
+    await rpc.request("session/set_model", { sessionId, modelId: model }, ACP_CONTROL_TIMEOUT_MS);
     return;
   } catch {
     /* ACP v1 uses config options for some agents */
   }
   try {
-    await rpc.request("session/set_config_option", { sessionId, id: "model", value: model });
+    await rpc.request("session/set_config_option", { sessionId, configId: "model", value: model }, ACP_CONTROL_TIMEOUT_MS);
   } catch {
     /* agent may not support model selection */
   }
 }
 
-async function authenticateIfNeeded(
+/** ACP's `auth_required` error: the agent wants `authenticate` before it opens a session. */
+export function isAcpAuthRequired(err: unknown): boolean {
+  if (!(err instanceof RpcError)) return false;
+  return err.code === -32000 || /auth/i.test(err.message);
+}
+
+/**
+ * Authenticate only when the agent asked for it. An agent that is already signed in must not be
+ * pushed through a login flow, which on a headless host may never finish.
+ */
+async function withAuthRetry<T>(
   rpc: JsonRpcStdio,
   init: Record<string, unknown> | undefined,
-  apiKey?: string,
-): Promise<void> {
-  const methods = Array.isArray(init?.authMethods) ? init.authMethods : [];
-  if (!methods.length) return;
-  const first = asRecord(methods[0]);
-  const methodId = typeof first?.id === "string" ? first.id : "";
-  if (!methodId) return;
+  open: () => Promise<T>,
+): Promise<T> {
   try {
-    await rpc.request("authenticate", {
-      methodId,
-      ...(apiKey ? { params: { apiKey } } : {}),
-    });
+    return await open();
   } catch (err) {
-    throw new AdapterError(`ACP authenticate failed: ${errorMessage(err)}`, "startup");
+    const methods = Array.isArray(init?.authMethods) ? init.authMethods : [];
+    const first = asRecord(methods[0]);
+    const methodId = typeof first?.id === "string" ? first.id : "";
+    if (!isAcpAuthRequired(err) || !methodId) throw err;
+    try {
+      await rpc.request("authenticate", { methodId }, ACP_CONTROL_TIMEOUT_MS);
+    } catch (authErr) {
+      throw new AdapterError(`ACP authenticate failed: ${errorMessage(authErr)}`, "startup");
+    }
+    return open();
   }
 }
 
@@ -155,20 +174,32 @@ async function openAcpSession(
   const created = asRecord(
     await rpc.request("session/new", { cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS),
   );
-  return typeof created?.sessionId === "string" ? created.sessionId : randomUUID();
+  if (typeof created?.sessionId !== "string" || !created.sessionId) {
+    throw new AdapterError("ACP session/new returned no sessionId", "startup");
+  }
+  return created.sessionId;
 }
 
+/** What ends a prompt turn other than finishing it, in the operator's words. */
+const STOP_REASON_ERRORS: Record<string, string> = {
+  max_tokens: "The agent hit its token limit",
+  max_turn_requests: "The agent hit its turn limit",
+  refusal: "The agent refused to continue",
+};
+
 class AcpSession implements AdapterSession {
-  private tools = new Map<string, string>();
   private sessionId: string;
+  private model: string;
 
   constructor(
     private rpc: JsonRpcStdio,
     sessionId: string,
     readonly agentId: string,
     private cleanupHost: () => void,
+    model: string,
   ) {
     this.sessionId = sessionId;
+    this.model = model;
   }
 
   get closed(): boolean {
@@ -186,7 +217,7 @@ class AcpSession implements AdapterSession {
           "initialize",
           {
             protocolVersion: 1,
-            clientInfo: { name: "Glassys", version: "0.1.0" },
+            clientInfo: { name: "Glassys", version: GLASSYS_VERSION },
             clientCapabilities: {
               fs: { readTextFile: true, writeTextFile: true },
               terminal: true,
@@ -195,7 +226,6 @@ class AcpSession implements AdapterSession {
           ACP_SETUP_TIMEOUT_MS,
         ),
       ) ?? undefined;
-      await authenticateIfNeeded(rpc, init, opts.apiKey);
     } catch (err) {
       cleanupHost();
       await rpc.close();
@@ -205,14 +235,16 @@ class AcpSession implements AdapterSession {
     await persistResumeCapability(opts.storeDir, command, args, acpChildSupportsResume(caps));
     let sessionId: string;
     try {
-      sessionId = await openAcpSession(rpc, opts, resumeId, caps);
+      sessionId = await withAuthRetry(rpc, init, () => openAcpSession(rpc, opts, resumeId, caps));
     } catch (err) {
       cleanupHost();
       await rpc.close();
-      throw new AdapterError(`ACP session setup failed: ${errorMessage(err)}`, "startup");
+      throw err instanceof AdapterError && /authenticate/.test(err.message)
+        ? err
+        : new AdapterError(`ACP session setup failed: ${errorMessage(err)}`, "startup");
     }
     await applySessionModel(rpc, sessionId, opts.model);
-    return new AcpSession(rpc, sessionId, sessionId, cleanupHost);
+    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model);
   }
 
   async send(
@@ -220,8 +252,10 @@ class AcpSession implements AdapterSession {
     onEvent: Parameters<AdapterSession["send"]>[1],
     sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
-    if (sendOpts?.model && sendOpts.model !== "default") {
+    /* The gateway passes the model on every send; only a change costs a round trip. */
+    if (sendOpts?.model && sendOpts.model !== "default" && sendOpts.model !== this.model) {
       await applySessionModel(this.rpc, this.sessionId, sendOpts.model);
+      this.model = sendOpts.model;
     }
     const runId = randomUUID();
     const promptText = promptWithAttachments(text, sendOpts?.attachments);
@@ -230,73 +264,54 @@ class AcpSession implements AdapterSession {
     for (const img of images) {
       promptBlocks.push({ type: "image", mimeType: img.mime, data: img.data });
     }
-    return pendingRun(runId, async ({ isCancelled }) => {
+    return pendingRun(runId, async ({ signal, isCancelled }) => {
+      /* Tool ids are per turn; a long session must not keep every call it ever made. */
+      const state = acpMapState();
       const onUpdate = (params: unknown) => {
-        for (const ev of mapAcpUpdate(params, this.tools)) onEvent(ev);
+        for (const ev of mapAcpUpdate(params, state)) onEvent(ev);
       };
       const off = this.rpc.onNotification("session/update", onUpdate);
       const prompt = this.rpc.request("session/prompt", {
         sessionId: this.sessionId,
         prompt: promptBlocks,
       });
-      let stop = false;
-      let cancelledAt = 0;
-      const watch = (async () => {
-        while (!isCancelled() && !stop) await new Promise((r) => setTimeout(r, 40));
-        if (!isCancelled()) return;
-        cancelledAt = Date.now();
-        try {
-          this.rpc.notify("session/cancel", { sessionId: this.sessionId });
-        } catch {
-          /* ignore */
-        }
-      })();
-      try {
-        const result = await Promise.race([
-          prompt,
-          (async () => {
-            for (;;) {
-              await new Promise((r) => setTimeout(r, 40));
-              if (stop) return prompt;
-              if (cancelledAt && Date.now() - cancelledAt > ACP_CANCEL_TIMEOUT_MS) {
-                /* The prompt is still open in the child; a new one on top of it would interleave. */
-                this.cleanupHost();
-                await this.rpc.close();
-                throw new AdapterError("ACP did not stop after session/cancel", "run");
-              }
-            }
-          })(),
-        ]);
-        if (isCancelled()) return "cancelled";
-        const rec = asRecord(result);
-        const usage = asRecord(rec?.usage);
-        if (usage) {
-          const inputTokens =
-            typeof usage.inputTokens === "number"
-              ? usage.inputTokens
-              : typeof usage.input_tokens === "number"
-                ? usage.input_tokens
-                : undefined;
-          const outputTokens =
-            typeof usage.outputTokens === "number"
-              ? usage.outputTokens
-              : typeof usage.output_tokens === "number"
-                ? usage.output_tokens
-                : undefined;
-          if (inputTokens != null || outputTokens != null) {
-            onEvent({ type: "run.usage", inputTokens, outputTokens });
+      let giveUp: ReturnType<typeof setTimeout> | undefined;
+      /* After session/cancel the agent still answers the prompt with stopReason "cancelled". If it
+         never does, the prompt is still open in the child and a new one would interleave. */
+      const stuck = new Promise<never>((_, reject) => {
+        const onAbort = () => {
+          try {
+            this.rpc.notify("session/cancel", { sessionId: this.sessionId });
+          } catch {
+            /* ignore */
           }
+          giveUp = setTimeout(() => {
+            this.cleanupHost();
+            void this.rpc.close();
+            reject(new AdapterError("ACP did not stop after session/cancel", "run"));
+          }, ACP_CANCEL_TIMEOUT_MS);
+        };
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      });
+      stuck.catch(() => undefined);
+      try {
+        const rec = asRecord(await Promise.race([prompt, stuck]));
+        if (isCancelled() || rec?.stopReason === "cancelled") return "cancelled";
+        const usage = usageFrom(rec?.usage);
+        if (usage) onEvent({ type: "run.usage", ...usage });
+        const stopError = typeof rec?.stopReason === "string" ? STOP_REASON_ERRORS[rec.stopReason] : undefined;
+        if (stopError) {
+          onEvent({ type: "run.error", message: stopError, phase: "run" });
+          return "error";
         }
-        if (rec?.stopReason === "cancelled") return "cancelled";
-        if (rec?.stopReason === "max_tokens" || rec?.stopReason === "error") return "error";
         return "finished";
       } catch (err) {
         if (isCancelled()) return "cancelled";
-        throw new AdapterError(errorMessage(err), "run");
+        throw err instanceof AdapterError ? err : new AdapterError(errorMessage(err), "run");
       } finally {
-        stop = true;
+        if (giveUp) clearTimeout(giveUp);
         off();
-        void watch;
       }
     });
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapCursorDelta, toolKindFromName, diffStats, unifiedFromWrite } from "./mapper.js";
+import { cursorMapState, mapCursorDelta, toolKindFromName } from "./mapper.js";
 import fixture from "./fixtures/deltas.json";
 
 describe("mapCursorDelta", () => {
@@ -13,77 +13,88 @@ describe("mapCursorDelta", () => {
     ]);
   });
 
-  it("maps read/edit/shell tool lifecycle", () => {
-    const start = mapCursorDelta({
-      type: "tool-call-started",
-      callId: "c1",
-      toolCall: { name: "read", args: { path: "src/a.ts" } },
-    });
-    expect(start).toEqual([
-      { type: "tool.start", callId: "c1", kind: "read", title: "src/a.ts", path: "src/a.ts", command: undefined },
+  it("maps an SDK-shaped session: read, failing shell with streamed output, edit with diff", () => {
+    const state = cursorMapState();
+    const events = fixture.flatMap((delta) => mapCursorDelta(delta, state));
+    expect(events.map((e) => e.type)).toEqual([
+      "thinking.delta",
+      "thinking.done",
+      "tool.start",
+      "tool.end",
+      "tool.start",
+      "tool.progress",
+      "tool.end",
+      "tool.start",
+      "tool.end",
+      "text.delta",
     ]);
+    expect(events[3]).toMatchObject({ type: "tool.end", ok: true, kind: "read", outputPreview: "# hi" });
+    expect(events[4]).toMatchObject({ type: "tool.start", kind: "shell", title: "false", command: "false" });
+    expect(events[5]).toEqual({ type: "tool.progress", callId: "2", chunk: "boom\n" });
+    expect(events[6]).toMatchObject({ type: "tool.end", ok: false, error: "exit 1", outputPreview: "boom\n" });
+    expect(events[7]).toMatchObject({ type: "tool.start", kind: "edit", path: "src/a.ts" });
+    expect(events[8]).toMatchObject({ type: "tool.end", ok: true, kind: "edit", stats: { add: 1, del: 1 } });
+    expect(events.some((e) => e.type === "run.done")).toBe(false);
+  });
 
-    const end = mapCursorDelta({
+  it("synthesizes a new-file diff for writes", () => {
+    const [end] = mapCursorDelta({
       type: "tool-call-completed",
-      callId: "c1",
+      callId: "w1",
       toolCall: {
-        name: "edit",
-        path: "src/a.ts",
-        result: { diffString: "--- a\n+++ b\n@@\n-old\n+new\n" },
+        type: "write",
+        args: { path: "a.txt", fileText: "hello\nworld" },
+        result: { status: "success", value: { path: "a.txt", linesCreated: 2, fileSize: 11 } },
       },
     });
-    expect(end[0]).toMatchObject({
-      type: "tool.end",
-      callId: "c1",
-      ok: true,
-      kind: "edit",
-      stats: { add: 1, del: 1 },
-    });
+    expect(end).toMatchObject({ ok: true, kind: "write", stats: { add: 2, del: 0 } });
+    expect(end && "diff" in end ? end.diff : "").toContain("--- /dev/null");
   });
 
-  it("maps shell output chunks and flattened nested task updates", () => {
-    expect(
-      mapCursorDelta({ type: "shell-output-delta", callId: "s1", event: { chunk: "npm test\n" } }),
-    ).toEqual([{ type: "tool.progress", callId: "s1", chunk: "npm test\n" }]);
-
-    const nested = mapCursorDelta({
-      type: "tool-call-delta",
-      callId: "task1",
-      taskUpdate: { type: "text-delta", text: "child" },
-    });
-    expect(nested).toEqual([{ type: "text.delta", text: "child" }]);
-  });
-
-  it("flags truncated diffs and synthesizes unified diff for writes", () => {
-    const truncated = mapCursorDelta({
+  it("reports an error result with its message, and auto-review refusals as denied", () => {
+    const [failed] = mapCursorDelta({
       type: "tool-call-completed",
       callId: "e1",
-      toolCall: { name: "edit", diffString: "+x", truncated: { result: true } },
+      toolCall: { type: "edit", args: { path: "a" }, result: { status: "error", error: { message: "no such file" } } },
     });
-    expect(truncated[0]).toMatchObject({ truncated: true });
+    expect(failed).toMatchObject({ ok: false, error: "no such file", denied: undefined });
+    const [denied] = mapCursorDelta({
+      type: "tool-call-completed",
+      callId: "e2",
+      toolCall: { type: "shell", args: { command: "rm -rf /" }, result: { status: "error", error: "Denied by auto-review" } },
+    });
+    expect(denied).toMatchObject({ ok: false, denied: true });
+  });
 
-    const write = unifiedFromWrite("a.txt", "hello");
-    expect(write).toContain("+++ b/a.txt");
-    expect(diffStats(write)).toEqual({ add: 1, del: 0 });
+  it("names MCP calls by provider and tool and shows their text output", () => {
+    const state = cursorMapState();
+    const call = { type: "mcp", args: { providerIdentifier: "github", toolName: "search_issues", args: {} } };
+    expect(mapCursorDelta({ type: "tool-call-started", callId: "m1", toolCall: call }, state)[0]).toMatchObject({
+      kind: "mcp",
+      title: "github/search_issues",
+    });
+    const [end] = mapCursorDelta(
+      {
+        type: "tool-call-completed",
+        callId: "m1",
+        toolCall: { ...call, result: { status: "success", value: { content: [{ text: { text: "3 issues" } }] } } },
+      },
+      state,
+    );
+    expect(end).toMatchObject({ ok: true, outputPreview: "3 issues" });
+  });
+
+  it("flattens nested task updates and ignores output with no running shell", () => {
+    expect(mapCursorDelta({ type: "tool-call-delta", callId: "task1", taskUpdate: { type: "text-delta", text: "child" } })).toEqual([
+      { type: "text.delta", text: "child" },
+    ]);
+    expect(mapCursorDelta({ type: "shell-output-delta", event: { case: "stdout", value: { data: "x" } } })).toEqual([]);
   });
 
   it("maps tool names defensively", () => {
     expect(toolKindFromName("semSearch")).toBe("semsearch");
     expect(toolKindFromName("ApplyPatch")).toBe("edit");
     expect(toolKindFromName("mystery")).toBe("other");
-  });
-
-  it("maps a recorded onDelta fixture into protocol events", () => {
-    const events = fixture.flatMap((delta) => mapCursorDelta(delta));
-    expect(events.map((e) => e.type)).toEqual([
-      "thinking.delta",
-      "thinking.done",
-      "tool.start",
-      "tool.end",
-      "text.delta",
-    ]);
-    expect(events[4]).toEqual({ type: "text.delta", text: "This repo is Glassys." });
-    expect(events.some((e) => e.type === "run.done")).toBe(false);
   });
 
   it("ignores unknown updates and partial tool args", () => {

@@ -1,6 +1,18 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { asRecord } from "@glassys/adapter-contract";
 
+/** A JSON-RPC error answer, keeping the code so callers can tell `auth_required` from a failure. */
+export class RpcError extends Error {
+  constructor(
+    message: string,
+    readonly code?: number,
+    readonly data?: unknown,
+  ) {
+    super(message);
+    this.name = "RpcError";
+  }
+}
+
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 export type RpcHandler = (params: unknown) => Promise<unknown> | unknown;
@@ -22,7 +34,14 @@ export function headerEnd(buf: Buffer): { end: number; bodyStart: number } | nul
 export class JsonRpcStdio {
   private nextId = 1;
   private buf = Buffer.alloc(0);
+  /** How the agent frames what it writes; detected from its first bytes. */
   private framing: "unknown" | "lsp" | "ndjson" = "unknown";
+  /**
+   * How we frame what we write. ACP is newline-delimited JSON and the agent never speaks first,
+   * so `initialize` must already go out as NDJSON; an agent that answers with LSP headers
+   * switches us over.
+   */
+  private outFraming: "lsp" | "ndjson" = "ndjson";
   private stderrTail = "";
   private pending = new Map<number | string, Pending>();
   private notifications = new Map<string, Array<(params: unknown) => void>>();
@@ -125,7 +144,7 @@ export class JsonRpcStdio {
   private send(msg: unknown) {
     if (this.exited) return;
     const json = JSON.stringify(msg);
-    if (this.framing === "ndjson") {
+    if (this.outFraming === "ndjson") {
       this.child.stdin?.write(`${json}\n`);
       return;
     }
@@ -148,8 +167,8 @@ export class JsonRpcStdio {
     for (;;) {
       if (this.framing === "unknown") {
         const head = this.buf.subarray(0, Math.min(this.buf.length, 32)).toString("utf8");
-        if (/^\s*Content-Length:/i.test(head)) this.framing = "lsp";
-        else if (this.buf.includes(0x0a)) this.framing = "ndjson";
+        if (/^\s*Content-Length:/i.test(head)) this.setFraming("lsp");
+        else if (this.buf.includes(0x0a)) this.setFraming("ndjson");
         else return;
       }
       if (this.framing === "lsp") {
@@ -158,7 +177,7 @@ export class JsonRpcStdio {
         const header = this.buf.subarray(0, split.end).toString("utf8");
         const match = header.match(/Content-Length:\s*(\d+)/i);
         if (!match) {
-          this.framing = "ndjson";
+          this.setFraming("ndjson");
           continue;
         }
         const len = Number(match[1]);
@@ -185,7 +204,7 @@ export class JsonRpcStdio {
       this.buf = this.buf.subarray(nl + 1);
       if (!line.trim()) continue;
       if (/^Content-Length:/i.test(line)) {
-        this.framing = "lsp";
+        this.setFraming("lsp");
         this.buf = Buffer.concat([Buffer.from(`${line}\n`, "utf8"), this.buf]);
         continue;
       }
@@ -195,6 +214,11 @@ export class JsonRpcStdio {
         /* ignore */
       }
     }
+  }
+
+  private setFraming(framing: "lsp" | "ndjson") {
+    this.framing = framing;
+    this.outFraming = framing;
   }
 
   private onMessage(raw: unknown) {
@@ -214,7 +238,13 @@ export class JsonRpcStdio {
       this.pending.delete(rec.id as number | string);
       if (rec.error) {
         const err = asRecord(rec.error);
-        pending.reject(new Error(typeof err?.message === "string" ? err.message : "ACP error"));
+        pending.reject(
+          new RpcError(
+            typeof err?.message === "string" ? err.message : "ACP error",
+            typeof err?.code === "number" ? err.code : undefined,
+            err?.data,
+          ),
+        );
       } else pending.resolve(rec.result);
     }
   }
@@ -223,8 +253,12 @@ export class JsonRpcStdio {
     const method = String(rec.method);
     const id = rec.id;
     const fn = this.methods.get(method);
+    if (!fn) {
+      this.send({ jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } });
+      return;
+    }
     try {
-      const result = fn ? await fn(rec.params) : {};
+      const result = await fn(rec.params);
       this.send({ jsonrpc: "2.0", id, result: result ?? {} });
     } catch (err) {
       this.send({

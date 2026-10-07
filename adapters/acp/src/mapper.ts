@@ -1,9 +1,6 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, str, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
 
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
-}
 
 function mapContent(content: unknown): ServerMessage[] {
   const rec = asRecord(content);
@@ -40,7 +37,61 @@ function previewFromContent(content: unknown): string | undefined {
   return joined ? joined.slice(0, 4000) : undefined;
 }
 
-export function mapAcpUpdate(params: unknown, tools = new Map<string, string>()): ServerMessage[] {
+/** Per-turn mapping state: each call's tool name, and how much of its output was already shown. */
+export type AcpMapState = { tools: Map<string, string>; shown: Map<string, string> };
+
+export function acpMapState(): AcpMapState {
+  return { tools: new Map(), shown: new Map() };
+}
+
+function toolEnd(id: string, status: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage {
+  const { diff, stats, truncated } = extractDiff(update);
+  const err = status === "failed" || status === "cancelled" ? str(update.error) || status : undefined;
+  return {
+    type: "tool.end",
+    callId: id,
+    ok: status === "completed",
+    kind: toolKindFromName(state.tools.get(id)),
+    outputPreview: previewFromContent(update.content) || str(update.rawOutput) || str(update.output),
+    error: err,
+    denied: toolDenied(status, err) || undefined,
+    diff,
+    stats,
+    truncated,
+  };
+}
+
+/**
+ * ACP sends a tool call's content whole on every update. Show only what is new since the last
+ * one; content that was rewritten rather than extended has nothing appendable to show.
+ */
+function progress(id: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage[] {
+  const full = previewFromContent(update.content) || str(update.rawOutput) || str(update.output);
+  if (!full) return [];
+  const before = state.shown.get(id) ?? "";
+  state.shown.set(id, full);
+  if (!full.startsWith(before) || full.length === before.length) return [];
+  return [{ type: "tool.progress", callId: id, chunk: full.slice(before.length) }];
+}
+
+function toolStart(id: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage {
+  const kindName = str(update.kind) || str(update.toolName) || str(update.title) || state.tools.get(id) || "tool";
+  state.tools.set(id, kindName);
+  const loc = Array.isArray(update.locations) ? asRecord(update.locations[0]) : asRecord(update.locations);
+  const raw = asRecord(update.rawInput);
+  return {
+    type: "tool.start",
+    callId: id,
+    kind: toolKindFromName(kindName),
+    title: str(update.title) || str(update.toolName) || str(update.kind) || "tool",
+    path: str(update.path) || str(loc?.path) || str(raw?.path) || str(raw?.file_path),
+    command: str(update.command) || str(raw?.command),
+  };
+}
+
+const DONE = new Set(["completed", "failed", "cancelled"]);
+
+export function mapAcpUpdate(params: unknown, state: AcpMapState = acpMapState()): ServerMessage[] {
   const rec = asRecord(params);
   if (!rec) return [];
   const update = asRecord(rec.update) ?? rec;
@@ -53,54 +104,25 @@ export function mapAcpUpdate(params: unknown, tools = new Map<string, string>())
     }
     return events;
   }
+  const id = str(update.toolCallId) || str(update.toolCallID) || "tool";
+  const status = str(update.status);
   if (sessionUpdate === "tool_call") {
-    const id = str(update.toolCallId) || str(update.toolCallID) || "tool";
-    const kindName = str(update.kind) || str(update.toolName) || str(update.title) || "tool";
-    const title = str(update.title) || str(update.toolName) || str(update.kind) || "tool";
-    tools.set(id, kindName);
-    const loc = Array.isArray(update.locations) ? asRecord(update.locations[0]) : asRecord(update.locations);
-    return [
-      {
-        type: "tool.start",
-        callId: id,
-        kind: toolKindFromName(kindName),
-        title,
-        path: str(update.path) || str(loc?.path),
-        command: str(update.command),
-      },
-    ];
+    const start = toolStart(id, update, state);
+    /* A call can arrive already finished (a fast read); it still needs its end. */
+    return status && DONE.has(status) ? [start, toolEnd(id, status, update, state)] : [start];
   }
   if (sessionUpdate === "tool_call_update") {
-    const id = str(update.toolCallId) || str(update.toolCallID) || "tool";
-    const status = str(update.status);
-    if (status === "in_progress" || status === "pending") {
-      const chunk = previewFromContent(update.content) || str(update.output);
-      return chunk ? [{ type: "tool.progress", callId: id, chunk }] : [];
+    if (status && DONE.has(status)) {
+      state.shown.delete(id);
+      return [toolEnd(id, status, update, state)];
     }
-    if (status === "completed" || status === "failed" || status === "cancelled") {
-      const { diff, stats, truncated } = extractDiff(update);
-      const err =
-        status === "failed"
-          ? str(update.error) || "failed"
-          : status === "cancelled"
-            ? str(update.error) || "denied"
-            : undefined;
-      const denied = status === "cancelled" || toolDenied(status, err) || undefined;
-      return [
-        {
-          type: "tool.end",
-          callId: id,
-          ok: status === "completed",
-          kind: toolKindFromName(tools.get(id)),
-          outputPreview: previewFromContent(update.content) || str(update.output),
-          error: err,
-          denied: denied || undefined,
-          diff,
-          stats,
-          truncated,
-        },
-      ];
+    const out: ServerMessage[] = [];
+    /* Updates without a status refine the call: a better title, its location, its input. */
+    if (!status && (str(update.title) || str(update.kind) || update.locations || update.rawInput)) {
+      out.push(toolStart(id, update, state));
     }
+    out.push(...progress(id, update, state));
+    return out;
   }
   return [];
 }

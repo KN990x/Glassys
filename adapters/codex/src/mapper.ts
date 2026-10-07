@@ -1,130 +1,137 @@
-import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import type { ServerMessage, ToolKind } from "@glassys/protocol";
+import { asRecord, num, str, toolDenied, usageFrom } from "@glassys/adapter-contract";
 
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
+/*
+ * Shapes, from @openai/codex-sdk's index.d.ts: items are agent_message, reasoning,
+ * command_execution { command, aggregated_output, exit_code, status }, file_change
+ * { changes: [{ path, kind }], status }, mcp_tool_call { server, tool, result, error }, web_search,
+ * todo_list and error.
+ */
+
+/** Per-run mapping state: last full text of each item, to turn snapshots into deltas. */
+export type CodexMapState = { snapshots: Map<string, string> };
+
+export function codexMapState(): CodexMapState {
+  return { snapshots: new Map() };
 }
 
-function snapshotDelta(
-  snapshots: Map<string, string>,
-  id: string,
-  text: string,
-  kind: "text" | "thinking",
-): ServerMessage[] {
-  const prev = snapshots.get(id) ?? "";
-  if (!text || text === prev) return [];
-  snapshots.set(id, text);
-  const delta = text.startsWith(prev) ? text.slice(prev.length) : text;
-  if (!delta) return [];
-  return [{ type: kind === "thinking" ? "thinking.delta" : "text.delta", text: delta }];
+const PREVIEW_CHARS = 4000;
+
+function suffix(state: CodexMapState, key: string, text: string): string {
+  const prev = state.snapshots.get(key) ?? "";
+  state.snapshots.set(key, text);
+  return text.startsWith(prev) ? text.slice(prev.length) : "";
 }
 
-export function mapCodexJsonl(
-  line: unknown,
-  tools = new Map<string, string>(),
-  snapshots = new Map<string, string>(),
-): ServerMessage[] {
+function textDelta(state: CodexMapState, key: string, text: string, kind: "text" | "thinking"): ServerMessage[] {
+  const delta = suffix(state, key, text);
+  return delta ? [{ type: kind === "thinking" ? "thinking.delta" : "text.delta", text: delta }] : [];
+}
+
+function changesOf(item: Record<string, unknown>): Array<{ path: string; kind: string }> {
+  if (!Array.isArray(item.changes)) return [];
+  return item.changes
+    .map((c) => asRecord(c))
+    .filter((c): c is Record<string, unknown> => Boolean(c && str(c.path)))
+    .map((c) => ({ path: String(c.path), kind: str(c.kind) ?? "update" }));
+}
+
+function toolOf(item: Record<string, unknown>): { kind: ToolKind; title: string; path?: string; command?: string } | null {
+  switch (item.type) {
+    case "command_execution": {
+      const command = str(item.command);
+      return { kind: "shell", title: command ?? "shell", command };
+    }
+    case "file_change": {
+      const changes = changesOf(item);
+      const path = changes.length === 1 ? changes[0]!.path : undefined;
+      const title = changes.length > 1 ? `${changes.length} files` : (path ?? "edit");
+      return { kind: "edit", title, path };
+    }
+    case "mcp_tool_call": {
+      const server = str(item.server);
+      const tool = str(item.tool);
+      return { kind: "mcp", title: server && tool ? `${server}/${tool}` : (tool ?? "mcp") };
+    }
+    case "web_search":
+      return { kind: "other", title: str(item.query) ?? "web search" };
+    default:
+      return null;
+  }
+}
+
+function mcpOutput(item: Record<string, unknown>): string | undefined {
+  const content = asRecord(item.result)?.content;
+  if (!Array.isArray(content)) return undefined;
+  const parts = content.map((b) => (asRecord(b)?.type === "text" ? str(asRecord(b)?.text) : undefined)).filter(Boolean);
+  return parts.length ? parts.join("\n") : undefined;
+}
+
+function toolEnd(item: Record<string, unknown>, id: string, kind: ToolKind): ServerMessage {
+  const status = str(item.status);
+  const exit = num(item.exit_code);
+  let error: string | undefined;
+  if (status === "failed") {
+    error = str(asRecord(item.error)?.message) ?? str(item.error) ?? (exit !== undefined ? `exit ${exit}` : "failed");
+  } else if (item.type === "command_execution" && exit !== undefined && exit !== 0) {
+    error = `exit ${exit}`;
+  }
+  const output =
+    item.type === "file_change"
+      ? changesOf(item)
+          .map((c) => `${c.kind} ${c.path}`)
+          .join("\n") || undefined
+      : str(item.aggregated_output) ?? mcpOutput(item);
+  return {
+    type: "tool.end",
+    callId: id,
+    ok: !error,
+    kind,
+    outputPreview: output?.slice(0, PREVIEW_CHARS),
+    error,
+    denied: toolDenied(undefined, error) || undefined,
+  };
+}
+
+export function mapCodexJsonl(line: unknown, state: CodexMapState = codexMapState()): ServerMessage[] {
   const rec = asRecord(line);
   if (!rec || typeof rec.type !== "string") return [];
   const item = asRecord(rec.item);
-  if (rec.type === "item.started" && item) {
+  if (item && (rec.type === "item.started" || rec.type === "item.updated" || rec.type === "item.completed")) {
     const id = str(item.id) ?? "item";
-    const type = str(item.type) ?? "";
-    if (type === "command_execution" || type === "mcp_tool_call") {
-      const name = str(item.command) || str(item.name) || type;
-      tools.set(id, name);
-      return [
-        {
-          type: "tool.start",
-          callId: id,
-          kind: toolKindFromName(type === "command_execution" ? "shell" : name),
-          title: name,
-          command: str(item.command),
-        },
-      ];
+    if (item.type === "agent_message" && str(item.text)) return textDelta(state, id, String(item.text), "text");
+    if (item.type === "reasoning" && str(item.text)) return textDelta(state, `${id}:think`, String(item.text), "thinking");
+    if (item.type === "error" && rec.type === "item.completed") {
+      return [{ type: "run.error", message: str(item.message) ?? "Codex error", phase: "run" }];
     }
-    if (type === "file_change") {
-      tools.set(id, "edit");
-      return [{ type: "tool.start", callId: id, kind: "edit", title: str(item.path) || "edit", path: str(item.path) || str(item.file) }];
+    const tool = toolOf(item);
+    if (!tool) return [];
+    const out: ServerMessage[] = [];
+    const startKey = `${id}:start`;
+    /* file_change is only ever emitted completed; it still needs its start. */
+    if (!state.snapshots.has(startKey)) {
+      state.snapshots.set(startKey, "");
+      out.push({ type: "tool.start", callId: id, ...tool });
     }
-    return [];
-  }
-  if (rec.type === "item.completed" && item) {
-    const id = str(item.id) ?? "item";
-    const type = str(item.type) ?? "";
-    if (type === "agent_message" && str(item.text)) {
-      return snapshotDelta(snapshots, id, String(item.text), "text");
+    if (rec.type === "item.completed") {
+      state.snapshots.delete(startKey);
+      state.snapshots.delete(`${id}:out`);
+      out.push(toolEnd(item, id, tool.kind));
+    } else if (item.type === "command_execution" && str(item.aggregated_output)) {
+      const chunk = suffix(state, `${id}:out`, String(item.aggregated_output));
+      if (chunk) out.push({ type: "tool.progress", callId: id, chunk });
     }
-    if (type === "reasoning" && str(item.text)) {
-      return snapshotDelta(snapshots, `${id}:think`, String(item.text), "thinking");
-    }
-    if (type === "command_execution" || type === "mcp_tool_call" || type === "file_change") {
-      const ok = str(item.status) !== "failed";
-      const kind = toolKindFromName(type === "command_execution" ? "shell" : tools.get(id) || type);
-      const { diff, stats, truncated } = extractDiff(item);
-      const err = ok ? undefined : str(item.error) || "failed";
-      return [
-        {
-          type: "tool.end",
-          callId: id,
-          ok,
-          kind,
-          outputPreview: str(item.output) || str(item.aggregated_output),
-          error: err,
-          denied: toolDenied(str(item.status), err) || undefined,
-          diff,
-          stats,
-          truncated,
-        },
-      ];
-    }
-    return [];
-  }
-  if (rec.type === "item.updated" && item) {
-    const id = str(item.id) ?? "item";
-    const type = str(item.type);
-    if (type === "agent_message" && str(item.text)) {
-      return snapshotDelta(snapshots, id, String(item.text), "text");
-    }
-    if (type === "reasoning" && str(item.text)) {
-      return snapshotDelta(snapshots, `${id}:think`, String(item.text), "thinking");
-    }
-    if (type === "command_execution" || type === "mcp_tool_call") {
-      const text = str(item.aggregated_output) || str(item.output);
-      if (!text) return [];
-      const key = `tool:${id}`;
-      const prev = snapshots.get(key) ?? "";
-      if (text === prev) return [];
-      const delta = text.startsWith(prev) ? text.slice(prev.length) : text;
-      snapshots.set(key, text);
-      return delta ? [{ type: "tool.progress", callId: id, chunk: delta }] : [];
-    }
-    return [];
+    return out;
   }
   if (rec.type === "error") {
     return [{ type: "run.error", message: str(rec.message) || "Codex error", phase: "run" }];
   }
   if (rec.type === "turn.failed") {
-    const err = asRecord(rec.error);
-    return [{ type: "run.error", message: str(err?.message) || "Turn failed", phase: "run" }];
+    return [{ type: "run.error", message: str(asRecord(rec.error)?.message) || "Turn failed", phase: "run" }];
   }
   if (rec.type === "turn.completed") {
-    const usage = asRecord(rec.usage);
-    if (!usage) return [];
-    const inputTokens =
-      typeof usage.input_tokens === "number"
-        ? usage.input_tokens
-        : typeof usage.inputTokens === "number"
-          ? usage.inputTokens
-          : undefined;
-    const outputTokens =
-      typeof usage.output_tokens === "number"
-        ? usage.output_tokens
-        : typeof usage.outputTokens === "number"
-          ? usage.outputTokens
-          : undefined;
-    if (inputTokens == null && outputTokens == null) return [];
-    return [{ type: "run.usage", inputTokens, outputTokens }];
+    const usage = usageFrom(rec.usage);
+    return usage ? [{ type: "run.usage", ...usage }] : [];
   }
   return [];
 }

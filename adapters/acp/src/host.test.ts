@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_ACP_READ_BYTES, registerHostHandlers, resolveInsideCwd, resolveRealInsideCwd } from "./host.js";
+import { MAX_ACP_READ_BYTES, acpPermissionChoice, registerHostHandlers, resolveInsideCwd, resolveRealInsideCwd } from "./host.js";
 
 describe("resolveRealInsideCwd", () => {
   it("rejects a symlink inside the workspace that points out of it", async () => {
@@ -55,7 +55,7 @@ describe("registerHostHandlers autoRun", () => {
     const { map, cleanup } = handlers(false);
     try {
       await expect(map.get("fs/write_text_file")?.({ path: "a.ts", content: "x" })).rejects.toThrow(/Auto-run is off/);
-      expect(() => map.get("terminal/create")?.({ command: "true" })).toThrow(/Auto-run is off/);
+      await expect(map.get("terminal/create")?.({ command: "true" })).rejects.toThrow(/Auto-run is off/);
     } finally {
       cleanup();
     }
@@ -107,7 +107,7 @@ describe("registerHostHandlers autoRun", () => {
     try {
       await expect(map.get("fs/read_text_file")?.({ path: "glassys/data/secrets.json" })).rejects.toThrow(/denied/);
       await expect(map.get("fs/write_text_file")?.({ path: join(data, "x"), content: "" })).rejects.toThrow(/denied/);
-      expect(() => map.get("terminal/create")?.({ command: "cat", args: [join(data, "secrets.json")] })).toThrow(/denied/);
+      await expect(map.get("terminal/create")?.({ command: "cat", args: [join(data, "secrets.json")] })).rejects.toThrow(/denied/);
       await expect(map.get("fs/read_text_file")?.({ path: "notes.txt" })).resolves.toEqual({ content: "ok" });
     } finally {
       cleanup();
@@ -124,13 +124,13 @@ describe("registerHostHandlers autoRun", () => {
     };
     const cleanup = registerHostHandlers(rpc, dir, { autoRun: true });
     try {
-      const created = map.get("terminal/create")?.({
+      const created = (await map.get("terminal/create")?.({
         command: process.execPath,
         args: ["-e", "process.exit(7)"],
-      }) as { terminalId: string };
+      })) as { terminalId: string };
       await new Promise((r) => setTimeout(r, 80));
       const result = await map.get("terminal/wait_for_exit")?.({ terminalId: created.terminalId });
-      expect(result).toEqual({ exitCode: 7 });
+      expect(result).toEqual({ exitCode: 7, signal: null });
     } finally {
       cleanup();
     }
@@ -141,7 +141,7 @@ describe("registerHostHandlers autoRun", () => {
     const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
     const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
     try {
-      const created = map.get("terminal/create")?.({ command: "glassys-no-such-binary-xyz" }) as { terminalId: string };
+      const created = (await map.get("terminal/create")?.({ command: "glassys-no-such-binary-xyz" })) as { terminalId: string };
       const result = (await map.get("terminal/wait_for_exit")?.({ terminalId: created.terminalId })) as {
         exitCode: number;
       };
@@ -158,11 +158,105 @@ describe("registerHostHandlers autoRun", () => {
     const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
     const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
     const args = ["-e", "setInterval(() => {}, 1000)"];
-    const a = map.get("terminal/create")?.({ command: process.execPath, args }) as { terminalId: string };
-    const b = map.get("terminal/create")?.({ command: process.execPath, args }) as { terminalId: string };
+    const a = (await map.get("terminal/create")?.({ command: process.execPath, args })) as { terminalId: string };
+    const b = (await map.get("terminal/create")?.({ command: process.execPath, args })) as { terminalId: string };
     expect(a.terminalId).not.toBe(b.terminalId);
     const waiting = map.get("terminal/wait_for_exit")?.({ terminalId: a.terminalId });
     cleanup();
-    await expect(waiting).resolves.toMatchObject({ exitCode: expect.any(Number) });
+    await expect(waiting).resolves.toMatchObject({ signal: "SIGTERM" });
+  });
+
+  it("keeps a killed terminal readable and reports how it ended", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-term-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    try {
+      const t = (await map.get("terminal/create")?.({
+        command: process.execPath,
+        args: ["-e", "console.log('started'); setInterval(() => {}, 1000)"],
+      })) as { terminalId: string };
+      await new Promise((r) => setTimeout(r, 200));
+      await map.get("terminal/kill")?.({ terminalId: t.terminalId });
+      const exit = (await map.get("terminal/wait_for_exit")?.({ terminalId: t.terminalId })) as {
+        exitCode: number | null;
+        signal: string | null;
+      };
+      expect(exit.exitCode === 0 && exit.signal === null).toBe(false);
+      const out = (await map.get("terminal/output")?.({ terminalId: t.terminalId })) as {
+        output: string;
+        exitStatus?: unknown;
+      };
+      expect(out.output).toMatch(/started/);
+      expect(out.exitStatus).toEqual(exit);
+      await map.get("terminal/release")?.({ terminalId: t.terminalId });
+      await expect(map.get("terminal/wait_for_exit")?.({ terminalId: t.terminalId })).rejects.toThrow(/Unknown terminal/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("runs in the requested cwd with the requested env and byte limit", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-term-"));
+    await mkdir(join(dir, "sub"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    try {
+      const t = (await map.get("terminal/create")?.({
+        command: process.execPath,
+        args: ["-e", "process.stdout.write(process.cwd() + ' ' + process.env.GLASSYS_T + ' ' + 'x'.repeat(200))"],
+        cwd: join(dir, "sub"),
+        env: [{ name: "GLASSYS_T", value: "on" }],
+        outputByteLimit: 64,
+      })) as { terminalId: string };
+      await map.get("terminal/wait_for_exit")?.({ terminalId: t.terminalId });
+      const out = (await map.get("terminal/output")?.({ terminalId: t.terminalId })) as { output: string; truncated: boolean };
+      expect(out.truncated).toBe(true);
+      expect(Buffer.byteLength(out.output)).toBeLessThanOrEqual(64);
+      await expect(map.get("terminal/create")?.({ command: "true", cwd: "/" })).rejects.toThrow(/outside/);
+      const full = (await map.get("terminal/create")?.({
+        command: process.execPath,
+        args: ["-e", "process.stdout.write(require('path').basename(process.cwd()) + ' ' + process.env.GLASSYS_T)"],
+        cwd: "sub",
+        env: [{ name: "GLASSYS_T", value: "on" }],
+      })) as { terminalId: string };
+      await map.get("terminal/wait_for_exit")?.({ terminalId: full.terminalId });
+      const shown = (await map.get("terminal/output")?.({ terminalId: full.terminalId })) as { output: string };
+      expect(shown.output).toBe("sub on");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("reads a line range of a file too large to read whole", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    try {
+      const lines = Array.from({ length: 200_000 }, (_, i) => `line ${i + 1} ${"x".repeat(10)}`);
+      await writeFile(join(dir, "big.log"), lines.join("\n"));
+      await expect(map.get("fs/read_text_file")?.({ path: "big.log", line: 3, limit: 2 })).resolves.toEqual({
+        content: `${lines[2]}\n${lines[3]}`,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe("acpPermissionChoice", () => {
+  const options = [
+    { optionId: "proceed_always", kind: "allow_always", name: "Always" },
+    { optionId: "proceed_once", kind: "allow_once", name: "Once" },
+    { optionId: "cancel", kind: "reject_once", name: "No" },
+  ];
+
+  it("picks the agent's own ids by kind", () => {
+    expect(acpPermissionChoice({ options }, true)).toEqual({ outcome: { outcome: "selected", optionId: "proceed_once" } });
+    expect(acpPermissionChoice({ options }, false)).toEqual({ outcome: { outcome: "selected", optionId: "cancel" } });
+  });
+
+  it("falls back for agents that send no options", () => {
+    expect(acpPermissionChoice({}, true)).toEqual({ outcome: { outcome: "selected", optionId: "allow-once" } });
+    expect(acpPermissionChoice({}, false)).toEqual({ outcome: { outcome: "cancelled" } });
   });
 });

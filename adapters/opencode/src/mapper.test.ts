@@ -1,133 +1,146 @@
 import { describe, expect, it } from "vitest";
-import { isOpencodeError, isOpencodeIdle, isStaleOpencodeIdle, mapOpencodeEvent, opencodeSessionId } from "./mapper.js";
+import {
+  isOpencodeError,
+  isOpencodeIdle,
+  isStaleOpencodeIdle,
+  mapOpencodeEvent,
+  opencodeMapState,
+  opencodePermission,
+  opencodeSessionId,
+} from "./mapper.js";
+
+/* Event shapes as @opencode-ai/sdk types them (types.gen.d.ts). */
+const part = (p: Record<string, unknown>, delta?: string) => ({
+  type: "message.part.updated",
+  properties: { part: { sessionID: "ses_1", messageID: "msg_a", ...p }, ...(delta ? { delta } : {}) },
+});
+const tool = (callID: string, toolName: string, state: Record<string, unknown>) =>
+  part({ id: `prt_${callID}`, type: "tool", callID, tool: toolName, state });
 
 describe("mapOpencodeEvent", () => {
-  it("maps text and reasoning deltas", () => {
-    expect(
-      mapOpencodeEvent({ type: "message.part.updated", properties: { part: { type: "text", text: "Hi" } } }),
-    ).toEqual([{ type: "text.delta", text: "Hi" }]);
-    expect(
-      mapOpencodeEvent({ type: "message.part.updated", properties: { part: { type: "reasoning", text: "plan" } } }),
-    ).toEqual([{ type: "thinking.delta", text: "plan" }]);
+  it("maps text and reasoning, preferring the event's delta", () => {
+    const state = opencodeMapState();
+    expect(mapOpencodeEvent(part({ id: "p1", type: "text", text: "Hel" }, "Hel"), state)).toEqual([
+      { type: "text.delta", text: "Hel" },
+    ]);
+    expect(mapOpencodeEvent(part({ id: "p1", type: "text", text: "Hello" }, "lo"), state)).toEqual([
+      { type: "text.delta", text: "lo" },
+    ]);
+    expect(mapOpencodeEvent(part({ id: "p2", type: "reasoning", text: "plan" }), state)).toEqual([
+      { type: "thinking.delta", text: "plan" },
+    ]);
+    /* Without a delta, a growing snapshot still yields only the new suffix. */
+    expect(mapOpencodeEvent(part({ id: "p2", type: "reasoning", text: "plan more" }), state)).toEqual([
+      { type: "thinking.delta", text: " more" },
+    ]);
   });
 
-  it("maps tool lifecycle from part state", () => {
-    const tools = new Map<string, string>();
-    const start = mapOpencodeEvent(
-      { type: "message.part.updated", properties: { part: { type: "tool", callID: "c1", tool: "bash", state: { status: "running" } } } },
-      tools,
-    );
-    expect(start[0]).toMatchObject({ type: "tool.start", callId: "c1", kind: "shell" });
-    const withLoc = mapOpencodeEvent(
-      {
-        type: "message.part.updated",
-        properties: {
-          part: {
-            type: "tool",
-            callID: "c-loc",
-            tool: "bash",
-            state: { status: "running", input: { command: "ls /etc" } },
-          },
-        },
-      },
-      tools,
-    );
-    expect(withLoc[0]).toMatchObject({ type: "tool.start", command: "ls /etc" });
-    const denied = mapOpencodeEvent(
-      {
-        type: "message.part.updated",
-        properties: { part: { type: "tool", callID: "c-deny", tool: "write", state: { status: "cancelled" } } },
-      },
-      tools,
-    );
-    expect(denied.some((e) => e.type === "tool.end" && "denied" in e && e.denied)).toBe(true);
+  it("does not echo the operator's own prompt or synthetic parts", () => {
+    const state = opencodeMapState();
+    mapOpencodeEvent({ type: "message.updated", properties: { info: { id: "msg_u", sessionID: "ses_1", role: "user" } } }, state);
+    expect(mapOpencodeEvent(part({ id: "pu", messageID: "msg_u", type: "text", text: "hi" }), state)).toEqual([]);
+    expect(mapOpencodeEvent(part({ id: "ps", type: "text", text: "x", synthetic: true }), state)).toEqual([]);
+  });
+
+  it("refines a pending tool once its input arrives, streams output, and ends with a diff", () => {
+    const state = opencodeMapState();
+    expect(mapOpencodeEvent(tool("c1", "edit", { status: "pending", input: {}, raw: "" }), state)).toEqual([
+      expect.objectContaining({ type: "tool.start", callId: "c1", kind: "edit", path: undefined }),
+    ]);
+    expect(
+      mapOpencodeEvent(tool("c1", "edit", { status: "running", input: { filePath: "/w/a.ts" }, time: { start: 1 } }), state),
+    ).toEqual([expect.objectContaining({ type: "tool.start", callId: "c1", path: "/w/a.ts" })]);
+    const diff = "--- a/w/a.ts\n+++ b/w/a.ts\n@@ -1 +1 @@\n-a\n+b";
     const end = mapOpencodeEvent(
-      { type: "message.part.updated", properties: { part: { type: "tool", callID: "c1", tool: "bash", state: { status: "completed", output: "ok" } } } },
-      tools,
+      tool("c1", "edit", {
+        status: "completed",
+        input: { filePath: "/w/a.ts" },
+        output: "",
+        title: "a.ts",
+        metadata: { diff },
+        time: { start: 1, end: 2 },
+      }),
+      state,
     );
-    expect(end[0]).toMatchObject({ type: "tool.end", callId: "c1", ok: true });
-    const again = mapOpencodeEvent(
-      { type: "message.part.updated", properties: { part: { type: "tool", callID: "c1", tool: "bash", state: { status: "running" } } } },
-      tools,
+    expect(end).toEqual([expect.objectContaining({ type: "tool.end", ok: true, diff, stats: { add: 1, del: 1 } })]);
+  });
+
+  it("shows only new shell output while running and reports errors", () => {
+    const state = opencodeMapState();
+    mapOpencodeEvent(tool("c2", "bash", { status: "running", input: { command: "make" }, time: { start: 1 } }), state);
+    const run = (output: string) =>
+      mapOpencodeEvent(tool("c2", "bash", { status: "running", input: { command: "make" }, metadata: { output }, time: { start: 1 } }), state);
+    expect(run("cc a.c\n")).toEqual([{ type: "tool.progress", callId: "c2", chunk: "cc a.c\n" }]);
+    expect(run("cc a.c\ncc b.c\n")).toEqual([{ type: "tool.progress", callId: "c2", chunk: "cc b.c\n" }]);
+    const end = mapOpencodeEvent(
+      tool("c2", "bash", { status: "error", input: { command: "make" }, error: "make: *** [all] Error 2", time: { start: 1, end: 2 } }),
+      state,
     );
-    expect(again.filter((e) => e.type === "tool.start")).toEqual([]);
+    expect(end).toEqual([expect.objectContaining({ type: "tool.end", ok: false, error: "make: *** [all] Error 2", denied: undefined })]);
   });
 
   it("emits start and end when the first tool event is already completed", () => {
-    const tools = new Map<string, string>();
     const events = mapOpencodeEvent(
-      {
-        type: "message.part.updated",
-        properties: { part: { type: "tool", callID: "c2", tool: "bash", state: { status: "completed", output: "ok" } } },
-      },
-      tools,
+      tool("c3", "read", { status: "completed", input: { filePath: "/w/b" }, output: "body", title: "b", metadata: {}, time: { start: 1, end: 2 } }),
     );
     expect(events.map((e) => e.type)).toEqual(["tool.start", "tool.end"]);
-    expect(events[1]).toMatchObject({ type: "tool.end", callId: "c2", ok: true });
+    expect(events[1]).toMatchObject({ outputPreview: "body" });
   });
 
-  it("ignores events from another session", () => {
-    expect(
-      opencodeSessionId({ type: "message.part.updated", properties: { sessionID: "s1", part: { type: "text", text: "x" } } }),
-    ).toBe("s1");
-    expect(
-      mapOpencodeEvent(
-        {
-          type: "message.part.updated",
-          properties: { sessionID: "other", part: { type: "text", text: "nope" } },
-        },
-        new Map(),
-        new Map(),
-        "mine",
-      ),
-    ).toEqual([]);
-  });
-
-  it("maps a patch on a completed tool part", () => {
-    const tools = new Map<string, string>([["c1", "edit"]]);
-    const diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n";
-    const end = mapOpencodeEvent(
-      {
-        type: "message.part.updated",
-        properties: { part: { type: "tool", callID: "c1", tool: "edit", state: { status: "completed", patch: diff } } },
-      },
-      tools,
+  it("marks a refused permission as denied", () => {
+    const [, end] = mapOpencodeEvent(
+      tool("c4", "bash", {
+        status: "error",
+        input: { command: "rm -rf x" },
+        error: "The user rejected permission to use this specific tool call.",
+        time: { start: 1, end: 2 },
+      }),
     );
-    expect(end[0]).toMatchObject({ type: "tool.end", diff });
+    expect(end).toMatchObject({ type: "tool.end", denied: true });
   });
 
-  it("emits suffixes when part text is a growing snapshot", () => {
-    const snap = new Map<string, string>();
-    expect(
-      mapOpencodeEvent(
-        { type: "message.part.updated", properties: { part: { id: "p1", type: "text", text: "Hel" } } },
-        new Map(),
-        snap,
-      ),
-    ).toEqual([{ type: "text.delta", text: "Hel" }]);
-    expect(
-      mapOpencodeEvent(
-        { type: "message.part.updated", properties: { part: { id: "p1", type: "text", text: "Hello" } } },
-        new Map(),
-        snap,
-      ),
-    ).toEqual([{ type: "text.delta", text: "lo" }]);
+  it("reports usage once per finished assistant message, cache included", () => {
+    const state = opencodeMapState();
+    const info = {
+      id: "msg_a",
+      sessionID: "ses_1",
+      role: "assistant",
+      time: { created: 1, completed: 2 },
+      tokens: { input: 10, output: 5, reasoning: 0, cache: { read: 100, write: 3 } },
+    };
+    expect(mapOpencodeEvent({ type: "message.updated", properties: { info } }, state)).toEqual([
+      { type: "run.usage", inputTokens: 113, outputTokens: 5 },
+    ]);
+    expect(mapOpencodeEvent({ type: "message.updated", properties: { info } }, state)).toEqual([]);
   });
 
-  it("maps session.usage when the runtime provides tokens", () => {
+  it("reads error messages from data.message and ignores the operator's abort", () => {
     expect(
       mapOpencodeEvent({
-        type: "session.usage",
-        properties: { tokens: { input: 11, output: 7 } },
+        type: "session.error",
+        properties: { sessionID: "ses_1", error: { name: "APIError", data: { message: "model not found", isRetryable: false } } },
       }),
-    ).toEqual([{ type: "run.usage", inputTokens: 11, outputTokens: 7 }]);
+    ).toEqual([{ type: "run.error", message: "model not found", phase: "run" }]);
+    const aborted = { type: "session.error", properties: { sessionID: "ses_1", error: { name: "MessageAbortedError", data: { message: "x" } } } };
+    expect(mapOpencodeEvent(aborted)).toEqual([]);
+    expect(isOpencodeError(aborted)).toBe(false);
   });
 
-  it("treats leftover session.idle as stale until the current prompt has events", () => {
+  it("finds the session id where the SDK puts it and drops other sessions", () => {
+    expect(opencodeSessionId(part({ type: "text", text: "x" }))).toBe("ses_1");
+    expect(opencodeSessionId({ type: "message.updated", properties: { info: { sessionID: "ses_2" } } })).toBe("ses_2");
+    expect(opencodeSessionId({ type: "session.idle", properties: { sessionID: "ses_3" } })).toBe("ses_3");
+    expect(mapOpencodeEvent(part({ id: "p", type: "text", text: "theirs" }), opencodeMapState(), "ses_other")).toEqual([]);
+  });
+
+  it("recognizes permission requests and idleness", () => {
+    expect(
+      opencodePermission({ type: "permission.updated", properties: { id: "per_1", sessionID: "ses_1", title: "bash", callID: "c" } }),
+    ).toEqual({ id: "per_1", title: "bash", callId: "c" });
+    expect(isOpencodeIdle({ type: "session.idle", properties: { sessionID: "s" } })).toBe(true);
+    expect(isOpencodeIdle({ type: "session.status", properties: { sessionID: "s", status: { type: "idle" } } })).toBe(true);
     expect(isStaleOpencodeIdle({ type: "session.idle" }, false, false)).toBe(true);
     expect(isStaleOpencodeIdle({ type: "session.idle" }, true, false)).toBe(false);
     expect(isStaleOpencodeIdle({ type: "session.idle" }, false, true)).toBe(false);
-    expect(isOpencodeIdle({ type: "session.idle.updated" })).toBe(true);
-    expect(isOpencodeError({ type: "session.error" })).toBe(true);
   });
 });
