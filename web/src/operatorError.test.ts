@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { operatorError, shouldSubmitOnEnter } from "./operatorError";
+import { describe, expect, it } from "vitest";
+import { operatorError } from "./operatorError";
 
 describe("operatorError", () => {
   it("maps stable gateway codes and leaves model text alone", () => {
@@ -17,28 +17,5 @@ describe("operatorError", () => {
     expect(operatorError("Too many schedules", t)).toBe("i18n:error.tooManySchedules");
     expect(operatorError("Invalid cron expression", t)).toBe("i18n:error.invalidCron");
     expect(operatorError("model said something", t)).toBe("model said something");
-  });
-});
-
-describe("shouldSubmitOnEnter", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  const pointer = (coarseOnly: boolean) =>
-    vi.stubGlobal("matchMedia", (q: string) => ({
-      matches: q === "(pointer: coarse)" ? coarseOnly : q === "(any-pointer: fine)" ? !coarseOnly : false,
-    }));
-
-  it("submits on Enter on a desktop keyboard, touch screen or not", () => {
-    pointer(false);
-    expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: false })).toBe(true);
-    expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: true })).toBe(false);
-    expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: false, nativeEvent: { isComposing: true } })).toBe(false);
-  });
-
-  it("does not submit on Enter on a phone, where Enter is the soft keyboard's newline", () => {
-    pointer(true);
-    expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: false })).toBe(false);
   });
 });

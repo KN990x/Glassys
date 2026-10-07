@@ -1,3 +1,4 @@
+import { shortcutLabel } from "../keyboard";
 import type { PromptTemplate, Theme, ThreadSummary } from "@glassys/protocol";
 import { cwdBasename } from "../format";
 import { templatePaletteItems, type PaletteItem } from "../components/CommandPalette";
@@ -58,8 +59,8 @@ export function buildPaletteItems(ctx: {
 }): PaletteItem[] {
   const { t, actions: a } = ctx;
   return [
-    { id: "new", group: "product", label: t("palette.newThread"), glyph: <IconPlus />, kbd: "⌘⇧O", run: a.newThread },
-    { id: "cancel", group: "product", label: t("palette.cancel"), glyph: <IconStop />, kbd: "esc", run: a.cancel },
+    { id: "new", group: "product", label: t("palette.newThread"), glyph: <IconPlus />, kbd: shortcutLabel("mod+shift+o"), run: a.newThread },
+    { id: "cancel", group: "product", label: t("palette.cancel"), glyph: <IconStop />, kbd: shortcutLabel("esc"), run: a.cancel },
     { id: "export", group: "product", label: t("palette.export"), glyph: <IconExport />, run: a.exportThread },
     { id: "view:overview", group: "product", label: t("nav.overview"), glyph: <IconGauge />, run: () => a.showView("overview") },
     { id: "view:services", group: "product", label: t("nav.services"), glyph: <IconServices />, run: () => a.showView("services") },
@@ -71,7 +72,7 @@ export function buildPaletteItems(ctx: {
       group: "product",
       label: t("nav.activity"),
       glyph: <IconActivity />,
-      kbd: "⌘I",
+      kbd: shortcutLabel("mod+i"),
       run: () => a.toggleActivity(!ctx.activityOpen),
     },
     {
@@ -79,7 +80,7 @@ export function buildPaletteItems(ctx: {
       group: "product",
       label: t(ctx.railCollapsed ? "nav.expandRail" : "nav.collapseRail"),
       glyph: ctx.railCollapsed ? <IconRailOpen /> : <IconRailClose />,
-      kbd: "⌘B",
+      kbd: shortcutLabel("mod+b"),
       run: () => a.collapseRail(!ctx.railCollapsed),
     },
     {
@@ -89,7 +90,7 @@ export function buildPaletteItems(ctx: {
       glyph: <IconMoon />,
       run: () => a.changeTheme(nextTheme(ctx.theme)),
     },
-    { id: "search", group: "product", label: t("palette.search"), glyph: <IconSearch />, kbd: "⌘F", run: a.openSearch },
+    { id: "search", group: "product", label: t("palette.search"), glyph: <IconSearch />, kbd: shortcutLabel("mod+f"), run: a.openSearch },
     { id: "restart", group: "product", label: t("palette.restart"), glyph: <IconRefresh />, run: a.restart },
     { id: "upgrade", group: "product", label: t("palette.upgrade"), glyph: <IconRefresh />, run: () => a.openSettings("updates") },
     {

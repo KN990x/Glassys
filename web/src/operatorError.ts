@@ -45,19 +45,3 @@ export function operatorError(message: string, t: (key: string) => string): stri
   if (/git fetch failed/i.test(message)) return t("error.gitFetch");
   return message;
 }
-
-/**
- * A phone or tablet without a pointing device: its on-screen Enter writes a newline, and the
- * Send button sends. A touch-screen laptop (or an iPad with a trackpad) still has a fine pointer
- * and a real keyboard, so Enter sends there.
- */
-export function touchOnly(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(any-pointer: fine)").matches;
-}
-
-export function shouldSubmitOnEnter(e: { key: string; shiftKey: boolean; nativeEvent?: { isComposing?: boolean } }): boolean {
-  if (e.key !== "Enter" || e.shiftKey) return false;
-  if (e.nativeEvent?.isComposing) return false;
-  return !touchOnly();
-}

@@ -45,14 +45,27 @@ export function Popover({
     }
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
+      /* A dialog opened from this menu (a confirm) sits on top: its Escape is its own. Both
+         listen on window, so stopping propagation could not keep this one out of it. */
+      const own = panel.current;
+      const modals = [...document.querySelectorAll('[aria-modal="true"]')];
+      if (own && modals.some((m) => !m.contains(own))) return;
       e.stopPropagation();
       onCloseRef.current();
     }
+    /* Focus moves into the menu, and back to what opened it when it closes. */
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const first = panel.current?.querySelector<HTMLElement>('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    first?.focus();
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("keydown", onKey, true);
+      const now = document.activeElement;
+      if (opener?.isConnected && (!now || now === document.body || panel.current === null || panel.current.contains(now))) {
+        opener.focus();
+      }
     };
   }, [open]);
 

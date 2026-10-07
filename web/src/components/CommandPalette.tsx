@@ -200,7 +200,7 @@ export function CommandPalette({
             <Kbd>⏎</Kbd> {t("palette.run")}
           </span>
           <span>
-            <Kbd>esc</Kbd> {t("palette.close")}
+            <Kbd>Esc</Kbd> {t("palette.close")}
           </span>
         </footer>
       )}

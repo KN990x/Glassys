@@ -1,3 +1,4 @@
+import { touchOnly } from "../keyboard";
 import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 import { formatElapsed } from "../format";
@@ -36,7 +37,8 @@ export function RunStatus({
         </span>
       ) : null}
       {step ? <span className="muted truncate status-step">{step}</span> : null}
-      {canCancel ? (
+      {/* A phone has no Escape key to press. */}
+      {canCancel && !touchOnly() ? (
         <span className="muted status-esc">
           <Kbd>Esc</Kbd> {t("chat.cancel")}
         </span>

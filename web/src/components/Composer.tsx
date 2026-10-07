@@ -11,7 +11,7 @@ import type {
 } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { isImageMime, slashQuery } from "../format";
-import { shouldSubmitOnEnter } from "../operatorError";
+import { shouldSubmitOnEnter } from "../keyboard";
 import { CommandPalette, filterPaletteItems, templatePaletteItems } from "./CommandPalette";
 import { ModelMenu } from "./ModelMenu";
 import { PermissionChip } from "./PermissionChip";

@@ -1,5 +1,6 @@
 import type { Ref } from "react";
 import type { Theme } from "@glassys/protocol";
+import { shortcutLabel } from "../keyboard";
 import { useT } from "../i18n";
 import {
   GlassysMark,
@@ -150,7 +151,7 @@ export function Sidebar({
         <button type="button" className="rail-new" onClick={onNew} disabled={newDisabled}>
           <IconPlus />
           <span className="truncate">{t("threads.new")}</span>
-          <Kbd>⌘⇧O</Kbd>
+          <Kbd>{shortcutLabel("mod+shift+o")}</Kbd>
         </button>
         <button type="button" className="icon-btn" onClick={onSearch} aria-label={t("nav.search")} title={t("nav.search")}>
           <IconSearch />

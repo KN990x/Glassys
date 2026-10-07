@@ -22,7 +22,7 @@ import { reduceTranscriptBatch, replay, type Block } from "../transcript";
 import { createEventBatcher } from "../eventBatch";
 import { Composer } from "../components/Composer";
 import { ThreadDrawer } from "../components/ThreadDrawer";
-import { operatorError, shouldSubmitOnEnter } from "../operatorError";
+import { operatorError } from "../operatorError";
 import { blockMatchesQuery, formatElapsed, newMessageId, slashQuery } from "../format";
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette } from "../components/CommandPalette";
@@ -55,7 +55,6 @@ const ACTIVITY_KEY = "glassys.activityOpen";
 const INSPECTOR_QUERY = "(min-width: 1280px)";
 const OPS_CHIP_IDS = ["status", "disk", "failed-units"] as const;
 
-export { shouldSubmitOnEnter };
 
 export function resizeComposer(el: HTMLTextAreaElement, maxPx = COMPOSER_MAX_PX): void {
   if (!el.value) {
