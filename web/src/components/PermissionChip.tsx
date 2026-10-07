@@ -50,6 +50,10 @@ export function PermissionChip({
       ? autoRun
         ? t("chip.autoRunOn")
         : t("chip.autoReview")
+      : caps.toolConfirmation === "deny-writes"
+        ? autoRun
+          ? t("chip.autoRunOn")
+          : t("chip.denyWrites")
       : caps.toolConfirmation === "permission-mode"
         ? t(`wizard.exec.permission.${mode === "dontAsk" ? "dontAsk" : mode === "acceptEdits" ? "acceptEdits" : "bypass"}`)
         : t("chip.unattended");
@@ -141,6 +145,7 @@ export function PermissionChip({
         {caps.toolConfirmation === "auto-review-deny" && (
           <Callout tone={tone === "danger" ? "warn" : "neutral"}>{t("wizard.exec.danger")}</Callout>
         )}
+        {caps.toolConfirmation === "deny-writes" && <Callout tone="neutral">{t("wizard.exec.denyWrites")}</Callout>}
         {caps.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
         {error && <Callout tone="danger">{error}</Callout>}
       </Popover>

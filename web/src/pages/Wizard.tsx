@@ -668,6 +668,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 </label>
               )}
               {caps?.toolConfirmation === "auto-review-deny" && <Callout tone="warn">{t("wizard.exec.danger")}</Callout>}
+              {caps?.toolConfirmation === "deny-writes" && <Callout>{t("wizard.exec.denyWrites")}</Callout>}
               {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
               {caps?.toolConfirmation === "permission-mode" && <Callout tone="warn">{t("wizard.exec.permission.hint")}</Callout>}
               {cwdExposesDataDir({

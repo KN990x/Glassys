@@ -197,6 +197,8 @@ class AcpSession implements AdapterSession {
     readonly agentId: string,
     private cleanupHost: () => void,
     model: string,
+    /** The agent said it takes image content blocks (promptCapabilities.image). */
+    private takesImages: boolean,
   ) {
     this.sessionId = sessionId;
     this.model = model;
@@ -244,7 +246,8 @@ class AcpSession implements AdapterSession {
         : new AdapterError(`ACP session setup failed: ${errorMessage(err)}`, "startup");
     }
     await applySessionModel(rpc, sessionId, opts.model);
-    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model);
+    const promptCaps = asRecord(caps?.promptCapabilities);
+    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model, promptCaps?.image === true);
   }
 
   async send(
@@ -259,7 +262,8 @@ class AcpSession implements AdapterSession {
     }
     const runId = randomUUID();
     const promptText = promptWithAttachments(text, sendOpts?.attachments);
-    const images = imagePartsFromAttachments(sendOpts?.attachments);
+    /* An agent that did not declare image support gets the files' paths in the text only. */
+    const images = this.takesImages ? imagePartsFromAttachments(sendOpts?.attachments) : [];
     const promptBlocks: Array<Record<string, unknown>> = [{ type: "text", text: promptText }];
     for (const img of images) {
       promptBlocks.push({ type: "image", mimeType: img.mime, data: img.data });
@@ -334,7 +338,7 @@ export const acpAdapter: Adapter = {
     cancel: true,
     resume: false,
     discover: true,
-    toolConfirmation: "auto-review-deny",
+    toolConfirmation: "deny-writes",
     attachments: true,
     auth: { kind: "cli-binary", envNames: [] },
     defaultModel: { id: "default", params: [] },

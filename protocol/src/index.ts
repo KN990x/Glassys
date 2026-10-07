@@ -83,7 +83,13 @@ export type EdgeAuth = "none" | "cloudflare-access" | "header";
 export type SettingSource = "project" | "user" | "plugins" | "team" | "mdm" | "all";
 
 export type AdapterAuthKind = "sdk-login" | "api-key" | "cli-binary";
-export type ToolConfirmation = "auto-review-deny" | "permission-mode" | "none";
+/**
+ * How an adapter keeps tools in check when auto-run is off. auto-review-deny: Cursor's Auto-review
+ * classifier denies risky calls. deny-writes: Glassys itself refuses writes, terminals and any
+ * permission request that is not a read (ACP). permission-mode: Claude Code's permission modes.
+ * none: nothing Glassys can set.
+ */
+export type ToolConfirmation = "auto-review-deny" | "deny-writes" | "permission-mode" | "none";
 
 export interface AdapterAuthCapability {
   kind: AdapterAuthKind;
@@ -153,7 +159,10 @@ export interface AgentConfig {
   cwd: string;
   model: string;
   modelParams: ModelParam[];
-  /** Adapter-specific. Cursor: settingSources, sandbox, autoRun. Claude: permissionMode. ACP: command, args, registryId. */
+  /**
+   * Adapter-specific. Cursor: settingSources, sandbox, autoRun. Claude: permissionMode, autoRun.
+   * Codex: sandboxMode. ACP: command, args, registryId, autoRun. OpenCode and Gemini: none.
+   */
   options: Record<string, unknown>;
 }
 
@@ -376,7 +385,11 @@ export function isClientMessage(value: unknown): value is ClientMessage {
     case "auth":
       return typeof rec.token === "string";
     case "user.message":
-      return typeof rec.text === "string" && optionalAttachments(rec.attachments);
+      return (
+        typeof rec.text === "string" &&
+        (rec.id === undefined || typeof rec.id === "string") &&
+        optionalAttachments(rec.attachments)
+      );
     case "queue.cancel":
     case "thread.switch":
       return typeof rec.id === "string";

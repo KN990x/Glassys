@@ -248,6 +248,7 @@ export function AgentTab({
       {caps?.toolConfirmation === "auto-review-deny" && tone === "danger" && (
         <Callout tone="warn">{t("wizard.exec.danger")}</Callout>
       )}
+      {caps?.toolConfirmation === "deny-writes" && <Callout>{t("wizard.exec.denyWrites")}</Callout>}
       {caps?.toolConfirmation === "none" && <Callout tone="warn">{t("wizard.exec.unattended")}</Callout>}
       {cwdExposesDataDir({ cwd: draft.agent.cwd, dataDir: draft.dataDir, sandbox, sandboxSupported: Boolean(caps?.sandbox) }) && (
         <Callout tone="warn">{t("settings.dataDirExposed")}</Callout>

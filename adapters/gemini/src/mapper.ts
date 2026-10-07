@@ -1,9 +1,10 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, toolKindFromName } from "@glassys/adapter-contract";
-
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
-}
+import {
+  asRecord,
+  extractDiff,
+  str,
+  toolKindFromName,
+} from "@glassys/adapter-contract";
 
 export function mapGeminiChunk(chunk: unknown, tools = new Map<string, string>()): ServerMessage[] {
   const rec = asRecord(chunk);

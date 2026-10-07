@@ -22,7 +22,8 @@ agent:
   #   autoRun false → local.autoReview (classifier denies; headless SDK cannot prompt).
   # Claude: permissionMode, autoRun.
   # ACP: command, args, registryId, autoRun (required command after onboarding too).
-  # OpenCode / Codex / Gemini: model only; they have no Glassys deny lever.
+  # Codex: sandboxMode (read-only | workspace-write | danger-full-access; empty keeps ~/.codex/config.toml).
+  # OpenCode / Gemini: model only; they have no Glassys deny lever.
   options:
     settingSources:
       - project

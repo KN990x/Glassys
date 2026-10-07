@@ -7,6 +7,7 @@ import {
   pendingRun,
   promptWithAttachments,
   requireHostCommand,
+  str,
   type Adapter,
   type AdapterCreateOptions,
   type AdapterSession,
@@ -34,10 +35,6 @@ const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Default (Op
 
 type OcBundle = Awaited<ReturnType<typeof createOpencode>>;
 type OcClient = OcBundle["client"];
-
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
-}
 
 let envLock = Promise.resolve();
 let sharedServer: Promise<OcBundle> | null = null;
