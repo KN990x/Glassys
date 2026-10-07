@@ -94,13 +94,15 @@ composer clears the home indicator.
   block, diffs get a sign channel, and text paints from the first token.
 - **Activity** — `⌘I`, or the button in the chat's topbar: every command this thread ran
   with how it ended, and every file it read or rewrote, derived from the
-  transcript. Clicking a row jumps to that call.
+  transcript. Clicking a row jumps to that call, opening its folded group.
 - **Composer** — one card. Attach, saved prompts, the model chip and the
-  permission chip sit inside its bottom edge; send becomes stop while a run is
-  in flight, and `Esc` cancels.
+  permission chip sit inside its bottom edge; while a run is in flight, stop
+  takes send's place and send comes back beside it once there is something to
+  queue, and `Esc` cancels. A message the gateway does not confirm goes back
+  into the box instead of being lost.
 - **Command palette** — `⌘K` / `Ctrl+K` for threads, export, restart, upgrade,
   workspaces, and your saved prompts. Typing `/` in the composer filters the
-  same prompts inline.
+  same prompts inline; a message that merely starts with a path is sent as is.
 - **Saved operations** — slash templates you define in Settings. The empty
   transcript offers them as a list, so a fresh thread starts with one tap.
 - **Scheduled prompts** — cron or a one-shot time, queued when the gateway is
@@ -262,13 +264,17 @@ y el composer respeta el indicador de inicio.
   y el texto se pinta desde el primer token.
 - **Actividad** — `⌘I`, o el botón del topbar del chat: cada comando que ha
   ejecutado el hilo y cómo terminó, y cada archivo leído o reescrito, derivado
-  del transcript. Al pulsar una fila, el transcript salta a esa llamada.
+  del transcript. Al pulsar una fila, el transcript salta a esa llamada y abre
+  su grupo si estaba plegado.
 - **Composer** — una sola tarjeta. Adjuntar, prompts guardados, el chip de
-  modelo y el de permisos van dentro de su borde inferior; enviar se convierte
-  en detener mientras hay una ejecución, y `Esc` cancela.
+  modelo y el de permisos van dentro de su borde inferior; mientras hay una
+  ejecución, detener ocupa el sitio de enviar y enviar vuelve a su lado en cuanto
+  hay algo que encolar, y `Esc` cancela. Un mensaje que el gateway no confirma
+  vuelve al cuadro en lugar de perderse.
 - **Paleta de comandos** — `⌘K` / `Ctrl+K` para hilos, exportar, reiniciar,
   actualizar, workspaces y tus prompts guardados. Escribir `/` en el composer
-  filtra esos mismos prompts en línea.
+  filtra esos mismos prompts en línea; un mensaje que solo empieza por una ruta
+  se envía tal cual.
 - **Operaciones guardadas** — plantillas slash que defines en Ajustes. El
   transcript vacío las ofrece como una lista, así un hilo nuevo arranca de un
   toque.
