@@ -9,7 +9,7 @@ import type {
 } from "@glassys/protocol";
 import { adapterSelectable } from "@glassys/protocol";
 import { api } from "../../api";
-import { useT } from "../../i18n";
+import { adapterDescription, useT } from "../../i18n";
 import { ModelPicker } from "../../components/ModelPicker";
 import { CatalogFallbackNotice } from "../../components/CatalogFallback";
 import { SdkLoginControls } from "../../components/SdkLogin";
@@ -104,7 +104,7 @@ export function AgentTab({
                 {t("wizard.adapter.unavailable")} {currentAdapter.available.error}
               </span>
             ) : (
-              currentAdapter?.description
+              currentAdapter && adapterDescription(t, currentAdapter)
             )
           }
         >
@@ -193,7 +193,7 @@ export function AgentTab({
           </SettingRow>
         )}
         {caps?.autoRun && (
-          <SettingRow label={t("wizard.exec.autoRun")} hint={t("settings.autoRunHint")}>
+          <SettingRow label={t("wizard.exec.autoRun")} hint={caps?.toolConfirmation === "auto-review-deny" ? t("settings.autoRunHint") : undefined}>
             <Switch
               hideLabel
               label={t("wizard.exec.autoRun")}

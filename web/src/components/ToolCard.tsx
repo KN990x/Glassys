@@ -105,6 +105,8 @@ export function ToolGroup({
   const { files, add, del } = useMemo(() => toolGroupSummary(blocks), [blocks]);
   const running = blocks.some((b) => b.status === "running");
   const failed = blocks.some((b) => b.status === "error" || b.status === "denied");
+  /* A group whose only failures are refusals says so, as its rows do. */
+  const errored = blocks.some((b) => b.status === "error");
   const stopped = blocks.some((b) => b.status === "stopped");
   /* Open, a group whose changes all sit in one row would print that row's
      totals twice; the head keeps them when folded or when they add up. */
@@ -131,7 +133,7 @@ export function ToolGroup({
           </span>
           <span className="tool-group-title nums">
             {blocks.length} {t("tool.steps")}
-            {files > 0 ? ` · ${files} ${t("tool.files")}` : ""}
+            {files > 0 ? ` · ${files} ${t(files === 1 ? "tool.file" : "tool.files")}` : ""}
           </span>
         </button>
         <span className="tool-tail">
@@ -141,8 +143,10 @@ export function ToolGroup({
             </span>
           ) : null}
           <ToolState
-            status={running ? "running" : failed ? "error" : stopped ? "stopped" : "done"}
-            label={running ? t("tool.running") : failed ? t("tool.error") : stopped ? t("tool.stopped") : t("tool.done")}
+            status={running ? "running" : errored ? "error" : failed ? "denied" : stopped ? "stopped" : "done"}
+            label={
+              running ? t("tool.running") : errored ? t("tool.error") : failed ? t("tool.denied") : stopped ? t("tool.stopped") : t("tool.done")
+            }
           />
         </span>
       </div>
@@ -171,7 +175,9 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
     userOpen ??
     (block.status === "running" || block.status === "error" || block.status === "denied" || Boolean(showDiff && block.diff));
   const hunks = useMemo(() => (showDiff && block.diff ? splitHunks(block.diff) : []), [block.diff, showDiff]);
-  const chunkLines = block.chunk ? block.chunk.split("\n").length : 0;
+  /* A shell's output streams as chunks; an agent that only reports it at the end sends a preview. */
+  const output = block.chunk || (block.toolKind === "shell" ? block.outputPreview : undefined);
+  const chunkLines = output ? output.split("\n").length : 0;
   const canExpand = chunkLines > shellLines;
 
   async function copyCommand(e: { stopPropagation: () => void }) {
@@ -250,12 +256,10 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
                 </span>
                 <code>{block.command}</code>
               </div>
-              {block.chunk && (
-                <pre className="shell-out">{expanded ? block.chunk : tail(block.chunk, shellLines)}</pre>
-              )}
+              {output && <pre className="shell-out">{expanded ? output : tail(output, shellLines)}</pre>}
             </div>
           ) : (
-            block.chunk && <pre className="shell-out">{expanded ? block.chunk : tail(block.chunk, shellLines)}</pre>
+            output && <pre className="shell-out">{expanded ? output : tail(output, shellLines)}</pre>
           )}
           {canExpand && (
             <button type="button" className="ghost tiny" onClick={() => setExpanded((v) => !v)}>

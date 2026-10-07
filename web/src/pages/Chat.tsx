@@ -307,6 +307,7 @@ export function Chat({
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [blocks, busy, currentThreadId, view]);
 
+
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -1091,6 +1092,10 @@ export function Chat({
               const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
               pinToBottom.current = bottom;
               setAtBottom(bottom);
+            }}
+            onResize={() => {
+              /* A pinned transcript stays pinned when a banner above it or a late layout changes its size. */
+              if (pinToBottom.current) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
             }}
             atBottom={atBottom}
             onJumpBottom={() => {

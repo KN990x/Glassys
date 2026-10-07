@@ -37,3 +37,10 @@ export function I18nProvider({ locale, children }: { locale: Locale; children: R
 export function useT(): (key: string) => string {
   return useContext(I18nContext).t;
 }
+
+/** The operator-facing line for an adapter, in the PWA's language; unknown adapters keep their own. */
+export function adapterDescription(t: (key: string) => string, adapter: { id: string; description?: string }): string | undefined {
+  const key = `adapter.desc.${adapter.id}`;
+  const line = t(key);
+  return line === key ? adapter.description : line;
+}

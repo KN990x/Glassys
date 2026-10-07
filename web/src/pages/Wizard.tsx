@@ -12,7 +12,7 @@ import type {
 } from "@glassys/protocol";
 import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
-import { isLocale, useT, type Locale } from "../i18n";
+import { adapterDescription, isLocale, useT, type Locale } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
@@ -36,9 +36,10 @@ export function wizardStepIds(caps?: {
   autoRun?: boolean;
   toolConfirmation?: string;
 }): StepId[] {
-  const s: StepId[] = ["adapter", "workspace", "phone", "credential"];
+  /* ACP cannot be saved without its command, so the command is picked right after the adapter. */
+  const s: StepId[] = caps?.discover ? ["adapter", "acp"] : ["adapter"];
+  s.push("workspace", "phone", "credential");
   if (caps?.models !== false) s.push("model");
-  if (caps?.discover) s.push("acp");
   if (caps?.settingSources) s.push("rules");
   if (caps?.sandbox || caps?.sandboxModes?.length || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
   return s;
@@ -258,19 +259,24 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
     }
     setSubmitting(true);
     try {
+      const agentFor = (adapter: AdapterPublicInfo, opts: Record<string, unknown>) => ({
+        adapter: adapterId,
+        model: adapter.capabilities.defaultModel?.id || model,
+        modelParams: adapter.capabilities.defaultModel?.params || modelParams,
+        options: opts,
+      });
       if (id === "adapter" && current) {
+        /* An adapter that needs a command is saved with it, on the next step. */
+        const needsCommand = current.capabilities.discover === true;
         onConfig(
           await api.saveConfig({
             space: { locale, theme },
-            agent: {
-              adapter: adapterId,
-              model: current.capabilities.defaultModel?.id || model,
-              modelParams: current.capabilities.defaultModel?.params || modelParams,
-              options: defaultOptionsFor(current),
-            },
+            ...(needsCommand ? {} : { agent: agentFor(current, defaultOptionsFor(current)) }),
           }),
         );
         setOptions(defaultOptionsFor(current));
+      } else if (id === "acp" && current) {
+        onConfig(await api.saveConfig({ agent: agentFor(current, options) }));
       } else if (id === "workspace") {
         onConfig(await api.saveConfig({ agent: { cwd } }));
       } else if (id === "credential") {
@@ -283,8 +289,6 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         }
       } else if (id === "model") {
         onConfig(await api.saveConfig({ agent: { model, modelParams } }));
-      } else if (id === "acp") {
-        onConfig(await api.saveConfig({ agent: { options } }));
       } else if (id === "rules") {
         onConfig(await api.saveConfig({ agent: { options } }));
       } else if (id === "execution") {
@@ -454,7 +458,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                     </span>
                     <span className="adapter-card-body">
                       <strong>{a.displayName}</strong>
-                      {a.description ? <span className="muted">{a.description}</span> : null}
+                      {adapterDescription(t, a) ? <span className="muted">{adapterDescription(t, a)}</span> : null}
                       {!selectable && a.available && !a.available.ok && a.available.error ? (
                         <span className="muted adapter-error" title={a.available.error}>
                           {a.available.error}
@@ -650,7 +654,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 <Switch
                   checked={optionBool(options, "autoRun", true)}
                   label={t("wizard.exec.autoRun")}
-                  hint={t("settings.autoRunHint")}
+                  hint={caps?.toolConfirmation === "auto-review-deny" ? t("settings.autoRunHint") : undefined}
                   onChange={(next) => setOptions(setAutoRun(options, next, caps?.toolConfirmation))}
                 />
               )}

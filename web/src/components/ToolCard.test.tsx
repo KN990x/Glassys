@@ -76,4 +76,25 @@ describe("ToolCard", () => {
     });
     expect(host.textContent).toContain("Clipboard unavailable");
   });
+
+  it("shows a shell's final output when none streamed", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <ToolCard block={shellBlock({ chunk: undefined, status: "error", outputPreview: "checking\n", error: "exit 1" })} shellLines={4} showDiff={false} />
+        </I18nProvider>,
+      );
+    });
+    if (!host.querySelector(".shell-out")) {
+      await act(async () => {
+        host.querySelector(".tool-head")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    }
+    expect(host.querySelector(".shell-out")?.textContent).toBe("checking\n");
+    expect(host.querySelector(".preview")).toBeNull();
+  });
 });
+

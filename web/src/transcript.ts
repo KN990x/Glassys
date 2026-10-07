@@ -19,7 +19,18 @@ export type ToolBlock = {
 };
 
 export type Block =
-  | { id: string; kind: "user"; text: string; messageId?: string; attachments?: MessageAttachment[]; pending?: boolean; retracted?: boolean }
+  | {
+      id: string;
+      kind: "user";
+      text: string;
+      messageId?: string;
+      attachments?: MessageAttachment[];
+      pending?: boolean;
+      retracted?: boolean;
+      /** Its run began (`run.start` named it), and then ended. */
+      started?: boolean;
+      settled?: boolean;
+    }
   | { id: string; kind: "thinking"; text: string; durationMs?: number }
   | { id: string; kind: "text"; text: string }
   | ToolBlock
@@ -83,9 +94,17 @@ export function reduceTranscriptBatch(blocks: Block[], events: TranscriptEvent[]
 
 /** Apply one event to `next`, which the caller owns; returns it or a replacement. */
 function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
-  const tail = next[next.length - 1];
-  if (event.type !== "run.stalled" && tail?.kind === "banner" && tail.code === "stalled") next.pop();
-  const last = next[next.length - 1];
+  let at = outputAt(next);
+  const before = next[at - 1];
+  if (event.type !== "run.stalled" && before?.kind === "banner" && before.code === "stalled") {
+    next.splice(at - 1, 1);
+    at -= 1;
+  }
+  const last = next[at - 1];
+  const put = (block: Block) => {
+    next.splice(at, 0, block);
+    return next;
+  };
 
   switch (event.type) {
     case "user.message":
@@ -106,11 +125,10 @@ function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
     }
     case "thinking.delta": {
       if (last?.kind === "thinking" && last.durationMs === undefined) {
-        next[next.length - 1] = { ...last, text: last.text + event.text };
+        next[at - 1] = { ...last, text: last.text + event.text };
         return next;
       }
-      next.push({ id: nid("th"), kind: "thinking", text: event.text });
-      return next;
+      return put({ id: nid("th"), kind: "thinking", text: event.text });
     }
     case "thinking.done": {
       for (let i = next.length - 1; i >= 0; i--) {
@@ -120,21 +138,21 @@ function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
           return next;
         }
       }
-      next.push({ id: nid("th"), kind: "thinking", text: "", durationMs: event.durationMs });
-      return next;
+      return put({ id: nid("th"), kind: "thinking", text: "", durationMs: event.durationMs });
     }
     case "text.delta": {
       if (last?.kind === "text") {
-        next[next.length - 1] = { ...last, text: last.text + event.text };
+        next[at - 1] = { ...last, text: last.text + event.text };
         return next;
       }
-      next.push({ id: nid("tx"), kind: "text", text: event.text });
-      return next;
+      return put({ id: nid("tx"), kind: "text", text: event.text });
     }
     case "tool.start": {
       const idx = findTool(next, event.callId);
-      if (idx >= 0 && next[idx].kind === "tool") {
-        const cur = next[idx];
+      const cur = idx >= 0 ? next[idx] : undefined;
+      /* Some agents number calls per turn (Codex's item_0, item_1…): a start for an id whose
+         call already finished is a new call, not a refinement of the old one. */
+      if (cur?.kind === "tool" && cur.status === "running") {
         next[idx] = {
           ...cur,
           title: event.title || cur.title,
@@ -144,8 +162,8 @@ function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
         };
         return next;
       }
-      next.push({
-        id: `tool:${event.callId}`,
+      return put({
+        id: cur ? nid(`tool:${event.callId}:`) : `tool:${event.callId}`,
         kind: "tool",
         callId: event.callId,
         toolKind: event.kind,
@@ -155,7 +173,6 @@ function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
         status: "running",
         chunk: "",
       });
-      return next;
     }
     case "tool.progress": {
       const idx = findTool(next, event.callId);
@@ -178,38 +195,44 @@ function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
       };
       if (idx >= 0 && next[idx].kind === "tool") {
         next[idx] = { ...next[idx], ...patch };
-      } else {
-        next.push({
-          id: `tool:${event.callId}`,
-          kind: "tool",
-          callId: event.callId,
-          toolKind: event.kind,
-          title: event.kind,
-          status: "error",
-          chunk: "",
-          ...patch,
-        });
+        return next;
+      }
+      return put({
+        id: `tool:${event.callId}`,
+        kind: "tool",
+        callId: event.callId,
+        toolKind: event.kind,
+        title: event.kind,
+        status: "error",
+        chunk: "",
+        ...patch,
+      });
+    }
+    case "run.queued":
+      return next;
+    case "run.start": {
+      for (let i = next.length - 1; i >= 0; i--) {
+        const b = next[i];
+        if (b.kind === "user" && event.messageId && b.messageId === event.messageId) {
+          next[i] = { ...b, started: true };
+          break;
+        }
       }
       return next;
     }
-    case "run.queued":
-    case "run.start":
-      return next;
     case "run.error":
-      next.push({ id: nid("err"), kind: "banner", text: event.message, tone: "error" });
-      return closeOpenWork(next, "stopped");
+      put({ id: nid("err"), kind: "banner", text: event.message, tone: "error" });
+      return closeOpenWork(settleRun(next), "stopped");
     case "run.cancelled":
-      next.push({ id: nid("c"), kind: "banner", text: "", tone: "info", code: "cancelled" });
-      return closeOpenWork(next, "stopped");
+      put({ id: nid("c"), kind: "banner", text: "", tone: "info", code: "cancelled" });
+      return closeOpenWork(settleRun(next), "stopped");
     case "run.done":
-      return closeOpenWork(next, "done");
+      return closeOpenWork(settleRun(next), "done");
     case "run.stalled":
       if (next.some((b) => b.kind === "banner" && b.code === "stalled")) return next;
-      next.push({ id: nid("stall"), kind: "banner", text: "", tone: "info", code: "stalled" });
-      return next;
+      return put({ id: nid("stall"), kind: "banner", text: "", tone: "info", code: "stalled" });
     case "run.usage":
-      next.push({ id: nid("use"), kind: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens });
-      return next;
+      return put({ id: nid("use"), kind: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens });
     default:
       return next;
   }
@@ -224,6 +247,36 @@ function capChunk(chunk: string): string {
   const cut = chunk.length - MAX_TOOL_CHUNK;
   const nl = chunk.indexOf("\n", cut);
   return chunk.slice(nl >= 0 && nl < chunk.length - 1 ? nl + 1 : cut);
+}
+
+/**
+ * Where the running turn writes. A message sent during a run is saved when it is queued, so it
+ * sits in the middle of that run's events; the run's later output still belongs above it, not
+ * split around it. While the message `run.start` named has not settled, output goes before the
+ * first message waiting behind it. Transcripts from before `run.start` named messages, and
+ * messages whose run never started, just append.
+ */
+function outputAt(blocks: Block[]): number {
+  let waiting = -1;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (b.kind !== "user") continue;
+    if (b.started) return b.settled || waiting < 0 ? blocks.length : waiting;
+    if (!b.retracted) waiting = i;
+  }
+  return blocks.length;
+}
+
+/** The run of the last message that started is over. */
+function settleRun(blocks: Block[]): Block[] {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (b.kind === "user" && b.started) {
+      if (!b.settled) blocks[i] = { ...b, settled: true };
+      break;
+    }
+  }
+  return blocks;
 }
 
 function findTool(blocks: Block[], callId: string): number {

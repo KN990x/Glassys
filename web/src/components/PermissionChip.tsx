@@ -74,6 +74,8 @@ export function PermissionChip({
     try {
       setError("");
       onConfig(await api.saveConfig({ agent: { options } }));
+      /* The change opened a new thread; the composer is where the operator goes next. */
+      setOpen(false);
     } catch (err) {
       setError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
     }

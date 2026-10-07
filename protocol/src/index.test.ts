@@ -70,10 +70,10 @@ describe("protocol v1", () => {
     expect(clampKeepaliveSeconds(Number.NaN)).toBe(DEFAULT_KEEPALIVE_SECONDS);
   });
 
-  it("does not persist ephemeral run lifecycle events", () => {
+  it("persists run.start, which names the message a run answers, and not the ephemeral ones", () => {
     expect(isTranscriptEvent({ type: "run.queued" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "run.queued" })).toBe(false);
-    expect(isPersistedTranscriptEvent({ type: "run.start", runId: "1" })).toBe(false);
+    expect(isPersistedTranscriptEvent({ type: "run.start", runId: "1", messageId: "m1" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "run.done" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "user.message", text: "x" })).toBe(true);
     expect(isPersistedTranscriptEvent({ type: "user.retracted", id: "m1" })).toBe(true);

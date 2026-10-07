@@ -345,7 +345,8 @@ export type TranscriptEvent = (
   | ToolProgress
   | ToolEnd
   | { type: "run.queued" }
-  | { type: "run.start"; runId?: string }
+  /** `messageId` names the queued message this run answers, so a client can tell it from the ones still waiting. */
+  | { type: "run.start"; runId?: string; messageId?: string }
   | { type: "run.done" }
   | { type: "run.error"; message: string; phase?: "startup" | "run" }
   | { type: "run.cancelled" }
@@ -509,14 +510,13 @@ export function isTranscriptEvent(value: ServerMessage): value is TranscriptEven
 
 /**
  * Events written to transcript.jsonl and replayed on reconnect. The others describe a moment of
- * a live run (queued, started, streaming tool output, no output for a while) and mean nothing
- * once it is over.
+ * a live run (queued, streaming tool output, no output for a while) and mean nothing once it is
+ * over. `run.start` stays: it says which message each run answered.
  */
 export function isPersistedTranscriptEvent(value: ServerMessage): value is TranscriptEvent {
   return (
     isTranscriptEvent(value) &&
     value.type !== "run.queued" &&
-    value.type !== "run.start" &&
     value.type !== "run.stalled" &&
     value.type !== "tool.progress"
   );

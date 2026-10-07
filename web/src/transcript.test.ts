@@ -2,6 +2,73 @@ import { describe, expect, it } from "vitest";
 import { MAX_TOOL_CHUNK, reduceTranscript, replay } from "./transcript";
 
 describe("transcript reducer", () => {
+  it("keeps a running turn's output above a message queued during it", () => {
+    const blocks = replay([
+      { type: "user.message", text: "long", id: "m1" },
+      { type: "run.start", runId: "r1", messageId: "m1" },
+      { type: "text.delta", text: "tick 1 " },
+      { type: "user.message", text: "follow-up", id: "m2" },
+      { type: "text.delta", text: "tick 2" },
+      { type: "tool.start", callId: "t1", kind: "shell", title: "ls" },
+      { type: "run.usage", inputTokens: 3 },
+      { type: "run.done" },
+      { type: "run.start", runId: "r2", messageId: "m2" },
+      { type: "text.delta", text: "answer 2" },
+      { type: "run.done" },
+    ]);
+    expect(blocks.map((b) => (b.kind === "user" || b.kind === "text" ? `${b.kind}:${b.text}` : b.kind))).toEqual([
+      "user:long",
+      "text:tick 1 tick 2",
+      "tool",
+      "usage",
+      "user:follow-up",
+      "text:answer 2",
+    ]);
+  });
+
+  it("appends as before when run.start names no message, or a run failed before starting", () => {
+    const old = replay([
+      { type: "user.message", text: "a", id: "m1" },
+      { type: "text.delta", text: "x" },
+      { type: "user.message", text: "b", id: "m2" },
+      { type: "text.delta", text: "y" },
+    ]);
+    expect(old.map((b) => b.kind)).toEqual(["user", "text", "user", "text"]);
+    const failed = replay([
+      { type: "user.message", text: "a", id: "m1" },
+      { type: "run.start", messageId: "m1" },
+      { type: "run.done" },
+      { type: "user.message", text: "b", id: "m2" },
+      { type: "run.error", message: "Attachments could not be read", phase: "startup" },
+    ]);
+    expect(failed.map((b) => b.kind)).toEqual(["user", "user", "banner"]);
+  });
+
+  it("starts a new card when a finished call id comes back in a later turn", () => {
+    const turn = (text: string) => [
+      { type: "user.message" as const, text },
+      { type: "tool.start" as const, callId: "item_0", kind: "shell" as const, title: "ls", command: text },
+      { type: "tool.end" as const, callId: "item_0", ok: true, kind: "shell" as const, outputPreview: text },
+      { type: "run.done" as const },
+    ];
+    const blocks = replay([...turn("first"), ...turn("second")]);
+    const tools = blocks.filter((b) => b.kind === "tool");
+    expect(tools.map((b) => (b.kind === "tool" ? [b.command, b.outputPreview, b.status] : []))).toEqual([
+      ["first", "first", "done"],
+      ["second", "second", "done"],
+    ]);
+    expect(new Set(tools.map((b) => b.id)).size).toBe(2);
+  });
+
+  it("still refines a running call from a second start", () => {
+    const blocks = replay([
+      { type: "tool.start", callId: "t1", kind: "edit", title: "Edit" },
+      { type: "tool.start", callId: "t1", kind: "edit", title: "Edit a.ts", path: "/w/a.ts" },
+    ]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ title: "Edit a.ts", path: "/w/a.ts", status: "running" });
+  });
+
   it("keeps only the tail of a long tool stream, cut on a line", () => {
     let blocks = reduceTranscript([], { type: "tool.start", callId: "c1", kind: "shell", title: "Shell" });
     const line = `${"x".repeat(99)}\n`;

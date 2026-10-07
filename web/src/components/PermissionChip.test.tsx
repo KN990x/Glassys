@@ -111,6 +111,8 @@ describe("PermissionChip", () => {
       await Promise.resolve();
     });
     expect(saveConfig).toHaveBeenCalled();
+    /* The change opened a new thread: the popover gets out of the composer's way. */
+    expect(host.querySelector(".pop")).toBeNull();
   });
 
   it("closes the popover on Escape and click outside", async () => {

@@ -59,7 +59,7 @@
     },
     { "type": "object", "required": ["type", "id"], "properties": { "type": { "const": "user.retracted" }, "id": { "type": "string" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.queued" } } },
-    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.start" }, "runId": { "type": "string" } } },
+    { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.start" }, "runId": { "type": "string" }, "messageId": { "type": "string" } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.done" } } },
     { "type": "object", "required": ["type", "message"], "properties": { "type": { "const": "run.error" }, "message": { "type": "string" }, "phase": { "enum": ["startup", "run"] } } },
     { "type": "object", "required": ["type"], "properties": { "type": { "const": "run.cancelled" } } },

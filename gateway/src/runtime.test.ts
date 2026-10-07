@@ -203,6 +203,11 @@ describe("runtime queue", () => {
       await drainEmit();
       const done = await readTranscript();
       expect(done.filter((e) => e.type === "run.done").length).toBeGreaterThanOrEqual(1);
+      /* Each saved run.start names the message it answers, so a replay can keep "two" below
+         the output of "one" that arrived after "two" was queued. */
+      const ids = done.flatMap((e) => (e.type === "user.message" && e.id ? [e.id] : []));
+      const starts = done.flatMap((e) => (e.type === "run.start" ? [e.messageId] : []));
+      expect(starts).toEqual(ids);
     } finally {
       hub.broadcast = orig;
     }

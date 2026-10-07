@@ -758,7 +758,7 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
     runStartedAt = nowFn();
     lastEventAt = nowFn();
     resetPushRunFlags();
-    await emit({ type: "run.start", runId });
+    await emit({ type: "run.start", runId, messageId: job.id });
     await broadcastSession();
     const stallSeconds = cfg.session.stallSeconds;
     if (stallSeconds > 0) {

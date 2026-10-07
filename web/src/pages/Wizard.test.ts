@@ -76,6 +76,6 @@ describe("wizardStepIds", () => {
   it("omits the model step when the adapter has no catalog", () => {
     expect(wizardStepIds({ ...caps, models: false })).not.toContain("model");
     expect(wizardStepIds({ ...caps, models: true })).toContain("model");
-    expect(wizardStepIds({ ...caps, discover: true })).toContain("acp");
+    expect(wizardStepIds({ ...caps, discover: true }).slice(0, 2)).toEqual(["adapter", "acp"]);
   });
 });
