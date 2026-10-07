@@ -235,9 +235,12 @@ async function emit(event: ServerMessage, agentId?: string | null): Promise<void
     hub.broadcast(out);
     if (stored) {
       try {
-        if (flushNow) await flushLiveTranscript();
+        if (flushNow) {
+          await flushLiveTranscript();
+          /* Only a write that reached the disk ends a failure; a buffered delta proves nothing. */
+          persistFailing = false;
+        }
         if (stored.type === "user.message") await refreshLiveTitle(stored.text);
-        persistFailing = false;
       } catch (err) {
         reportPersistFailure(err);
       }

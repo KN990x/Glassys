@@ -69,3 +69,20 @@ describe("startLoginJob", () => {
     ).rejects.toThrow(/Timed out waiting for the sign-in URL/);
   });
 });
+
+describe("cancelLoginJob", () => {
+  it("gives up on a vendor login that ignores its abort, instead of holding shutdown", async () => {
+    const { LOGIN_CANCEL_WAIT_MS } = await import("./adapter-login.js");
+    await startLoginJob(
+      "cursor",
+      async (opts) => {
+        opts?.onLoginUrl?.("https://example.test/login");
+        await new Promise(() => undefined);
+      },
+      50,
+    );
+    const started = Date.now();
+    await cancelLoginJob();
+    expect(Date.now() - started).toBeLessThan(LOGIN_CANCEL_WAIT_MS + 1_000);
+  }, 15_000);
+});

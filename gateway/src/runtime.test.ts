@@ -658,6 +658,34 @@ describe("runtime queue", () => {
     }
   });
 
+  it("tells the operator once when the transcript cannot be written, and keeps streaming", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = ws;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { enqueueMessage, readTranscript, drainEmit } = await import("./runtime.js");
+    const { liveTranscriptPath } = await import("./threads.js");
+    const { hub } = await import("./hub.js");
+    const { chmod } = await import("node:fs/promises");
+    await enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+    await drainEmit();
+    await chmod(liveTranscriptPath(), 0o400);
+    const sent: Array<{ type: string; message?: string; text?: string }> = [];
+    const spy = vi.spyOn(hub, "broadcast").mockImplementation((m) => void sent.push(m as never));
+    try {
+      await enqueueMessage("two");
+      await waitUntil(() => sent.some((m) => m.type === "run.done"));
+      await drainEmit();
+      const failures = sent.filter((m) => m.type === "run.error" && /could not save/.test(m.message ?? ""));
+      expect(failures).toHaveLength(1);
+      expect(sent.some((m) => m.type === "text.delta" && m.text === "echo:two")).toBe(true);
+    } finally {
+      spy.mockRestore();
+      await chmod(liveTranscriptPath(), 0o600);
+    }
+  });
+
   it("refuses to switch to a thread whose folder is gone, without leaving the live one", async () => {
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
