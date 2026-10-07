@@ -74,7 +74,7 @@
   "wizard.cred.keyHint": "Leave empty to use the SDK login or the matching environment variable.",
   "wizard.cred.unsignedWarn": "Sign in with the SDK or set an optional API key before entering chat.",
   "wizard.cred.required": "This adapter needs an SDK sign-in or an API key before you can enter chat. Vendor CLI / IDE login is not enough.",
-  "wizard.model.body": "Cursor, Claude, and OpenCode load models from the selected runtime’s live catalog. Gemini, Codex, and ACP use a static list; fallback is only a warning when a live catalog is expected.",
+  "wizard.model.body": "Cursor, Claude and OpenCode list the models of the runtime you picked. An ACP agent lists the ones it announces, after “Agent default”, which lets it choose. Gemini and Codex use a fixed list.",
   "wizard.model.variant": "Effort / variant",
   "wizard.model.custom": "Custom",
   "wizard.model.empty": "No models in the catalog yet.",

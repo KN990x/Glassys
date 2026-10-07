@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Block } from "../transcript";
 import { deriveActivity } from "../activity";
 import { useT } from "../i18n";
-import { formatTokens, truncateMiddle } from "../format";
+import { formatTokens, truncateMiddle, workspacePath } from "../format";
 import { SegmentedControl } from "./SegmentedControl";
 import { Disclosure, ListRow } from "./Primitives";
 import { Hunk, REVEAL_EVENT } from "./ToolCard";
@@ -64,8 +64,11 @@ export function ActivityPanel({
   locale,
   duration,
   usage: usageOverride,
+  cwd = "",
 }: {
   blocks: Block[];
+  /** The thread's workspace: paths under it read relative to it. */
+  cwd?: string;
   onClose?: () => void;
   locale: string;
   duration?: string;
@@ -173,7 +176,7 @@ export function ActivityPanel({
                       )
                     }
                   >
-                    {truncateMiddle(f.path, 34)}
+                    {truncateMiddle(workspacePath(f.path, cwd), 34)}
                   </ListRow>
                   {f.diff && (
                     <Disclosure

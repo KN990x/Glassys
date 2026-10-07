@@ -1024,6 +1024,7 @@ export function Chat({
             onClose={() => toggleActivity(false)}
             duration={runStartedAt ? formatElapsed(Date.now() - runStartedAt) : undefined}
             usage={liveUsage}
+            cwd={config.agent.cwd}
           />
         ) : null
       }

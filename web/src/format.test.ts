@@ -4,6 +4,7 @@ import {
   newMessageId,
   blockMatchesQuery,
   cwdBasename,
+  workspacePath,
   formatBytes,
   formatRelativeShort,
   formatUptime,
@@ -27,6 +28,15 @@ describe("format", () => {
     ]);
     expect(groups.map((g) => g.cwd)).toEqual(["/opt/a", "/opt/b"]);
     expect(groups[0]?.threads.map((t) => t.id)).toEqual(["a", "c"]);
+  });
+
+  it("shows workspace paths relative to the workspace and leaves others whole", () => {
+    expect(workspacePath("/srv/app/conf/x.yml", "/srv/app")).toBe("conf/x.yml");
+    expect(workspacePath("/srv/app/conf/x.yml", "/srv/app/")).toBe("conf/x.yml");
+    expect(workspacePath("/srv/app", "/srv/app")).toBe(".");
+    expect(workspacePath("/srv/apples/x", "/srv/app")).toBe("/srv/apples/x");
+    expect(workspacePath("/etc/hosts", "/srv/app")).toBe("/etc/hosts");
+    expect(workspacePath("notes.md", "")).toBe("notes.md");
   });
 
   it("takes the last path segment", () => {

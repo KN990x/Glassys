@@ -178,6 +178,7 @@ export function Transcript({
             thinkingDefault={thinkingDefault}
             shellLines={shellLines}
             showDiff={showDiff}
+            cwd={cwd}
           />
         );
       })}
@@ -215,6 +216,7 @@ type RowProps = {
   thinkingDefault: "collapsed" | "expanded";
   shellLines: number;
   showDiff: boolean;
+  cwd: string;
 };
 
 /* groupBlocks rebuilds tool groups on every render; the blocks inside keep
@@ -240,10 +242,11 @@ const TranscriptRow = memo(function TranscriptRow({
   thinkingDefault,
   shellLines,
   showDiff,
+  cwd,
 }: RowProps) {
   const t = useT();
   if ("kind" in item && item.kind === "tools") {
-    return <ToolGroup blocks={item.blocks} shellLines={shellLines} showDiff={showDiff} />;
+    return <ToolGroup blocks={item.blocks} shellLines={shellLines} showDiff={showDiff} cwd={cwd} />;
   }
   const b = item as Block;
   if (b.kind === "user") {

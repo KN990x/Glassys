@@ -76,7 +76,8 @@ export interface Adapter {
   readonly displayName: string;
   readonly description?: string;
   readonly capabilities: AdapterCapabilities;
-  listModels(apiKey?: string, cwd?: string): Promise<ModelListResponse>;
+  /** `ctx` carries the saved options and store when the adapter is the configured one (ACP asks its agent). */
+  listModels(apiKey?: string, cwd?: string, ctx?: { options: Record<string, unknown>; storeDir: string }): Promise<ModelListResponse>;
   create(opts: AdapterCreateOptions): Promise<AdapterSession>;
   resume(agentId: string, opts: AdapterCreateOptions): Promise<AdapterSession>;
   normalizeConfig?(agent: {

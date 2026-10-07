@@ -70,6 +70,8 @@ node scripts/smoke-adapter.mjs claude --model haiku
 
 It runs the adapter in a temporary workspace, asks the agent to write and edit a file and run a failing command, and checks that tool cards, the diff, the failed shell and the finished run all reach the transcript. With `GLASSYS_RECORD_FIXTURES=<dir>` every adapter (and the gateway) writes the raw SDK events to `<dir>/<adapter>-<time>.jsonl`; a reviewed recording, stripped of host paths, makes the best mapper fixture (see `adapters/claude/src/fixtures/`).
 
+Without an account, `scripts/fake-acp-agent.mjs` stands in for one. It speaks ACP with no model behind it: a demo turn thinks, writes and edits `demo.txt` through the host, asks permission for a shell that fails, reads the file back and answers in markdown; `long 30` streams for 30 seconds (default 150) until cancelled. It also announces two models. Pick ACP in the wizard with command `node` and arguments `/absolute/path/to/glassys/scripts/fake-acp-agent.mjs` to try the PWA end to end (queue, cancel, reconnect, auto-run off). `adapters/acp/src/fake-agent.test.ts` runs the same agent in CI.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

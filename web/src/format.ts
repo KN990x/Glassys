@@ -32,6 +32,15 @@ export function groupThreadsByCwd(threads: ThreadSummary[]): Array<{ cwd: string
   return order.map((cwd) => ({ cwd, threads: map.get(cwd)! }));
 }
 
+/** A path inside the workspace as the operator thinks of it, relative to its root; others stay whole. */
+export function workspacePath(path: string, cwd: string): string {
+  const root = cwd.replace(/[\\/]+$/, "");
+  if (!root || !path.startsWith(root)) return path;
+  const rest = path.slice(root.length);
+  if (!rest) return ".";
+  return /^[\\/]/.test(rest) ? rest.replace(/^[\\/]+/, "") : path;
+}
+
 export function cwdBasename(cwd: string): string {
   const trimmed = cwd.replace(/[\\/]+$/, "");
   const parts = trimmed.split(/[\\/]/);

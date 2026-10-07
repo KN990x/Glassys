@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCopy } from "../useCopy";
 import { useT } from "../i18n";
+import { workspacePath } from "../format";
 import type { ToolBlock } from "../transcript";
 import {
   IconAlert,
@@ -85,10 +86,12 @@ export function ToolGroup({
   blocks,
   shellLines,
   showDiff,
+  cwd = "",
 }: {
   blocks: ToolBlock[];
   shellLines: number;
   showDiff: boolean;
+  cwd?: string;
 }) {
   const t = useT();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
@@ -114,7 +117,7 @@ export function ToolGroup({
   const showTotals = Boolean(add || del) && (!open || statRows > 1);
 
   if (blocks.length === 1) {
-    return <ToolCard block={blocks[0]!} shellLines={shellLines} showDiff={showDiff} />;
+    return <ToolCard block={blocks[0]!} shellLines={shellLines} showDiff={showDiff} cwd={cwd} />;
   }
 
   return (
@@ -153,7 +156,7 @@ export function ToolGroup({
       {open && (
         <div className="tool-group-body">
           {blocks.map((b) => (
-            <ToolCard key={b.id} block={b} shellLines={shellLines} showDiff={showDiff} />
+            <ToolCard key={b.id} block={b} shellLines={shellLines} showDiff={showDiff} cwd={cwd} />
           ))}
         </div>
       )}
@@ -161,7 +164,18 @@ export function ToolGroup({
   );
 }
 
-export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; shellLines: number; showDiff: boolean }) {
+export function ToolCard({
+  block,
+  shellLines,
+  showDiff,
+  cwd = "",
+}: {
+  block: ToolBlock;
+  shellLines: number;
+  showDiff: boolean;
+  /** The thread's workspace: paths under it read relative to it. */
+  cwd?: string;
+}) {
   const t = useT();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -215,7 +229,11 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
               under it and in the Activity panel. */}
           <span className={`title${block.toolKind === "shell" ? " command" : ""}`}>
             <span>{block.title}</span>
-            {block.path && block.path !== block.title ? <span className="tool-path">{block.path}</span> : null}
+            {block.path && block.path !== block.title ? (
+              <span className="tool-path" title={block.path}>
+                {workspacePath(block.path, cwd)}
+              </span>
+            ) : null}
           </span>
         </button>
         <span className="tool-tail">

@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
@@ -11,6 +12,7 @@ import {
   pendingRun,
   promptWithAttachments,
   requireHostCommand,
+  str,
   usageFrom,
   type Adapter,
   type AdapterCreateOptions,
@@ -151,27 +153,81 @@ async function storedResumeCapability(
   }
 }
 
+/**
+ * The models an agent offers, from a session/new, load or resume result: the session-model
+ * shape (`models.availableModels`) or a config option of category "model". Undefined when the
+ * agent offers no choice.
+ */
+export function acpModelsFrom(result: unknown): ModelCatalogItem[] | undefined {
+  const rec = asRecord(result);
+  const models = asRecord(rec?.models);
+  if (models && Array.isArray(models.availableModels)) {
+    return models.availableModels.flatMap((m) => {
+      const item = asRecord(m);
+      const id = str(item?.modelId);
+      return id ? [{ id, displayName: str(item?.name) || id, description: str(item?.description) }] : [];
+    });
+  }
+  const options = Array.isArray(rec?.configOptions) ? rec.configOptions.map((o) => asRecord(o)) : [];
+  const select = options.find((o) => (o?.category === "model" || o?.id === "model") && Array.isArray(o?.options));
+  if (!select) return undefined;
+  const flat = (select.options as unknown[]).flatMap((o) => {
+    const group = asRecord(o);
+    return Array.isArray(group?.options) ? group.options : [o];
+  });
+  return flat.flatMap((o) => {
+    const item = asRecord(o);
+    const id = str(item?.value);
+    return id ? [{ id, displayName: str(item?.name) || id, description: str(item?.description) }] : [];
+  });
+}
+
+function modelCatalogPath(storeDir: string): string {
+  return join(storeDir, "models.json");
+}
+
+/** What the agent offered when it last opened a session; an empty list means it offers no choice. */
+async function persistModelCatalog(storeDir: string, command: string, args: string[], models: ModelCatalogItem[]): Promise<void> {
+  if (!storeDir) return;
+  try {
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(modelCatalogPath(storeDir), JSON.stringify({ command, args, models }), "utf8");
+  } catch {
+    /* store is best-effort */
+  }
+}
+
+async function storedModelCatalog(storeDir: string, command: string, args: string[]): Promise<ModelCatalogItem[] | undefined> {
+  try {
+    const raw = JSON.parse(await readFile(modelCatalogPath(storeDir), "utf8")) as { command?: string; args?: unknown; models?: unknown };
+    if (raw.command !== command || JSON.stringify(raw.args ?? []) !== JSON.stringify(args)) return undefined;
+    return Array.isArray(raw.models) ? (raw.models as ModelCatalogItem[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function openAcpSession(
   rpc: JsonRpcStdio,
   opts: AdapterCreateOptions,
   resumeId: string | undefined,
   caps: Record<string, unknown> | undefined,
-): Promise<string> {
+): Promise<{ sessionId: string; models?: ModelCatalogItem[] }> {
   const sessionCaps = asRecord(caps?.session) ?? caps;
   const loadSession = acpShouldLoadSession(caps);
   const canResume = sessionCaps?.resume === true || sessionCaps?.sessionResume === true;
   if (resumeId) {
     if (canResume) {
       try {
-        await rpc.request("session/resume", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
-        return resumeId;
+        const resumed = await rpc.request("session/resume", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
+        return { sessionId: resumeId, models: acpModelsFrom(resumed) };
       } catch {
         /* fall through to load */
       }
     }
     if (loadSession) {
-      await rpc.request("session/load", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
-      return resumeId;
+      const loaded = await rpc.request("session/load", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
+      return { sessionId: resumeId, models: acpModelsFrom(loaded) };
     }
     throw new AdapterError("ACP agent cannot resume the stored session", "startup");
   }
@@ -181,7 +237,42 @@ async function openAcpSession(
   if (typeof created?.sessionId !== "string" || !created.sessionId) {
     throw new AdapterError("ACP session/new returned no sessionId", "startup");
   }
-  return created.sessionId;
+  return { sessionId: created.sessionId, models: acpModelsFrom(created) ?? [] };
+}
+
+/** Opening a session only to read the catalog must not hold the model picker for minutes. */
+export const ACP_MODEL_PROBE_TIMEOUT_MS = 45_000;
+/** An agent that would not open a session is not started again for every model list. */
+export const ACP_MODEL_PROBE_RETRY_MS = 5 * 60_000;
+const probes = new Map<string, Promise<void>>();
+const probeFailures = new Map<string, { at: number; error: unknown }>();
+
+/** Open and close a session so the agent announces its models; concurrent asks share one. */
+function probeCatalog(opts: AdapterCreateOptions): Promise<void> {
+  const key = JSON.stringify([optionString(opts.options, "command", ""), optionStringArray(opts.options, "args", []), opts.storeDir]);
+  const failed = probeFailures.get(key);
+  if (failed && Date.now() - failed.at < ACP_MODEL_PROBE_RETRY_MS) return Promise.reject(failed.error);
+  const running = probes.get(key);
+  if (running) return running;
+  const probe = (async () => {
+    const starting = AcpSession.start(opts);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new AdapterError("The ACP agent did not open a session in time", "startup")), ACP_MODEL_PROBE_TIMEOUT_MS);
+    });
+    try {
+      const session = await Promise.race([starting, late]);
+      await session.dispose();
+    } catch (err) {
+      void starting.then((session) => session.dispose(), () => undefined);
+      probeFailures.set(key, { at: Date.now(), error: err });
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  })().finally(() => probes.delete(key));
+  probes.set(key, probe);
+  return probe;
 }
 
 /** What ends a prompt turn other than finishing it, in the operator's words. */
@@ -243,7 +334,9 @@ class AcpSession implements AdapterSession {
     await persistResumeCapability(opts.storeDir, command, args, acpChildSupportsResume(caps));
     let sessionId: string;
     try {
-      sessionId = await withAuthRetry(rpc, init, () => openAcpSession(rpc, opts, resumeId, caps));
+      const opened = await withAuthRetry(rpc, init, () => openAcpSession(rpc, opts, resumeId, caps));
+      sessionId = opened.sessionId;
+      if (opened.models) await persistModelCatalog(opts.storeDir, command, args, opened.models);
     } catch (err) {
       cleanupHost();
       await rpc.close();
@@ -366,11 +459,33 @@ export const acpAdapter: Adapter = {
     };
   },
 
-  async listModels() {
-    return {
-      models: FALLBACK,
-      source: "fallback" as const,
-    };
+  /**
+   * What the configured agent offers: the catalog its last session announced or, before any
+   * session, one opened just to read it. "Agent default" always leads, so the agent can keep
+   * choosing for itself.
+   */
+  async listModels(apiKey, cwd, ctx) {
+    const command = optionString(ctx?.options, "command", "");
+    if (!ctx || !command) return { models: FALLBACK, source: "fallback" as const };
+    const args = optionStringArray(ctx.options, "args", []);
+    let offered = await storedModelCatalog(ctx.storeDir, command, args);
+    if (!offered) {
+      try {
+        await probeCatalog({
+          cwd: cwd || tmpdir(),
+          model: "default",
+          modelParams: [],
+          storeDir: ctx.storeDir,
+          options: ctx.options,
+          apiKey,
+        });
+      } catch (err) {
+        return { models: FALLBACK, source: "fallback" as const, error: errorMessage(err) };
+      }
+      offered = await storedModelCatalog(ctx.storeDir, command, args);
+    }
+    if (!offered?.length) return { models: FALLBACK, source: "fallback" as const };
+    return { models: [...FALLBACK, ...offered.filter((m) => m.id !== "default")], source: "live" as const };
   },
 
   async discover(): Promise<AdapterDiscoverItem[]> {

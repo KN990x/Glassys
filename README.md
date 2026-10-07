@@ -59,7 +59,7 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 - **Audience:** operators and sysadmins who want a persistent chat while a local coding agent does systems work on the host.
 - **UI language:** English by default; Spanish (`es`) is available in Settings.
 - **Distribution:** self-hosted. Every operator runs their own instance. Not a Glassys SaaS.
-- **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet; use Gemini through ACP meanwhile), Codex SDK (runs the Codex binary it ships with), plus a generic ACP host for any agent in the ACP registry. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; Gemini, Codex, and ACP use a documented static fallback.
+- **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet; use Gemini through ACP meanwhile), Codex SDK (runs the Codex binary it ships with), plus a generic ACP host for any agent in the ACP registry. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; an ACP agent lists the models it announces (after “Agent default”); Gemini and Codex use a documented static fallback.
 - **v1:** one profile / one agent / **one live thread** / one run at a time (FIFO queue). The thread list includes archived transcripts; only one thread is live.
 
 **Agent / adapter** is the product on the host. **Transport** is how Glassys talks to it (SDK or ACP — never print-mode). **CLI** is the vendor’s terminal app: it may stay installed; its login does not authenticate Glassys. Codex and OpenCode still need their binary on PATH.
@@ -228,7 +228,7 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 - **Audiencia:** operadores y sysadmins que quieren un chat persistente mientras un agente de código local hace tareas de sistemas en el host.
 - **Idioma de la UI:** inglés por defecto; español (`es`) en Ajustes.
 - **Distribución:** self-hosted. Cada operador monta la suya. No hay SaaS de Glassys.
-- **Adaptadores:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + servidor local, Gemini CLI SDK (aún no en npm; mientras tanto, Gemini vía ACP), Codex SDK (usa el binario de Codex que trae consigo), más un host ACP genérico para cualquier agente del registro ACP. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del runtime; Gemini, Codex y ACP usan un fallback estático documentado.
+- **Adaptadores:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + servidor local, Gemini CLI SDK (aún no en npm; mientras tanto, Gemini vía ACP), Codex SDK (usa el binario de Codex que trae consigo), más un host ACP genérico para cualquier agente del registro ACP. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del runtime; un agente ACP lista los modelos que anuncia (tras “Agent default”); Gemini y Codex usan un fallback estático documentado.
 - **v1:** un perfil / un agente / **un hilo vivo** / un run a la vez (cola FIFO). La lista de hilos incluye los transcripts archivados; solo un hilo está vivo.
 
 **Agente / adaptador** es el producto en el host. **Transporte** es cómo le habla Glassys (SDK o ACP — nunca print-mode). **CLI** es el programa de terminal del vendor: puede seguir instalado; su login no autentica Glassys. Codex y OpenCode sí necesitan su binario en el PATH.

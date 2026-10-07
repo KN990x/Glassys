@@ -1293,7 +1293,8 @@ export async function listModels(adapterId?: string): Promise<ModelListResponse>
   const adapter = getAdapter(id);
   const secrets = await loadSecrets();
   const key = adapterApiKey(secrets, id);
-  const result = await adapter.listModels(key || undefined, cfg.agent.cwd || undefined);
+  const ctx = id === cfg.agent.adapter ? { options: cfg.agent.options, storeDir: paths.adapterStore(id) } : undefined;
+  const result = await adapter.listModels(key || undefined, cfg.agent.cwd || undefined, ctx);
   const ids = result.models.map((m) => m.id);
   if (result.source === "fallback") {
     log("warn", "model catalog fallback", { adapter: id, error: result.error, count: ids.length, ids });

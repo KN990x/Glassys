@@ -87,3 +87,25 @@ describe("acp adapter against a spec-shaped agent", () => {
     }
   }, 15_000);
 });
+
+describe("acpModelsFrom", () => {
+  it("reads the session-model shape and a model config option, groups included", async () => {
+    const { acpModelsFrom } = await import("./index.js");
+    expect(acpModelsFrom({ sessionId: "s", models: { currentModelId: "a", availableModels: [{ modelId: "a", name: "A" }] } })).toEqual([
+      { id: "a", displayName: "A", description: undefined },
+    ]);
+    const fromConfig = acpModelsFrom({
+      configOptions: [
+        { id: "mode", category: "mode", type: "select", options: [{ value: "ask", name: "Ask" }] },
+        {
+          id: "model",
+          category: "model",
+          type: "select",
+          options: [{ value: "x", name: "X" }, { group: "more", name: "More", options: [{ value: "y", name: "Y", description: "why" }] }],
+        },
+      ],
+    });
+    expect(fromConfig?.map((m) => m.id)).toEqual(["x", "y"]);
+    expect(acpModelsFrom({ sessionId: "s" })).toBeUndefined();
+  });
+});
