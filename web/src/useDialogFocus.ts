@@ -56,5 +56,5 @@ export function useDialogFocus(
         previous.focus();
       }
     };
-  }, []);
+  }, [rootRef, initialRef]);
 }

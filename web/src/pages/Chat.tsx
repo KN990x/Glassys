@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Suspense, lazy, useCallback, useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 import type {
   AdapterPublicInfo,
   ClientMessage,
@@ -288,8 +288,8 @@ export function Chat({
       },
     });
     sendRef.current = sock.send;
+    /* The effect below applies the configured keepalive, now and on every change. */
     keepaliveRef.current = sock.setKeepalive;
-    keepaliveRef.current(config.network.wsKeepaliveSeconds);
     return () => {
       batcher.drop();
       sock.close();
@@ -336,8 +336,12 @@ export function Chat({
       .catch(() => undefined);
   }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd]);
 
+  /* Read at a thread change only: the draft being left is whatever the composer holds then. */
+  const composerState = useRef({ text, drafts });
+  composerState.current = { text, drafts };
   useEffect(() => {
     if (loadedDraftFor.current === currentThreadId) return;
+    const { text, drafts } = composerState.current;
     const prev = loadedDraftFor.current;
     if (prev) saveDraft(prev, text, drafts);
     const orphan = prev === null && Boolean(text.trim() || drafts.length);
@@ -430,75 +434,65 @@ export function Chat({
     }
   }, []);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
-        e.preventDefault();
-        toggleActivity(!activityOpen);
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        collapseRail(!railCollapsed);
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        setSearchOpen(true);
-        queueMicrotask(() => searchRef.current?.focus());
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        void onNewThread();
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setSlashOpen(false);
-        setPaletteQuery("");
-        setPaletteOpen((v) => !v);
-        return;
-      }
-      if (e.key !== "Escape") return;
-      if (paletteOpen || slashOpen) {
-        setPaletteOpen(false);
-        setSlashOpen(false);
-        return;
-      }
-      if (searchOpen) {
-        setSearchOpen(false);
-        setSearch("");
-        return;
-      }
-      /* Escape is the shortcut the run strip advertises, in the chat. Escape in a host view's
-         filter or a rename field means "leave this field", not "stop the agent". */
-      const target = e.target as HTMLElement | null;
-      const inOtherField =
-        target instanceof HTMLElement &&
-        target !== composer.current &&
-        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-      if (busy && view === "chat" && !inOtherField && !settings && !threadOpen && caps?.cancel !== false) {
-        cancelRun();
-        return;
-      }
+  /* The global shortcuts read whatever is current at the key press (an effect event), so none of
+     them sees a stale value; ⌘⇧O used an old "waiting". */
+  const onGlobalKey = useEffectEvent((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+      e.preventDefault();
+      toggleActivity(!activityOpen);
+      return;
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [
-    settings,
-    threadOpen,
-    paletteOpen,
-    slashOpen,
-    searchOpen,
-    railCollapsed,
-    collapseRail,
-    busy,
-    caps,
-    view,
-    activityOpen,
-    toggleActivity,
-  ]);
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      collapseRail(!railCollapsed);
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      setSearchOpen(true);
+      queueMicrotask(() => searchRef.current?.focus());
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "o") {
+      e.preventDefault();
+      void onNewThread();
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      setSlashOpen(false);
+      setPaletteQuery("");
+      setPaletteOpen((v) => !v);
+      return;
+    }
+    if (e.key !== "Escape") return;
+    if (paletteOpen || slashOpen) {
+      setPaletteOpen(false);
+      setSlashOpen(false);
+      return;
+    }
+    if (searchOpen) {
+      setSearchOpen(false);
+      setSearch("");
+      return;
+    }
+    /* Escape is the shortcut the run strip advertises, in the chat. Escape in a host view's
+       filter or a rename field means "leave this field", not "stop the agent". */
+    const target = e.target as HTMLElement | null;
+    const inOtherField =
+      target instanceof HTMLElement &&
+      target !== composer.current &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+    if (busy && view === "chat" && !inOtherField && !settings && !threadOpen && caps?.cancel !== false) {
+      cancelRun();
+      return;
+    }
+  });
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onGlobalKey(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
 
   useEffect(() => {
     function onPop() {

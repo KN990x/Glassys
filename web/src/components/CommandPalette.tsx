@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import type { PromptTemplate } from "@glassys/protocol";
 import { Kbd } from "./Primitives";
@@ -54,7 +54,7 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const ownListId = useId();
   const listId = givenListId ?? ownListId;
-  const optionId = (i: number) => `${listId}-opt-${i}`;
+  const optionId = useCallback((i: number) => `${listId}-opt-${i}`, [listId]);
   const filtered = useMemo(() => filterPaletteItems(items, query), [items, query]);
   const ids = paletteItemIds(filtered);
 
@@ -77,7 +77,7 @@ export function CommandPalette({
 
   useEffect(() => {
     onActiveId?.(open && filtered[active] ? optionId(active) : undefined);
-  }, [open, active, filtered, onActiveId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, active, filtered, onActiveId, optionId]);
 
   useEffect(() => {
     if (!open) return;
@@ -119,7 +119,7 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return;
     document.getElementById(optionId(active))?.scrollIntoView?.({ block: "nearest" });
-  }, [open, active]);
+  }, [open, active, optionId]);
 
   if (!open) return null;
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { operatorError } from "../operatorError";
@@ -26,8 +26,9 @@ export function WorkspacePicker({
   const [browseOpen, setBrowseOpen] = useState<boolean | null>(null);
   const browsing = browseOpen ?? !value.trim();
 
+  const loadOnMount = useEffectEvent(() => void load());
   useEffect(() => {
-    void load();
+    loadOnMount();
   }, []);
 
   async function load(nextRoot?: string) {

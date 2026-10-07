@@ -76,6 +76,9 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
     } finally {
       if (gen === generation.current) setLoading(false);
     }
+    /* useLoad passes its caller's dependency list through, like useEffect itself; the caller's
+       list is what decides when to reload. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   useEffect(() => {
     void reload();

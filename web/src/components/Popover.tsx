@@ -54,6 +54,7 @@ export function Popover({
       onCloseRef.current();
     }
     /* Focus moves into the menu, and back to what opened it when it closes. */
+    const node = panel.current;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = panel.current?.querySelector<HTMLElement>('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
     first?.focus();
@@ -63,7 +64,7 @@ export function Popover({
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("keydown", onKey, true);
       const now = document.activeElement;
-      if (opener?.isConnected && (!now || now === document.body || panel.current === null || panel.current.contains(now))) {
+      if (opener?.isConnected && (!now || now === document.body || !node?.isConnected || node.contains(now))) {
         opener.focus();
       }
     };

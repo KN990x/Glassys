@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -122,7 +122,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   const current = adapters.find((a) => a.id === adapterId) ?? adapters[0];
   const caps = current?.capabilities;
 
-  const steps = useMemo<StepId[]>(() => wizardStepIds(caps), [adapterId, caps]);
+  const steps = useMemo<StepId[]>(() => wizardStepIds(caps), [caps]);
 
   useEffect(() => {
     setStep((s) => Math.min(s, Math.max(0, steps.length - 1)));
@@ -151,12 +151,17 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
       });
   }
 
+  const loadAdaptersOnMount = useEffectEvent(loadAdapters);
   useEffect(() => {
-    loadAdapters();
+    loadAdaptersOnMount();
   }, []);
 
-  useEffect(() => {
+  /* A new adapter gets its own option defaults; the saved config only seeds them. */
+  const resetOptions = useEffectEvent(() => {
     if (current) setOptions(optionsForAdapter(current, config.agent));
+  });
+  useEffect(() => {
+    resetOptions();
   }, [current?.id]);
 
   async function refreshAuth() {
@@ -167,8 +172,9 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
     }
   }
 
+  const refreshAuthEvent = useEffectEvent(refreshAuth);
   useEffect(() => {
-    if (id === "credential") void refreshAuth();
+    if (id === "credential") void refreshAuthEvent();
   }, [id, adapterId]);
 
   useEffect(() => {
