@@ -40,7 +40,6 @@ const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Default (Op
 type OcBundle = Awaited<ReturnType<typeof createOpencode>>;
 type OcClient = OcBundle["client"];
 
-let envLock = Promise.resolve();
 let sharedServer: Promise<OcBundle> | null = null;
 let sharedKey = "";
 /** Set when a session's event stream ended on its own: the `opencode serve` child is likely gone. */
@@ -48,25 +47,21 @@ let serverSuspect = false;
 /** Runs in flight on the shared server; a key change must not pull it out from under them. */
 let activeRuns = 0;
 
-async function withApiKey<T>(apiKey: string | undefined, fn: () => Promise<T>): Promise<T> {
-  let release!: () => void;
-  const prev = envLock;
-  envLock = new Promise<void>((r) => {
-    release = r;
-  });
-  await prev;
+/**
+ * Start the server with OPENCODE_API_KEY set. The SDK takes no env option, but it spawns
+ * `opencode serve` synchronously, before its first await, copying process.env at that moment;
+ * so the variable is set only around the call and restored before awaiting the start-up. No
+ * other child spawned meanwhile (a Claude process, a shell) inherits the key.
+ */
+function withApiKey<T>(apiKey: string | undefined, start: () => Promise<T>): Promise<T> {
+  if (!apiKey) return start();
+  const old = process.env.OPENCODE_API_KEY;
+  process.env.OPENCODE_API_KEY = apiKey;
   try {
-    if (!apiKey) return await fn();
-    const old = process.env.OPENCODE_API_KEY;
-    process.env.OPENCODE_API_KEY = apiKey;
-    try {
-      return await fn();
-    } finally {
-      if (old === undefined) delete process.env.OPENCODE_API_KEY;
-      else process.env.OPENCODE_API_KEY = old;
-    }
+    return start();
   } finally {
-    release();
+    if (old === undefined) delete process.env.OPENCODE_API_KEY;
+    else process.env.OPENCODE_API_KEY = old;
   }
 }
 

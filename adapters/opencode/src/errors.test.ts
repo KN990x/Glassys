@@ -8,8 +8,13 @@ let promptResult: unknown = { data: {} };
 let prompted!: () => void;
 let promptSent = new Promise<void>((r) => (prompted = r));
 
+const keyAtSpawn: Array<string | undefined> = [];
+
 vi.mock("@opencode-ai/sdk", () => ({
-  createOpencode: async () => ({
+  createOpencode: async () => {
+    keyAtSpawn.push(process.env.OPENCODE_API_KEY);
+    await new Promise((r) => setTimeout(r, 20));
+    return {
     server: { close: () => undefined },
     client: {
       postSessionIdPermissionsPermissionId: async (args: unknown) => {
@@ -40,7 +45,8 @@ vi.mock("@opencode-ai/sdk", () => ({
         providers: async () => ({ data: { providers: [], default: {} } }),
       },
     },
-  }),
+    };
+  },
 }));
 
 const { opencodeAdapter, checked } = await import("./index.js");
@@ -81,5 +87,15 @@ describe("opencode error results", () => {
 
   it("reports no providers as a fallback, never a live list of config keys", async () => {
     await expect(opencodeAdapter.listModels(undefined, "/srv/w")).resolves.toMatchObject({ source: "fallback" });
+  });
+
+  it("sets the API key only for the spawn, not while the server starts", async () => {
+    const { opencodeAdapter: fresh } = await import("./index.js");
+    await fresh.shutdown?.();
+    delete process.env.OPENCODE_API_KEY;
+    const listing = fresh.listModels("sk-test-key", "/srv/w");
+    expect(process.env.OPENCODE_API_KEY).toBeUndefined();
+    await listing;
+    expect(keyAtSpawn.at(-1)).toBe("sk-test-key");
   });
 });
