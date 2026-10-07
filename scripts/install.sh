@@ -11,24 +11,31 @@ need_bin() {
   fi
 }
 
-if [[ "$(id -u)" == "0" ]]; then
-  echo "Do not install Glassys as root. Run this as the user the agent should act as." >&2
-  exit 1
-fi
-
-need_bin git
-need_bin node
-
-if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
-  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [[ -f "$here/install.mjs" ]]; then
-    exec node "$here/install.mjs" "$@"
+# Everything runs from main, called on the last line: a download cut short by the network
+# defines functions and runs nothing, instead of running half a script.
+main() {
+  if [[ "$(id -u)" == "0" ]]; then
+    echo "Do not install Glassys as root. Run this as the user the agent should act as." >&2
+    exit 1
   fi
-fi
 
-DEST="${GLASSYS_DIR:-$PWD/glassys}"
-REPO="${GLASSYS_REPO:-https://github.com/KN990x/Glassys.git}"
-if [[ ! -f "$DEST/scripts/install.mjs" ]]; then
-  git clone "$REPO" "$DEST"
-fi
-exec node "$DEST/scripts/install.mjs" "$@"
+  need_bin git
+  need_bin node
+
+  if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    local here
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ -f "$here/install.mjs" ]]; then
+      exec node "$here/install.mjs" "$@"
+    fi
+  fi
+
+  local dest="${GLASSYS_DIR:-$PWD/glassys}"
+  local repo="${GLASSYS_REPO:-https://github.com/KN990x/Glassys.git}"
+  if [[ ! -f "$dest/scripts/install.mjs" ]]; then
+    git clone "$repo" "$dest"
+  fi
+  exec node "$dest/scripts/install.mjs" "$@"
+}
+
+main "$@"

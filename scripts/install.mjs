@@ -4,10 +4,10 @@
  * Invoked by scripts/install.sh. Not an npm publish.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { isRoot, nodeMeetsMin, openUrl, resolveListen } from "./host-service.mjs";
+import { isRoot, nodeMeetsMin, openUrl, resolveListen, spawnFailure } from "./host-service.mjs";
 
 export const DEFAULT_REPO = "https://github.com/KN990x/Glassys.git";
 
@@ -22,10 +22,6 @@ export function isGlassysRepo(dir) {
   } catch {
     return false;
   }
-}
-
-export function needsGatewayBuild(root) {
-  return !existsSync(join(root, "gateway/dist/index.js"));
 }
 
 /** The URL the installed service answers on: same resolution as service:install (env, config.yaml, defaults). */
@@ -45,7 +41,8 @@ export function resolveInstallRoot({ cwd, scriptUrl, env } = {}) {
 export function installCommands({ root, build, enableCorepack }) {
   const cmds = [];
   if (enableCorepack) cmds.push({ bin: "corepack", args: ["enable"], cwd: root, optional: true });
-  cmds.push({ bin: "pnpm", args: ["install"], cwd: root });
+  /* Frozen: the clone must stay exactly as checked out, or later upgrades refuse a dirty tree. */
+  cmds.push({ bin: "pnpm", args: ["install", "--frozen-lockfile"], cwd: root });
   if (build) cmds.push({ bin: "pnpm", args: ["run", "build"], cwd: root });
   cmds.push({ bin: "pnpm", args: ["run", "service:install"], cwd: root });
   return cmds;
@@ -59,7 +56,7 @@ function fail(message) {
 function run(bin, args, cwd, optional = false) {
   const result = spawnSync(bin, args, { cwd, stdio: "inherit", encoding: "utf8" });
   if (result.status !== 0 && !optional) {
-    fail(`${bin} ${args.join(" ")} failed (${result.status ?? "spawn"})`);
+    fail(spawnFailure(bin, result) ?? `${bin} ${args.join(" ")} failed (${result.status ?? "spawn"})`);
   }
   return result.status === 0;
 }
@@ -90,9 +87,10 @@ Otherwise clones ${DEFAULT_REPO} into ./glassys (or $GLASSYS_DIR).
   if (!isGlassysRepo(plan.root)) {
     fail(`Not a Glassys repo: ${plan.root}`);
   }
+  /* Always build: a clone re-run after a pull has a gateway/dist older than its source. */
   const cmds = installCommands({
     root: plan.root,
-    build: needsGatewayBuild(plan.root),
+    build: true,
     enableCorepack: true,
   });
   for (const cmd of cmds) {

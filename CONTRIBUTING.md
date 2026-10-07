@@ -9,7 +9,10 @@ pnpm test
 pnpm lint
 pnpm typecheck
 pnpm build
+pnpm budget
 ```
+
+`pnpm lint` checks the i18n catalogs (same keys in both, no unused or missing keys), the design tokens (`scripts/ui-audit.mjs`) and the PWA's React hook dependencies (ESLint). `pnpm budget` checks the built PWA's chunk sizes; raise a limit on purpose, never to turn a check green.
 
 Day to day:
 
@@ -56,7 +59,7 @@ Before changing adapters or the protocol:
 
 ## Tests
 
-`pnpm test` runs Vitest per package. Gateway tests cover onboarding, the FIFO queue, cancel, CORS, and identity. Adapter tests map streams to protocol events. Do not add live SDK e2e in CI.
+`pnpm test` builds the shared packages and runs Vitest per package (`pnpm test:run` skips the build). Gateway tests cover onboarding, the FIFO queue, cancel, CORS, and identity. Adapter tests map streams to protocol events, with payloads shaped like the SDK's own types: check a fixture against the `.d.ts` the SDK ships, not against what the mapper happens to read. Do not add live SDK e2e in CI.
 
 ## License
 

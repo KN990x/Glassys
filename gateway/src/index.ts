@@ -6,6 +6,7 @@ import { loadConfig } from "./config.js";
 import { listenBind, listenPort } from "./listen.js";
 import { handleHttp } from "./http.js";
 import { ensureSetupCode } from "./setup-token.js";
+import { trimServiceLogs } from "./service-logs.js";
 import { log, secureDataDir, webDir } from "./paths.js";
 import { initRuntime, shutdownRuntime } from "./runtime.js";
 import { setRestartHandler } from "./restart.js";
@@ -105,6 +106,9 @@ async function main(): Promise<void> {
     void shutdown(1);
   });
 
+  if (process.env.GLASSYS_SERVICE === "1") {
+    await trimServiceLogs().catch((err) => log("warn", "could not trim the service logs", { error: String(err) }));
+  }
   const unclaimed = !secretsFlags(await loadSecrets()).operatorPassword;
   if (unclaimed && (bind === "0.0.0.0" || bind === "::")) {
     log("warn", "listening on all interfaces before operator setup");

@@ -27,9 +27,16 @@ export function xmlEscape(value) {
     .replaceAll("'", "&apos;");
 }
 
+/** systemd expands %-specifiers in most unit settings; a literal % is %%. */
+export function systemdEscapeSpecifiers(value) {
+  return value.replaceAll("%", "%%");
+}
+
+/** Quoting for settings systemd unquotes (Environment=, ExecStart=), with specifiers escaped. */
 export function systemdQuote(value) {
-  if (/^[A-Za-z0-9_./:@%+=-]+$/.test(value)) return value;
-  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+  const escaped = systemdEscapeSpecifiers(value);
+  if (/^[A-Za-z0-9_./:@%+=-]+$/.test(escaped)) return escaped;
+  return `"${escaped.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 export const GRAPHICAL_ENV_KEYS = ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"];
@@ -203,14 +210,15 @@ export function renderSystemdUserUnit(opts) {
   }
   // StartLimitIntervalSec=0: with Restart=always, systemd's default limit (5 starts in 10s)
   // would leave the unit failed for good after a short crash loop.
+  // WorkingDirectory= is a path setting: systemd does not unquote it, so a path with spaces goes
+  // in as is. No After=network.target: a user manager has no such target to order against.
   return `[Unit]
 Description=Glassys gateway
-After=network.target
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-WorkingDirectory=${systemdQuote(opts.cwd)}
+WorkingDirectory=${systemdEscapeSpecifiers(opts.cwd)}
 ${env.map((line) => `Environment=${systemdQuote(line)}`).join("\n")}
 ExecStart=${systemdQuote(opts.node)} ${systemdQuote(opts.gateway)}
 Restart=always
@@ -319,6 +327,14 @@ function fail(message) {
 
 export function isRoot(uid = process.getuid?.()) {
   return uid === 0;
+}
+
+/** Why a spawn never ran (a missing binary), or null when it ran and failed on its own. */
+export function spawnFailure(cmd, result) {
+  const code = result?.error?.code;
+  if (code === "ENOENT") return `${cmd} is not on PATH (for pnpm: corepack enable, or install pnpm).`;
+  if (result?.error) return `${cmd} could not start: ${result.error.message}`;
+  return null;
 }
 
 function run(cmd, args, opts = {}) {
@@ -460,13 +476,29 @@ function installDarwin(opts) {
   const uid = String(userInfo().uid);
   const domain = `gui/${uid}`;
   const target = `${domain}/${SERVICE_LABEL}`;
-  run("launchctl", ["bootout", target]);
-  const boot = run("launchctl", ["bootstrap", domain, plist]);
+  bootoutAndWait(target);
+  /* "Bootstrap failed: 5: Input/output error" is launchd still tearing the old job down; retry. */
+  let boot = run("launchctl", ["bootstrap", domain, plist]);
+  for (let attempt = 1; boot.status !== 0 && attempt < 5; attempt++) {
+    sleepMs(500 * attempt);
+    boot = run("launchctl", ["bootstrap", domain, plist]);
+  }
   if (boot.status !== 0) {
     throw new Error(`launchctl bootstrap failed:\n${boot.stderr || boot.stdout || ""}`);
   }
   console.log(`Wrote ${plist}`);
   return finishInstall(opts);
+}
+
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** bootout returns before launchd has finished removing the job; wait until it is gone. */
+function bootoutAndWait(target, timeoutMs = 10_000) {
+  run("launchctl", ["bootout", target]);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && run("launchctl", ["print", target]).status === 0) sleepMs(200);
 }
 
 function uninstallDarwin(opts) {
@@ -693,20 +725,24 @@ export function upgradeRepo(root, { strict = true, dataDir, gitPull, pnpmInstall
     if (pull.stderr) console.warn(pull.stderr.trim());
   }
   if (dataDir) writeUpgradeStatus(dataDir, "install");
+  /* --frozen-lockfile: a lockfile rewritten here would leave the clone dirty, and the PWA refuses
+     every later upgrade of a dirty clone. */
   const inst = pnpmInstall
     ? pnpmInstall()
-    : spawnSync("pnpm", ["install"], { cwd: root, stdio: "inherit" });
+    : spawnSync("pnpm", ["install", "--frozen-lockfile"], { cwd: root, stdio: "inherit" });
   if (inst.status !== 0) {
-    if (dataDir) writeUpgradeStatus(dataDir, "error", "pnpm install failed.");
-    throw new Error("pnpm install failed.");
+    const why = spawnFailure("pnpm", inst) ?? "pnpm install failed.";
+    if (dataDir) writeUpgradeStatus(dataDir, "error", why);
+    throw new Error(why);
   }
   if (dataDir) writeUpgradeStatus(dataDir, "build");
   const built = pnpmBuild
     ? pnpmBuild()
     : spawnSync("pnpm", ["run", "build"], { cwd: root, stdio: "inherit" });
   if (built.status !== 0) {
-    if (dataDir) writeUpgradeStatus(dataDir, "error", "pnpm run build failed.");
-    throw new Error("pnpm run build failed.");
+    const why = spawnFailure("pnpm", built) ?? "pnpm run build failed.";
+    if (dataDir) writeUpgradeStatus(dataDir, "error", why);
+    throw new Error(why);
   }
 }
 

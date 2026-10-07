@@ -19,6 +19,7 @@ import {
   renderLaunchdPlist,
   renderSystemdUserUnit,
   systemdQuote,
+  spawnFailure,
   upgradeRepo,
   xmlEscape,
 } from "./host-service.mjs";
@@ -74,9 +75,19 @@ test("systemd user unit restarts and uses default.target", () => {
   assert.doesNotMatch(unit, /Environment=DISPLAY=/);
 });
 
-test("systemd user unit quotes a working directory with spaces", () => {
-  const unit = renderSystemdUserUnit({ ...opts, cwd: "/home/op/My Apps/glassys" });
-  assert.match(unit, /WorkingDirectory="\/home\/op\/My Apps\/glassys"/);
+test("systemd user unit writes a working directory with spaces as is, escaping %", () => {
+  const unit = renderSystemdUserUnit({ ...opts, cwd: "/home/op/My Apps/50%/glassys" });
+  assert.match(unit, /WorkingDirectory=\/home\/op\/My Apps\/50%%\/glassys\n/);
+  assert.doesNotMatch(unit, /After=network.target/);
+});
+
+test("systemdQuote escapes specifiers", () => {
+  assert.equal(systemdQuote("/opt/50%/node"), "/opt/50%%/node");
+});
+
+test("spawnFailure names a missing binary", () => {
+  assert.match(spawnFailure("pnpm", { error: Object.assign(new Error("spawn pnpm ENOENT"), { code: "ENOENT" }) }), /not on PATH/);
+  assert.equal(spawnFailure("pnpm", { status: 1 }), null);
 });
 
 test("isRoot only flags uid 0", () => {

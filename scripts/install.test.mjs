@@ -9,7 +9,6 @@ import {
   installCommands,
   isGlassysRepo,
   listenUrl,
-  needsGatewayBuild,
   resolveInstallRoot,
 } from "./install.mjs";
 
@@ -19,14 +18,6 @@ test("isGlassysRepo only accepts this package name", () => {
   assert.equal(isGlassysRepo(dir), true);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "other" }));
   assert.equal(isGlassysRepo(dir), false);
-});
-
-test("needsGatewayBuild is true until gateway/dist exists", () => {
-  const dir = mkdtempSync(join(tmpdir(), "glassys-install-"));
-  assert.equal(needsGatewayBuild(dir), true);
-  mkdirSync(join(dir, "gateway/dist"), { recursive: true });
-  writeFileSync(join(dir, "gateway/dist/index.js"), "");
-  assert.equal(needsGatewayBuild(dir), false);
 });
 
 test("listenUrl falls back to env and loopback before the gateway is built", async () => {
@@ -71,7 +62,7 @@ test("installCommands never publishes and prints a local service install", () =>
     cmds.map((c) => [c.bin, ...c.args]),
     [
       ["corepack", "enable"],
-      ["pnpm", "install"],
+      ["pnpm", "install", "--frozen-lockfile"],
       ["pnpm", "run", "build"],
       ["pnpm", "run", "service:install"],
     ],
