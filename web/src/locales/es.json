@@ -115,6 +115,7 @@
   "chat.copied": "Copiado",
   "chat.copyFailed": "Portapapeles no disponible",
   "chat.sendFailed": "Sin conexión — el mensaje no se envió.",
+  "chat.notDelivered": "El gateway no confirmó ese mensaje. Está de vuelta en el cuadro; vuelve a enviarlo.",
   "chat.modelFailed": "No se pudo guardar el modelo.",
   "chat.model": "Modelo",
   "chat.queuedHint": "Envía ahora para encolar el siguiente mensaje.",

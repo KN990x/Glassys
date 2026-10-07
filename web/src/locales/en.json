@@ -115,6 +115,7 @@
   "chat.copied": "Copied",
   "chat.copyFailed": "Clipboard unavailable",
   "chat.sendFailed": "Not connected — message was not sent.",
+  "chat.notDelivered": "The gateway did not confirm that message. It is back in the box; send it again.",
   "chat.modelFailed": "Could not save the model.",
   "chat.model": "Model",
   "chat.queuedHint": "Send now to queue the next message.",

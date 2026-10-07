@@ -99,13 +99,17 @@ self.addEventListener("fetch", (event) => {
     fetch(req)
       .then((res) => {
         if (res.ok) {
-          const forCache = res.clone();
+          /* Every copy is taken now, before `res` goes to the page: once the page has read the
+             body, clone() throws, and the "/" and "/index.html" fallbacks were never written. */
+          const copies = [res.clone()];
+          const shell = isHtml(req, res) && isNavigation(req);
+          if (shell) copies.push(res.clone(), res.clone());
           event.waitUntil(
             caches.open(CACHE).then((cache) => {
-              const tasks = [cache.put(req, forCache)];
-              if (isHtml(req, res) && isNavigation(req)) {
-                tasks.push(cache.put("/", res.clone()));
-                tasks.push(cache.put("/index.html", res.clone()));
+              const tasks = [cache.put(req, copies[0])];
+              if (shell) {
+                tasks.push(cache.put("/", copies[1]));
+                tasks.push(cache.put("/index.html", copies[2]));
               }
               return Promise.all(tasks);
             }),

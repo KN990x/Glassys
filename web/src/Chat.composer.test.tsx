@@ -449,6 +449,53 @@ describe("Chat composer and layout", () => {
     expect(socket.sent.some((m) => (m as { type?: string }).type === "run.cancel")).toBe(true);
   });
 
+  it("hands an unconfirmed message back to the composer instead of losing it", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    vi.useFakeTimers();
+    try {
+      const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+      await typeIn(textarea, "restart caddy");
+      await act(async () => {
+        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("");
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("restart caddy");
+      expect(host.textContent).toMatch(/did not confirm/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the composer clear once the gateway echoes the message", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    vi.useFakeTimers();
+    try {
+      await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "status");
+      await act(async () => {
+        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      const sent = socket.sent.find((m) => (m as { type?: string }).type === "user.message") as { id: string };
+      await act(async () => {
+        socket.emit({ type: "user.message", text: "status", id: sent.id, seq: 1 });
+        vi.advanceTimersByTime(10_000);
+      });
+      expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("offers saved operations on the empty transcript and inserts without sending", async () => {
     await renderChat();
     await act(async () => {

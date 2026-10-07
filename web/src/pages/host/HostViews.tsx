@@ -307,7 +307,7 @@ export function ServicesView({
   source: HostSource;
   caps: HostCapabilities | null;
   onDraft: Draft;
-  onLogs: (unit: string) => void;
+  onLogs: (unit: string, scope: ServiceScope) => void;
 }) {
   const t = useT();
   const [state, setState] = useState<ServiceStateFilter>("all");
@@ -410,7 +410,7 @@ export function ServicesView({
               </ListRow>
               {openUnit === u.name ? (
                 <div className="unit-actions">
-                  <button type="button" className="ghost tiny" onClick={() => onLogs(u.name)}>
+                  <button type="button" className="ghost tiny" onClick={() => onLogs(u.name, scope)}>
                     <IconLogs />
                     {t("services.logs")}
                   </button>
@@ -452,11 +452,15 @@ function priorityClass(p: number): string {
   return "";
 }
 
+/** A log line with a key that survives Follow trimming the head of the list. */
+type KeyedEntry = LogEntry & { key: number };
+
 export function LogsView({
   source,
   caps,
   locale,
   unit,
+  scope = "system",
   onUnit,
   onDraft,
 }: {
@@ -464,16 +468,21 @@ export function LogsView({
   caps: HostCapabilities | null;
   locale: string;
   unit: string;
+  scope?: ServiceScope;
   onUnit: (unit: string) => void;
   onDraft: Draft;
 }) {
   const t = useT();
   const [priority, setPriority] = useState<LogPriority | "all">("all");
   const [follow, setFollow] = useState(false);
-  const [entries, setEntries] = useState<LogEntry[] | null>(null);
+  const [entries, setEntries] = useState<KeyedEntry[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  /* Selection by key, not position: once Follow trims the head, positions point at other lines
+     and "Explain" sent lines the operator never picked. */
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const nextKey = useRef(0);
+  const keyed = (list: LogEntry[]): KeyedEntry[] => list.map((e) => ({ ...e, key: nextKey.current++ }));
   const cursor = useRef<string | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
   const units = useLoad(
@@ -491,10 +500,15 @@ export function LogsView({
     fullLoads.current += 1;
     setLoading(true);
     try {
-      const page = await source.hostLogs({ unit: unit || undefined, priority: priority === "all" ? undefined : priority, lines: 300 });
+      const page = await source.hostLogs({
+        unit: unit || undefined,
+        priority: priority === "all" ? undefined : priority,
+        lines: 300,
+        ...(unit ? { scope } : {}),
+      });
       if (gen !== generation.current) return;
       cursor.current = page.cursor;
-      setEntries(page.entries);
+      setEntries(keyed(page.entries));
       setSelected(new Set());
       setError("");
     } catch (err) {
@@ -504,7 +518,7 @@ export function LogsView({
       fullLoads.current -= 1;
       if (gen === generation.current) setLoading(false);
     }
-  }, [source, unit, priority, t]);
+  }, [source, unit, scope, priority, t]);
 
   useEffect(() => {
     if (caps?.logs) void load();
@@ -526,10 +540,11 @@ export function LogsView({
           priority: priority === "all" ? undefined : priority,
           cursor: cursor.current,
           lines: 500,
+          ...(unit ? { scope } : {}),
         });
         if (gen !== generation.current) return;
         cursor.current = page.cursor ?? cursor.current;
-        if (page.entries.length) setEntries((cur) => [...(cur ?? []), ...page.entries].slice(-MAX_LOG_ROWS));
+        if (page.entries.length) setEntries((cur) => [...(cur ?? []), ...keyed(page.entries)].slice(-MAX_LOG_ROWS));
       } catch {
         /* the next tick retries */
       } finally {
@@ -537,7 +552,7 @@ export function LogsView({
       }
     }, FOLLOW_MS);
     return () => clearInterval(id);
-  }, [follow, source, unit, priority, caps?.logs]);
+  }, [follow, source, unit, scope, priority, caps?.logs]);
 
   // Stay on the newest line, like tail -f, unless the operator scrolled up.
   useEffect(() => {
@@ -557,7 +572,7 @@ export function LogsView({
   function explain() {
     if (!entries) return;
     const lines = entries
-      .filter((_, i) => selected.has(i))
+      .filter((e) => selected.has(e.key))
       .map((e) => `${new Date(e.ts).toISOString()} ${e.unit ?? ""} ${e.message}`.trim())
       .join("\n");
     onDraft(`${fill(t("prompt.draft.explainLogs"), { source: unit || t("logs.allUnits") })}\n\n\`\`\`\n${lines}\n\`\`\``);
@@ -601,20 +616,20 @@ export function LogsView({
       {error ? <Callout tone="danger">{error}</Callout> : null}
       {!entries && loading ? <Skeleton rows={8} label={t("host.loading")} /> : null}
       {entries ? (
-        <div className="log-list" ref={listRef} role="list">
+        <div className="log-list" ref={listRef} role="listbox" aria-multiselectable="true" aria-label={t("nav.logs")}>
           {entries.length === 0 ? <p className="muted host-empty">{t("logs.empty")}</p> : null}
-          {entries.map((e, i) => (
+          {entries.map((e) => (
             <button
-              key={i}
+              key={e.key}
               type="button"
-              role="listitem"
-              aria-pressed={selected.has(i)}
-              className={`log-line ${priorityClass(e.priority)}${selected.has(i) ? " selected" : ""}`}
+              role="option"
+              aria-selected={selected.has(e.key)}
+              className={`log-line ${priorityClass(e.priority)}${selected.has(e.key) ? " selected" : ""}`}
               onClick={() =>
                 setSelected((cur) => {
                   const next = new Set(cur);
-                  if (next.has(i)) next.delete(i);
-                  else next.add(i);
+                  if (next.has(e.key)) next.delete(e.key);
+                  else next.add(e.key);
                   return next;
                 })
               }
@@ -873,6 +888,8 @@ export function HostViews({
 }) {
   const t = useT();
   const [logUnit, setLogUnit] = useState("");
+  /* A user-scope unit's journal is the user journal; asking the system one shows nothing. */
+  const [logScope, setLogScope] = useState<ServiceScope>("system");
   return (
     <main className="host-main">
       <h1 className="visually-hidden">{t(`nav.${view}`)}</h1>
@@ -898,14 +915,26 @@ export function HostViews({
           source={source}
           caps={caps}
           onDraft={onDraft}
-          onLogs={(unit) => {
+          onLogs={(unit, scope) => {
             setLogUnit(unit);
+            setLogScope(scope);
             onView("logs");
           }}
         />
       )}
       {view === "logs" && (
-        <LogsView source={source} caps={caps} locale={locale} unit={logUnit} onUnit={setLogUnit} onDraft={onDraft} />
+        <LogsView
+          source={source}
+          caps={caps}
+          locale={locale}
+          unit={logUnit}
+          scope={logScope}
+          onUnit={(unit) => {
+            setLogUnit(unit);
+            setLogScope("system");
+          }}
+          onDraft={onDraft}
+        />
       )}
       {view === "files" && (
         <FilesView source={source} start={cwd} locale={locale} onDraft={onDraft} onMention={onMention} narrow={narrow} />

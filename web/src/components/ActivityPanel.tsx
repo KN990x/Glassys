@@ -5,19 +5,33 @@ import { useT } from "../i18n";
 import { formatTokens, truncateMiddle } from "../format";
 import { SegmentedControl } from "./SegmentedControl";
 import { Disclosure, ListRow } from "./Primitives";
-import { Hunk } from "./ToolCard";
+import { Hunk, REVEAL_EVENT } from "./ToolCard";
 import { IconAlert, IconCheck, IconClose, IconError, IconFileEdit, IconFile, IconSpinner, IconStop, IconTerminal } from "./Icon";
 
 export type ActivityTab = "commands" | "files";
 
-/** Scroll the transcript to the call a row came from, and flash it. */
-export function revealBlock(id: string): void {
-  const node = document.getElementById(`tool-${id}`);
-  if (!node) return;
+function scrollToTool(node: HTMLElement): void {
   const reduce = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   node.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
   node.classList.add("flash");
   setTimeout(() => node.classList.remove("flash"), 1200);
+}
+
+/** Scroll the transcript to the call a row came from, and flash it, opening its group if folded. */
+export function revealBlock(id: string): void {
+  const node = document.getElementById(`tool-${id}`);
+  if (node) {
+    scrollToTool(node);
+    return;
+  }
+  window.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: id }));
+  /* The group renders its cards on the next commit; look again after it. */
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const opened = document.getElementById(`tool-${id}`);
+      if (opened) scrollToTool(opened);
+    }),
+  );
 }
 
 /** Every state is one 16px glyph in one column, so the rows' right edges agree. */

@@ -57,4 +57,41 @@ describe("LogsView", () => {
     expect(host.textContent).toContain("from b");
     expect(host.textContent).not.toContain("from a");
   });
+
+  it("asks the user journal for a user unit, and explains the lines picked even after new ones arrive", async () => {
+    const asked: Array<{ unit?: string; scope?: string }> = [];
+    const source = {
+      hostLogs: async (p: { unit?: string; scope?: string }) => {
+        asked.push(p);
+        return page("first line");
+      },
+    } as unknown as HostSource;
+    const drafts: string[] = [];
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <LogsView
+            source={source}
+            caps={caps}
+            locale="en"
+            unit="sync.service"
+            scope="user"
+            onUnit={() => undefined}
+            onDraft={(text) => drafts.push(text)}
+          />
+        </I18nProvider>,
+      );
+    });
+    expect(asked[0]).toMatchObject({ unit: "sync.service", scope: "user" });
+    const line = host.querySelector('[role="option"]') as HTMLButtonElement;
+    await act(async () => line.click());
+    expect(line.getAttribute("aria-selected")).toBe("true");
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Ask the agent"))!.click();
+    });
+    expect(drafts[0]).toContain("first line");
+  });
 });

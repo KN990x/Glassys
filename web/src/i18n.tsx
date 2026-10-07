@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import en from "./locales/en.json";
 import es from "./locales/es.json";
 
@@ -10,10 +10,18 @@ const I18nContext = createContext<{
   t: (key: string) => string;
 }>({ locale: "en", t: (k) => k });
 
+/**
+ * `t` (and the context value) keep their identity until the locale changes. A new `t` on every
+ * App render re-ran every effect that lists it: each reconnect refetched models, adapters,
+ * threads and workspaces, reloaded Logs and restarted the SDK login poll.
+ */
 export function I18nProvider({ locale, children }: { locale: Locale; children: ReactNode }) {
-  const dict = catalogs[locale] ?? catalogs.en;
-  const t = (key: string) => (dict as Record<string, string>)[key] ?? (en as Record<string, string>)[key] ?? key;
-  return <I18nContext.Provider value={{ locale, t }}>{children}</I18nContext.Provider>;
+  const value = useMemo(() => {
+    const dict = (catalogs[locale] ?? catalogs.en) as Record<string, string>;
+    const t = (key: string) => dict[key] ?? (en as Record<string, string>)[key] ?? key;
+    return { locale, t };
+  }, [locale]);
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export function useT(): (key: string) => string {

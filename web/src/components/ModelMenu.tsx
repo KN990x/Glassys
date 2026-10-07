@@ -63,7 +63,11 @@ export function ModelMenu({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const selected = models.find((m) => m.id === modelId) ?? models.find((m) => m.id === preferred?.id) ?? models[0];
+  /* A configured model the catalog does not list (a fallback catalog, a model id set by hand) is
+     still the one the gateway runs: name it, rather than the first model in the list. */
+  const selected = modelId
+    ? models.find((m) => m.id === modelId)
+    : (models.find((m) => m.id === preferred?.id) ?? models[0]);
   const variants = selected?.variants ?? [];
   const variant = matchingVariant(selected, params);
   const extras = selected ? extraDefs(selected).filter(boolParam) : [];

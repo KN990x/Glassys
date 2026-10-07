@@ -30,7 +30,8 @@ export function PromptsTab({
       type="button"
       className="ghost"
       onClick={() => {
-        const id = `tpl-${templates.length + 1}`;
+        /* Not `tpl-${length + 1}`: after a removal that reused an id still on the list. */
+        const id = `tpl-${crypto.randomUUID().slice(0, 8)}`;
         setTemplates([...templates, { id, slash: "", title: "", text: "" }]);
         setEditing(id);
       }}

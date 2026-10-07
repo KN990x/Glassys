@@ -44,8 +44,10 @@ export function createEventBatcher<T>(apply: (batch: T[]) => void, scheduler: Sc
     push(event: T) {
       pending.push(event);
       if (frame !== null || timer !== null) return;
-      if (scheduler.hidden()) timer = scheduler.later(flush, HIDDEN_FLUSH_MS);
-      else frame = scheduler.frame(flush);
+      /* The timer is armed with every frame too: a tab hidden after the frame was requested gets
+         no frame, and without it everything would pile up until the tab came back. */
+      timer = scheduler.later(flush, HIDDEN_FLUSH_MS);
+      if (!scheduler.hidden()) frame = scheduler.frame(flush);
     },
     flush,
     /** Forget what is pending: a snapshot is about to replace it, or the screen is going away. */

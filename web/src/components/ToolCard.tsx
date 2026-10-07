@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import type { ToolBlock } from "../transcript";
 import {
@@ -77,6 +77,9 @@ export function groupOpensByDefault(blocks: ToolBlock[], showDiff: boolean): boo
  * used to be a dozen bordered cards, each 64px tall, between the question and
  * the answer.
  */
+/** Asks the folded tool group holding a call to open, so the call has a node to scroll to. */
+export const REVEAL_EVENT = "glassys:reveal-tool";
+
 export function ToolGroup({
   blocks,
   shellLines,
@@ -89,6 +92,15 @@ export function ToolGroup({
   const t = useT();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? groupOpensByDefault(blocks, showDiff);
+  /* Activity's "jump to call" opens a folded group that holds the call. */
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (blocks.some((b) => b.id === id)) setUserOpen(true);
+    };
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, [blocks]);
   const { files, add, del } = useMemo(() => toolGroupSummary(blocks), [blocks]);
   const running = blocks.some((b) => b.status === "running");
   const failed = blocks.some((b) => b.status === "error" || b.status === "denied");

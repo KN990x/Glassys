@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import type { RedactedConfig } from "@glassys/protocol";
 import { isTheme, resolveTheme, type Theme } from "@glassys/protocol";
 import { I18nProvider, useT, type Locale } from "./i18n";
-import { api, setUnauthorizedHandler } from "./api";
+import { ApiError, api, setUnauthorizedHandler } from "./api";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
 import { GlassysMark } from "./components/Icon";
@@ -91,8 +91,9 @@ export function App() {
         const cfg = await api.config();
         setConfig(cfg);
         setGate(me.onboarded ? "chat" : "wizard");
-      } catch {
-        setGate("login");
+      } catch (err) {
+        /* Only a refused session means "sign in"; a 502 from the proxy or a dropped request does not. */
+        setGate(err instanceof ApiError && (err.status === 401 || err.status === 403) ? "login" : "unreachable");
       }
     } catch {
       setGate("unreachable");

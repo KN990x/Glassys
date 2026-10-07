@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { useT, type Locale } from "../i18n";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import { GlassysMark, IconEye, IconEyeOff } from "../components/Icon";
@@ -19,6 +19,9 @@ export function Login({
   const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /* Only a language picked here is the operator's choice; the browser's default must not
+     overwrite the instance's language for every device. */
+  const [pickedLocale, setPickedLocale] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -27,16 +30,20 @@ export function Login({
     setError("");
     try {
       await api.login(password);
-      try {
-        await api.saveConfig({ space: { locale } });
-      } catch {
-        /* locale is best-effort */
+      if (pickedLocale) {
+        try {
+          await api.saveConfig({ space: { locale } });
+        } catch {
+          /* locale is best-effort */
+        }
       }
       onDone();
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
       const network = /failed to fetch|network|load failed|aborterror/i.test(raw) || raw === "Failed to fetch";
-      setError(network ? t("login.unreachable") : t("login.error"));
+      if (network) setError(t("login.unreachable"));
+      else if (err instanceof ApiError && err.status === 429) setError(t("error.tooManyAttempts"));
+      else setError(t("login.error"));
     } finally {
       setSubmitting(false);
     }
@@ -45,7 +52,13 @@ export function Login({
   return (
     <main className="gate">
       <div className="gate-corner">
-        <LocaleSwitch locale={locale} onChange={onLocale} />
+        <LocaleSwitch
+          locale={locale}
+          onChange={(next) => {
+            setPickedLocale(true);
+            onLocale(next);
+          }}
+        />
       </div>
       {/* The mark stands above the panel, not inside it as a fourth heading. */}
       <div className="gate-column">

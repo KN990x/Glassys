@@ -47,6 +47,8 @@ const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Setti
 const HostViews = lazy(() => import("./host/HostViews").then((m) => ({ default: m.HostViews })));
 
 const COMPOSER_MAX_PX = 160;
+/** How long a sent message may go unechoed before it is handed back to the composer. */
+const SEND_CONFIRM_MS = 10_000;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
 const RAIL_KEY = "glassys.railCollapsed";
 const ACTIVITY_KEY = "glassys.activityOpen";
@@ -149,6 +151,11 @@ export function Chat({
   const gatewayCommitRef = useRef<string | undefined>(undefined);
   const [newVersion, setNewVersion] = useState(false);
   const sendRef = useRef<(msg: ClientMessage) => boolean>(() => false);
+  /**
+   * The message just sent, until the gateway echoes it back. A socket can look open while the
+   * link is dead; without this, the composer was cleared and the message silently lost.
+   */
+  const unconfirmed = useRef<{ id: string; text: string; drafts: MessageAttachment[]; timer: ReturnType<typeof setTimeout> } | null>(null);
   const keepaliveRef = useRef<(seconds: number) => void>(() => undefined);
   const scroller = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -230,6 +237,7 @@ export function Chat({
           setCurrentThreadId(msg.currentId);
         }
         if (msg.type === "transcript.snapshot") {
+          snapshotCount.current += 1;
           batcher.drop();
           snapshotReadyRef.current = true;
           setSnapshotReady(true);
@@ -259,6 +267,17 @@ export function Chat({
         }
         if (msg.type === "run.queued") setQueued(true);
         if (msg.type === "run.start") setQueued(false);
+        if (msg.type === "user.message" || msg.type === "user.retracted") {
+          const pending = unconfirmed.current;
+          if (pending && msg.id === pending.id) {
+            clearTimeout(pending.timer);
+            unconfirmed.current = null;
+          }
+        }
+        /* A refusal (queue full, gateway busy) comes back to this socket alone, unnumbered. */
+        if (msg.type === "run.error" && msg.phase === "startup" && msg.seq === undefined && unconfirmed.current) {
+          restoreRef.current(operatorError(msg.message, tRef.current));
+        }
         if (isTranscriptEvent(msg)) {
           if (!snapshotReadyRef.current) return;
           if (typeof msg.seq === "number") {
@@ -532,10 +551,24 @@ export function Chat({
     setCurrentThreadId(r.currentId);
   }
 
-  function beginThreadChange() {
+  /** Snapshots received so far; a thread change that fails only rolls back if none came meanwhile. */
+  const snapshotCount = useRef(0);
+
+  function beginThreadChange(): number {
     snapshotReadyRef.current = false;
     setSnapshotReady(false);
     setBlocks([]);
+    return snapshotCount.current;
+  }
+
+  /*
+   * The request failed, but the gateway may still have switched (a timeout after the work was
+   * done) and sent its snapshot. Only put the old blocks back when it did not.
+   */
+  function rollbackThreadChange(prevBlocks: Block[], countAtStart: number) {
+    snapshotReadyRef.current = true;
+    setSnapshotReady(true);
+    if (snapshotCount.current === countAtStart) setBlocks(prevBlocks);
   }
 
   async function onNewThread() {
@@ -544,15 +577,14 @@ export function Chat({
       return;
     }
     const prevBlocks = blocks;
+    let mark = snapshotCount.current;
     try {
-      beginThreadChange();
+      mark = beginThreadChange();
       applyThreadList(await api.newThread());
       closeThreads();
       setSendError("");
     } catch (err) {
-      snapshotReadyRef.current = true;
-      setSnapshotReady(true);
-      setBlocks(prevBlocks);
+      rollbackThreadChange(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -583,15 +615,14 @@ export function Chat({
       return;
     }
     const prevBlocks = blocks;
+    let mark = snapshotCount.current;
     try {
-      beginThreadChange();
+      mark = beginThreadChange();
       applyThreadList(await api.switchThread(id));
       closeThreads();
       setSendError("");
     } catch (err) {
-      snapshotReadyRef.current = true;
-      setSnapshotReady(true);
-      setBlocks(prevBlocks);
+      rollbackThreadChange(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -626,7 +657,8 @@ export function Chat({
       a.href = url;
       a.download = file.name;
       a.click();
-      URL.revokeObjectURL(url);
+      /* Revoked at once, Firefox and Safari can cancel the download before it starts. */
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (err) {
       setSendError(operatorError(err instanceof Error ? err.message : t("chat.sendFailed"), t));
     }
@@ -673,8 +705,9 @@ export function Chat({
     if (!hasThread && !(await confirm({ title: t("confirm.titleArchive"), message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" })))
       return;
     const prevBlocks = blocks;
+    let mark = snapshotCount.current;
     try {
-      beginThreadChange();
+      mark = beginThreadChange();
       const r = await api.openWorkspace(cwd);
       applyThreadList(r);
       onConfig(r.config);
@@ -682,9 +715,7 @@ export function Chat({
       setSendError("");
       await refreshSites();
     } catch (err) {
-      snapshotReadyRef.current = true;
-      setSnapshotReady(true);
-      setBlocks(prevBlocks);
+      rollbackThreadChange(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -795,20 +826,41 @@ export function Chat({
     e.preventDefault();
     const value = text.trim();
     if ((!value && !drafts.length) || conn !== "connected" || !snapshotReady || protocolError !== null) return;
+    const id = newMessageId();
     if (!sendRef.current({
       type: "user.message",
       text: value,
-      id: newMessageId(),
+      id,
       attachments: drafts.length ? drafts : undefined,
     })) {
       setSendError(t("chat.sendFailed"));
       return;
     }
+    if (unconfirmed.current) clearTimeout(unconfirmed.current.timer);
+    unconfirmed.current = {
+      id,
+      text: value,
+      drafts,
+      timer: setTimeout(() => restoreUnconfirmed(t("chat.notDelivered")), SEND_CONFIRM_MS),
+    };
     setSendError("");
     setText("");
     setDrafts([]);
     if (composer.current) resizeComposer(composer.current);
   }
+
+  /** Put an unconfirmed message back into an empty composer and say why. */
+  function restoreUnconfirmed(reason: string) {
+    const pending = unconfirmed.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    unconfirmed.current = null;
+    setText((cur) => (cur.trim() ? cur : pending.text));
+    setDrafts((cur) => (cur.length ? cur : pending.drafts));
+    setSendError(reason);
+  }
+  const restoreRef = useRef(restoreUnconfirmed);
+  restoreRef.current = restoreUnconfirmed;
 
   function cancelRun() {
     if (!sendRef.current({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));

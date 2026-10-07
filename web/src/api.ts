@@ -39,13 +39,25 @@ function checkSession(path: string, res: Response): void {
   onUnauthorized?.();
 }
 
+/** A failed request, with its HTTP status, so callers can tell "signed out" from "gateway down". */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const res = await fetch(path, { ...init, headers, credentials: "include" });
   checkSession(path, res);
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  /* HTTP/2 (Caddy, Cloudflare) sends no status text; an empty message showed as nothing at all. */
+  if (!res.ok) throw new ApiError(data.error || res.statusText || `HTTP ${res.status}`, res.status);
   return data;
 }
 

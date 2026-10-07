@@ -67,4 +67,17 @@ describe("event batcher", () => {
     fake.runFrames();
     expect(batches).toEqual([[2]]);
   });
+
+  it("still flushes when the tab is hidden after the frame was requested", () => {
+    const fake = fakeScheduler();
+    const batches: number[][] = [];
+    const b = createEventBatcher<number>((batch) => batches.push(batch), fake.scheduler);
+    b.push(1);
+    expect(fake.frames.size).toBe(1);
+    /* The tab goes to the background: no frame will ever run. The timer still does. */
+    b.push(2);
+    [...fake.timers.values()][0]!.fn();
+    expect(batches).toEqual([[1, 2]]);
+    expect(fake.frames.size).toBe(0);
+  });
 });

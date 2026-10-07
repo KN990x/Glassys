@@ -86,6 +86,7 @@ describe("socket reconnect", () => {
   async function setup() {
     FakeSocket.all = [];
     vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
     const WS = Object.assign(
       vi.fn(function () {
         return new FakeSocket();
@@ -102,6 +103,7 @@ describe("socket reconnect", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -128,9 +130,48 @@ describe("socket reconnect", () => {
     expect(FakeSocket.all).toHaveLength(3);
     FakeSocket.all[2]!.open();
     FakeSocket.all[2]!.message({ type: "auth.ok" });
+    /* Dropped right after auth: not a healthy connection, so the backoff keeps growing. */
     FakeSocket.all[2]!.drop();
     await vi.advanceTimersByTimeAsync(1_000);
+    expect(FakeSocket.all).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(3_000);
     expect(FakeSocket.all).toHaveLength(4);
+    sock.close();
+  });
+
+  it("starts the backoff over once a connection has stayed up", async () => {
+    const { sock } = await setup();
+    FakeSocket.all[0]!.open();
+    FakeSocket.all[0]!.drop();
+    await vi.advanceTimersByTimeAsync(1_000);
+    FakeSocket.all[1]!.open();
+    FakeSocket.all[1]!.message({ type: "auth.ok" });
+    await vi.advanceTimersByTimeAsync(10_000);
+    FakeSocket.all[1]!.message({ type: "pong" });
+    FakeSocket.all[1]!.drop();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(FakeSocket.all).toHaveLength(3);
+    sock.close();
+  });
+
+  it("closes a socket that has gone quiet, so it reconnects", async () => {
+    const { sock, states } = await setup();
+    const socket = FakeSocket.all[0]!;
+    socket.close = () => socket.drop();
+    socket.open();
+    socket.message({ type: "auth.ok" });
+    await vi.advanceTimersByTimeAsync(25_000 * 3 + 5_000);
+    expect(states.at(-1)).toBe("reconnecting");
+    sock.close();
+  });
+
+  it("reconnects at once when the page becomes visible again", async () => {
+    const { sock } = await setup();
+    FakeSocket.all[0]!.open();
+    FakeSocket.all[0]!.drop();
+    expect(FakeSocket.all).toHaveLength(1);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(FakeSocket.all).toHaveLength(2);
     sock.close();
   });
 

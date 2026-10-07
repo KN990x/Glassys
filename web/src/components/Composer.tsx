@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { MAX_ATTACHMENTS } from "@glassys/protocol";
 import type {
   AdapterCapabilities,
   MessageAttachment,
@@ -128,7 +129,9 @@ export function Composer(props: ComposerProps) {
           return;
         }
         const pasted = e.clipboardData?.getData("text/plain") || "";
-        if (pasted.length > 2048) {
+        /* Long pastes become a file, but only where it can go: with attachments off or the
+           limit reached, the text stays in the box instead of being lost to an error. */
+        if (pasted.length > 2048 && caps?.attachments !== false && drafts.length < MAX_ATTACHMENTS) {
           e.preventDefault();
           onAttach([new File([pasted], "paste.txt", { type: "text/plain" })]);
         }
