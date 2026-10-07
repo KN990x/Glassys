@@ -34,6 +34,14 @@ export function headerEnd(buf: Buffer): { end: number; bodyStart: number } | nul
 export class JsonRpcStdio {
   private nextId = 1;
   private buf = Buffer.alloc(0);
+  /**
+   * Chunks that cannot complete a message yet, joined only once one can. Concatenating every
+   * chunk into `buf` and rescanning it made a large message quadratic in its size.
+   */
+  private parts: Buffer[] = [];
+  private partsLen = 0;
+  /** With LSP framing, the buffer length at which the message being read is complete. */
+  private lspNeed = 0;
   /** How the agent frames what it writes; detected from its first bytes. */
   private framing: "unknown" | "lsp" | "ndjson" = "unknown";
   /**
@@ -154,13 +162,24 @@ export class JsonRpcStdio {
   }
 
   private onData(chunk: Buffer) {
-    this.buf = Buffer.concat([this.buf, chunk]);
-    this.consume();
-    if (this.buf.length > MAX_RPC_FRAME_BYTES) {
+    this.parts.push(chunk);
+    this.partsLen += chunk.length;
+    if (this.buf.length + this.partsLen > MAX_RPC_FRAME_BYTES) {
       this.buf = Buffer.alloc(0);
+      this.parts = [];
+      this.partsLen = 0;
       this.failAll(new Error(`ACP message larger than ${MAX_RPC_FRAME_BYTES} bytes`));
       void this.close();
+      return;
     }
+    const mayComplete =
+      this.framing === "unknown" ||
+      (this.framing === "ndjson" ? chunk.includes(0x0a) : this.buf.length + this.partsLen >= this.lspNeed);
+    if (!mayComplete) return;
+    this.buf = this.buf.length ? Buffer.concat([this.buf, ...this.parts]) : Buffer.concat(this.parts);
+    this.parts = [];
+    this.partsLen = 0;
+    this.consume();
   }
 
   private consume() {
@@ -188,7 +207,11 @@ export class JsonRpcStdio {
           return;
         }
         const bodyStart = split.bodyStart;
-        if (this.buf.length < bodyStart + len) return;
+        if (this.buf.length < bodyStart + len) {
+          this.lspNeed = bodyStart + len;
+          return;
+        }
+        this.lspNeed = 0;
         const body = this.buf.subarray(bodyStart, bodyStart + len).toString("utf8");
         this.buf = this.buf.subarray(bodyStart + len);
         try {

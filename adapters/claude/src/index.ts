@@ -423,24 +423,13 @@ export const claudeAdapter: Adapter = {
   },
 
   async listModels(apiKey?: string, cwd?: string) {
-    try {
-      const sdk = await loadSdk();
-      const q = sdk.query({
-        prompt: (async function* () {})(),
-        options: {
-          cwd: cwd || process.cwd(),
-          maxTurns: 0,
-          ...(apiKey ? { env: { ...process.env, ANTHROPIC_API_KEY: apiKey } } : {}),
-        },
-      });
-      try {
-        return claudeCatalogFromListed(q.supportedModels ? await q.supportedModels() : []);
-      } finally {
-        q.close?.();
-      }
-    } catch (err) {
-      return { models: CLAUDE_STATIC_CATALOG, source: "fallback" as const, error: errorMessage(err) };
-    }
+    /* Each listing starts a whole Claude Code process; the catalog changes on the order of days. */
+    const key = `${apiKey ?? ""}\u0000${cwd ?? ""}`;
+    const cached = catalogCache.get(key);
+    if (cached && Date.now() - cached.at < CLAUDE_CATALOG_TTL_MS) return cached.value;
+    const value = await listClaudeModels(apiKey, cwd);
+    if (value.source === "live") catalogCache.set(key, { at: Date.now(), value });
+    return value;
   },
 
   async probe() {
@@ -455,3 +444,27 @@ export const claudeAdapter: Adapter = {
     return ClaudeSession.start(opts, agentId);
   },
 };
+
+export const CLAUDE_CATALOG_TTL_MS = 10 * 60_000;
+const catalogCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof listClaudeModels>> }>();
+
+async function listClaudeModels(apiKey?: string, cwd?: string) {
+  try {
+    const sdk = await loadSdk();
+    const q = sdk.query({
+      prompt: (async function* () {})(),
+      options: {
+        cwd: cwd || process.cwd(),
+        maxTurns: 0,
+        ...(apiKey ? { env: { ...process.env, ANTHROPIC_API_KEY: apiKey } } : {}),
+      },
+    });
+    try {
+      return claudeCatalogFromListed(q.supportedModels ? await q.supportedModels() : []);
+    } finally {
+      q.close?.();
+    }
+  } catch (err) {
+    return { models: CLAUDE_STATIC_CATALOG, source: "fallback" as const, error: errorMessage(err) };
+  }
+}

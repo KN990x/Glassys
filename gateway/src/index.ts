@@ -32,7 +32,7 @@ async function main(): Promise<void> {
         res.end(JSON.stringify({ error: "not found" }));
         return;
       }
-      if (serveStatic(req, res)) return;
+      if (await serveStatic(req, res)) return;
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");
     } catch (err) {

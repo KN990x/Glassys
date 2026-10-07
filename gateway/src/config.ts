@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { writeFileAtomic } from "./atomic.js";
 import { dirname, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -120,12 +120,36 @@ function normalizeLoaded(cfg: GlassysConfig, parsed: unknown): { cfg: GlassysCon
   return { cfg, persist };
 }
 
+/**
+ * The parsed config, kept while config.yaml is unchanged on disk. Every HTTP request reads the
+ * config at least twice (origin policy, edge auth), and each read used to mkdir, try to create
+ * the file, read it, parse the YAML and normalize it. A stat now decides; an edit by hand (a new
+ * mtime or size) is picked up on the next read, as before.
+ */
+let configCache: { path: string; mtimeNs: bigint; size: bigint; cfg: GlassysConfig } | null = null;
+
+async function statConfig(path: string): Promise<{ mtimeNs: bigint; size: bigint } | null> {
+  try {
+    const st = await stat(path, { bigint: true });
+    return { mtimeNs: st.mtimeNs, size: st.size };
+  } catch {
+    return null;
+  }
+}
+
 async function loadConfigUnlocked(): Promise<GlassysConfig> {
-  await ensureConfigFile();
-  const raw = await readFile(paths.config(), "utf8");
+  const path = paths.config();
+  let st = await statConfig(path);
+  if (configCache && st && configCache.path === path && configCache.mtimeNs === st.mtimeNs && configCache.size === st.size) {
+    return structuredClone(configCache.cfg);
+  }
+  if (!st) await ensureConfigFile();
+  const raw = await readFile(path, "utf8");
   const parsed = YAML.parse(raw) as unknown;
   const { cfg, persist } = normalizeLoaded(deepMerge(defaultConfig(), parsed), parsed);
   if (persist) await saveConfig(cfg);
+  st = await statConfig(path);
+  configCache = st ? { path, ...st, cfg: structuredClone(cfg) } : null;
   return cfg;
 }
 
@@ -134,6 +158,7 @@ export async function loadConfig(): Promise<GlassysConfig> {
 }
 
 export async function saveConfig(cfg: GlassysConfig): Promise<void> {
+  configCache = null;
   await mkdir(dirname(paths.config()), { recursive: true });
   const toWrite: GlassysConfig = {
     ...cfg,

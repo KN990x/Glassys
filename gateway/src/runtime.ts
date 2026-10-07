@@ -90,6 +90,27 @@ let runStartedAt: number | undefined;
 let queue: QueueJob[] = [];
 let processing = false;
 let cancelGeneration = 0;
+/** Fires whenever cancelGeneration moves, so a waiting run reacts at once instead of polling. */
+const cancelEvents = new EventTarget();
+
+function bumpCancelGeneration(): number {
+  cancelGeneration += 1;
+  cancelEvents.dispatchEvent(new Event("cancel"));
+  return cancelGeneration;
+}
+
+/** Resolves once cancelGeneration differs from `gen` (now, or the next time it moves). */
+function cancelledSince(gen: number): { promise: Promise<void>; dispose: () => void } {
+  if (cancelGeneration !== gen) return { promise: Promise.resolve(), dispose: () => undefined };
+  let onCancel: () => void = () => undefined;
+  const promise = new Promise<void>((resolve) => {
+    onCancel = () => {
+      if (cancelGeneration !== gen) resolve();
+    };
+    cancelEvents.addEventListener("cancel", onCancel);
+  });
+  return { promise, dispose: () => cancelEvents.removeEventListener("cancel", onCancel) };
+}
 let identityGeneration = 0;
 let emitChain: Promise<void> = Promise.resolve();
 let pendingIdentityReset = false;
@@ -540,25 +561,17 @@ async function waitRunRespectingCancel(
   gen: number,
 ): Promise<"finished" | "error" | "cancelled"> {
   const waited = waitRun(run);
-  if (cancelGeneration !== gen) {
-    const raced = await Promise.race([waited, delay(runCancelTimeoutMs)]);
-    return raced === "timeout" ? abandonTimedOutRun() : raced;
-  }
+  /* After a cancel the run gets runCancelTimeoutMs to wind down before its session is dropped. */
+  const cancelled = cancelledSince(gen);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const onCancelTimeout = new Promise<"timeout">((resolve) => {
-    const poll = () => {
-      if (cancelGeneration !== gen) {
-        timer = setTimeout(() => resolve("timeout"), runCancelTimeoutMs);
-        return;
-      }
-      timer = setTimeout(poll, 50);
-    };
-    poll();
-  });
+  const timedOut = cancelled.promise.then(
+    () => new Promise<"timeout">((resolve) => (timer = setTimeout(() => resolve("timeout"), runCancelTimeoutMs))),
+  );
   try {
-    const raced = await Promise.race([waited, onCancelTimeout]);
+    const raced = await Promise.race([waited, timedOut]);
     return raced === "timeout" ? abandonTimedOutRun() : raced;
   } finally {
+    cancelled.dispose();
     if (timer) clearTimeout(timer);
   }
 }
@@ -962,8 +975,7 @@ export async function cancelQueued(id: string): Promise<void> {
 }
 
 export async function cancelRun(): Promise<void> {
-  const gen = cancelGeneration + 1;
-  cancelGeneration = gen;
+  bumpCancelGeneration();
   if (!currentRun) {
     abortStartingRun();
     return;
@@ -1003,7 +1015,7 @@ async function applyConfigPatchUnlocked(
     const identityChanged = agentFingerprint(before) !== agentFingerprint(config);
     if (identityChanged) {
       const dropped = await withQueueLock(async () => {
-        cancelGeneration += 1;
+        bumpCancelGeneration();
         identityGeneration += 1;
         const jobs = queue;
         queue = [];
@@ -1039,7 +1051,7 @@ async function beginIdleThreadOp(): Promise<void> {
   await withQueueLock(async () => {
     if (runtime.busy || processing || currentRun || rotating) throw new HttpError(409, "busy");
     rotating = true;
-    cancelGeneration += 1;
+    bumpCancelGeneration();
     identityGeneration += 1;
     queue = [];
   });
@@ -1105,7 +1117,7 @@ async function switchLiveThreadUnlocked(id: string): Promise<void> {
     if (runtime.busy || processing || currentRun || rotating) throw new HttpError(409, "busy");
     if (same) return false;
     rotating = true;
-    cancelGeneration += 1;
+    bumpCancelGeneration();
     identityGeneration += 1;
     queue = [];
     return true;
@@ -1244,7 +1256,7 @@ export async function shutdownRuntime(): Promise<void> {
   await withQueueLock(async () => {
     shuttingDown = true;
     queue = [];
-    cancelGeneration += 1;
+    bumpCancelGeneration();
     identityGeneration += 1;
     pendingIdentityReset = false;
     resetFromAgent = null;

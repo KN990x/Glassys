@@ -127,3 +127,27 @@ describe("JsonRpcStdio stderr", () => {
     await rpc.close();
   });
 });
+
+describe("JsonRpcStdio large frames", () => {
+  it("reads a multi-megabyte NDJSON message that arrives in many chunks", async () => {
+    const rpc = new JsonRpcStdio(
+      process.execPath,
+      [
+        "-e",
+        `
+        const rl = require("readline").createInterface({ input: process.stdin });
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { blob: "x".repeat(8 * 1024 * 1024) } }) + "\\n");
+        });
+        `,
+      ],
+      process.cwd(),
+    );
+    const started = Date.now();
+    const result = (await rpc.request("big", {}, 10_000)) as { blob: string };
+    expect(result.blob.length).toBe(8 * 1024 * 1024);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    await rpc.close();
+  }, 15_000);
+});

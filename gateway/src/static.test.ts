@@ -49,10 +49,10 @@ describe("static serving", () => {
       const file = join(dir, "app.js");
       await writeFile(file, "x");
       await writeFile(`${file}.gz`, "gz");
-      expect(pickEncoded(file, "gzip, br")).toEqual({ path: `${file}.gz`, encoding: "gzip" });
+      expect(await pickEncoded(file, "gzip, br")).toEqual({ path: `${file}.gz`, encoding: "gzip", size: 2 });
       await writeFile(`${file}.br`, "br");
-      expect(pickEncoded(file, "gzip, br")).toEqual({ path: `${file}.br`, encoding: "br" });
-      expect(pickEncoded(file, "identity")).toEqual({ path: file });
+      expect(await pickEncoded(file, "gzip, br")).toEqual({ path: `${file}.br`, encoding: "br", size: 2 });
+      expect(await pickEncoded(file, "identity")).toEqual({ path: file });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

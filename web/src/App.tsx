@@ -5,10 +5,13 @@ import { I18nProvider, useT, type Locale } from "./i18n";
 import { api, setUnauthorizedHandler } from "./api";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
-import { Chat } from "./pages/Chat";
 import { GlassysMark } from "./components/Icon";
 
 const Wizard = lazy(() => import("./pages/Wizard").then((m) => ({ default: m.Wizard })));
+/* Chat carries the markdown renderer and most of the app. Split out, Login and Setup no longer
+   download it first; it is fetched at boot alongside the auth calls, so chat does not wait. */
+const loadChat = () => import("./pages/Chat");
+const Chat = lazy(() => loadChat().then((m) => ({ default: m.Chat })));
 
 type Gate = "boot" | "unreachable" | "setup" | "login" | "wizard" | "chat";
 type ResolvedTheme = "dark" | "light";
@@ -97,6 +100,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    void loadChat().catch(() => undefined);
     void refresh();
   }, [refresh]);
 
@@ -151,7 +155,9 @@ export function App() {
           </Suspense>
         )}
         {gate === "chat" && config && (
-          <Chat config={config} onConfig={setConfig} onLogout={() => void refresh()} />
+          <Suspense fallback={<BootScreen />}>
+            <Chat config={config} onConfig={setConfig} onLogout={() => void refresh()} />
+          </Suspense>
         )}
       </div>
     </I18nProvider>

@@ -171,6 +171,23 @@ function collectAttachmentIds(raw: string, into: Set<string>): void {
   }
 }
 
+/**
+ * Attachment ids each transcript references, kept while the file is unchanged. GC runs on every
+ * new thread, switch and delete; archived transcripts never change, so only the ones that grew
+ * are read again instead of every transcript of every thread each time.
+ */
+const attachmentIndex = new Map<string, { size: number; mtimeMs: number; ids: Set<string> }>();
+
+async function threadAttachmentIds(path: string): Promise<Set<string>> {
+  const st = await stat(path);
+  const cached = attachmentIndex.get(path);
+  if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) return cached.ids;
+  const ids = new Set<string>();
+  collectAttachmentIds(await readFile(path, "utf8"), ids);
+  attachmentIndex.set(path, { size: st.size, mtimeMs: st.mtimeMs, ids });
+  return ids;
+}
+
 export async function gcUploads(now = Date.now()): Promise<void> {
   let files: string[] = [];
   try {
@@ -185,13 +202,17 @@ export async function gcUploads(now = Date.now()): Promise<void> {
   } catch {
     threadIds = [];
   }
+  const live = new Set<string>();
   for (const tid of threadIds) {
+    const path = paths.threadTranscript(tid);
+    live.add(path);
     try {
-      collectAttachmentIds(await readFile(paths.threadTranscript(tid), "utf8"), referenced);
+      for (const id of await threadAttachmentIds(path)) referenced.add(id);
     } catch {
       /* skip unreadable thread */
     }
   }
+  for (const path of attachmentIndex.keys()) if (!live.has(path)) attachmentIndex.delete(path);
   const seen = new Set<string>();
   for (const name of files) {
     const id = name.endsWith(".json") ? name.slice(0, -".json".length) : name;

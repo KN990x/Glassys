@@ -1,4 +1,5 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { webDir } from "./paths.js";
@@ -97,34 +98,52 @@ export function acceptsEncoding(header: string | undefined, name: string): boole
   return false;
 }
 
+/** The size of a regular file, or null when there is none at `path`. */
+async function fileSize(path: string): Promise<number | null> {
+  try {
+    const st = await stat(path);
+    return st.isFile() ? st.size : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The build writes .br and .gz beside compressible files; pick one the client takes. */
-export function pickEncoded(file: string, acceptEncoding: string | undefined): { path: string; encoding?: string } {
+export async function pickEncoded(
+  file: string,
+  acceptEncoding: string | undefined,
+): Promise<{ path: string; encoding?: string; size?: number }> {
   for (const enc of ENCODINGS) {
     if (!acceptsEncoding(acceptEncoding, enc.name)) continue;
     const candidate = `${file}${enc.suffix}`;
-    if (existsSync(candidate)) return { path: candidate, encoding: enc.name };
+    const size = await fileSize(candidate);
+    if (size !== null) return { path: candidate, encoding: enc.name, size };
   }
   return { path: file };
 }
 
-export function serveStatic(req: IncomingMessage, res: ServerResponse): boolean {
+/**
+ * Serve the PWA. Asynchronous throughout: every stat used to be a synchronous call on the event
+ * loop that also carries the agent's token stream.
+ */
+export async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (isGatewayApiPath(req.url || "/")) return false;
 
   const root = webDir();
-  if (!existsSync(root)) return false;
   const url = req.url || "/";
-  const target = safeJoin(root, url) ?? join(root, "index.html");
-  let file = target;
-  if (!existsSync(file) || statSync(file).isDirectory()) {
+  let file = safeJoin(root, url) ?? join(root, "index.html");
+  let size = await fileSize(file);
+  if (size === null) {
     file = join(root, "index.html");
+    size = await fileSize(file);
   }
-  if (!existsSync(file)) return false;
+  if (size === null) return false;
   const headers = fileResponseHeaders(file, root);
   const encodingHeader = req.headers["accept-encoding"];
-  const picked = pickEncoded(file, Array.isArray(encodingHeader) ? encodingHeader.join(",") : encodingHeader);
+  const picked = await pickEncoded(file, Array.isArray(encodingHeader) ? encodingHeader.join(",") : encodingHeader);
   headers["Vary"] = "Accept-Encoding";
   if (picked.encoding) headers["Content-Encoding"] = picked.encoding;
-  headers["Content-Length"] = String(statSync(picked.path).size);
+  headers["Content-Length"] = String(picked.size ?? size);
   res.writeHead(200, headers);
   if (req.method === "HEAD") {
     res.end();
