@@ -135,7 +135,16 @@ export function Topbar({
                 value={draft}
                 aria-label={t("threads.rename")}
                 onChange={(e) => setDraft(e.target.value)}
-                onBlur={() => setRenaming(false)}
+                /* Focus moving to Save is not leaving the field: unmounting here ate its click. */
+                onBlur={(e) => {
+                  if (!e.currentTarget.form?.contains(e.relatedTarget as Node | null)) setRenaming(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Escape") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setRenaming(false);
+                }}
                 autoFocus
               />
               <button type="submit" className="ghost tiny">

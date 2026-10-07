@@ -364,8 +364,12 @@ describe("Chat composer and layout", () => {
     expect(host.querySelector(".draft-thumbs img")?.getAttribute("alt")).toBe("shot.png");
   });
 
-  it("does not send on Enter when the device has a touch screen", async () => {
-    vi.stubGlobal("navigator", { maxTouchPoints: 5 });
+  it("does not send on Enter on a phone", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q === "(pointer: coarse)",
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
     await renderChat();
     await act(async () => {
       socket.setConnected();
@@ -395,6 +399,54 @@ describe("Chat composer and layout", () => {
     });
     expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
     expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
+  });
+
+  it("sends a message that starts with a path instead of swallowing Enter", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    await typeIn(textarea, "/var/log/syslog");
+    expect(host.querySelector(".palette-inline")).toBeNull();
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(socket.sent.some((m) => (m as { type?: string; text?: string }).type === "user.message")).toBe(true);
+  });
+
+  it("offers Send beside Stop during a run once there is something to queue", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+      socket.emit({ type: "session", profileId: "default", agentId: "a", busy: true, threadId: "t1" });
+    });
+    expect(host.querySelector(".composer-send.stop")).not.toBeNull();
+    expect(host.querySelector('.composer-send[type="submit"]')).toBeNull();
+    await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "next step");
+    expect(host.querySelector(".composer-send.stop.beside")).not.toBeNull();
+    expect((host.querySelector('.composer-send[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not cancel the run on Escape inside another field", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+      socket.emit({ type: "session", profileId: "default", agentId: "a", busy: true, threadId: "t1" });
+    });
+    const field = document.createElement("input");
+    host.append(field);
+    await act(async () => {
+      field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(socket.sent.some((m) => (m as { type?: string }).type === "run.cancel")).toBe(false);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(socket.sent.some((m) => (m as { type?: string }).type === "run.cancel")).toBe(true);
   });
 
   it("offers saved operations on the empty transcript and inserts without sending", async () => {

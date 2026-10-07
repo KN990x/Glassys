@@ -11,7 +11,7 @@ import type {
 import { useT } from "../i18n";
 import { isImageMime, slashQuery } from "../format";
 import { shouldSubmitOnEnter } from "../operatorError";
-import { CommandPalette, templatePaletteItems } from "./CommandPalette";
+import { CommandPalette, filterPaletteItems, templatePaletteItems } from "./CommandPalette";
 import { ModelMenu } from "./ModelMenu";
 import { PermissionChip } from "./PermissionChip";
 import {
@@ -217,8 +217,11 @@ export function Composer(props: ComposerProps) {
             onChange={(e) => {
               const next = e.target.value;
               onText(next);
+              /* Only while it names a template: "/var/log/syslog is full" is a message. */
               const q = slashQuery(next);
-              setSlashOpen(q !== null);
+              setSlashOpen(
+                q !== null && !/\s/.test(q) && filterPaletteItems(templatePaletteItems(templates, t, onTemplate), q).length > 0,
+              );
               onResize(e.currentTarget);
             }}
             onKeyDown={(e) => {
@@ -299,17 +302,20 @@ export function Composer(props: ComposerProps) {
 
             <span className="composer-spacer" />
 
-            {busy && caps?.cancel !== false ? (
+            {/* During a run Stop takes Send's place; once there is something to queue, Send
+                comes back beside it (a phone has no Enter to queue with). */}
+            {busy && caps?.cancel !== false && (
               <button
                 type="button"
-                className="composer-send stop"
+                className={`composer-send stop${canSend ? " beside" : ""}`}
                 aria-label={t("chat.cancel")}
                 title={t("chat.cancel")}
                 onClick={onCancel}
               >
                 <IconStop fill="currentColor" />
               </button>
-            ) : (
+            )}
+            {(!busy || caps?.cancel === false || canSend) && (
               <button className="composer-send" type="submit" disabled={!canSend} aria-label={t("chat.send")}>
                 <IconArrowUp />
               </button>

@@ -446,8 +446,14 @@ export function Chat({
         setSearch("");
         return;
       }
-      /* Escape is the shortcut the run strip advertises. */
-      if (busy && !settings && !threadOpen && caps?.cancel !== false) {
+      /* Escape is the shortcut the run strip advertises, in the chat. Escape in a host view's
+         filter or a rename field means "leave this field", not "stop the agent". */
+      const target = e.target as HTMLElement | null;
+      const inOtherField =
+        target instanceof HTMLElement &&
+        target !== composer.current &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (busy && view === "chat" && !inOtherField && !settings && !threadOpen && caps?.cancel !== false) {
         cancelRun();
         return;
       }
@@ -464,6 +470,7 @@ export function Chat({
     collapseRail,
     busy,
     caps,
+    view,
     activityOpen,
     toggleActivity,
   ]);

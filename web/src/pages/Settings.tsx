@@ -51,6 +51,26 @@ export type SettingsTab =
   | "phone"
   | "usage";
 
+/** The config sections Settings drafts; everything else always comes from the server. */
+const DRAFT_SECTIONS = ["space", "agent", "display", "session", "prompts"] as const;
+
+function sectionDiffers(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+
+export function draftDiffers(draft: RedactedConfig, baseline: RedactedConfig): boolean {
+  return DRAFT_SECTIONS.some((key) => sectionDiffers(draft[key], baseline[key]));
+}
+
+/** Move a draft onto a new server config, keeping only the sections the operator changed. */
+export function rebaseDraft(draft: RedactedConfig, prev: RedactedConfig, next: RedactedConfig): RedactedConfig {
+  const out: RedactedConfig = { ...next };
+  for (const key of DRAFT_SECTIONS) {
+    if (sectionDiffers(draft[key], prev[key])) Object.assign(out, { [key]: draft[key] });
+  }
+  return out;
+}
+
 export function Settings({
   config,
   onClose,
@@ -110,35 +130,42 @@ export function Settings({
   onCloseRef.current = onClose;
   /* Theme and language apply as the operator picks them, so the choice can be
      judged against the actual interface. Discard puts the space back. */
-  const originalSpace = useRef(config.space);
   const onConfigRef = useRef(onConfig);
   onConfigRef.current = onConfig;
+  /* `config` is what App shows: the server's config, with the space being previewed laid over
+     it. `baseline` is the server's alone; the draft is compared and rebased against it. */
+  const [baseline, setBaseline] = useState(config);
+  const baselineRef = useRef(config);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  /** The config this screen last handed App for a preview, so its echo is not taken for news. */
+  const previewSent = useRef<RedactedConfig | null>(null);
+
+  function showSpace(space: RedactedConfig["space"]) {
+    const shown = { ...baselineRef.current, space };
+    previewSent.current = shown;
+    onConfigRef.current(shown);
+  }
 
   function previewSpace(next: RedactedConfig) {
     setDraft(next);
-    onConfigRef.current({ ...config, space: next.space });
+    showSpace(next.space);
   }
 
   function revertPreview() {
-    onConfigRef.current({ ...config, space: originalSpace.current });
+    previewSent.current = null;
+    onConfigRef.current(baselineRef.current);
   }
 
-  const dirty =
-    Boolean(password || apiKey || clearKey) ||
-    JSON.stringify({
-      space: draft.space,
-      agent: draft.agent,
-      display: draft.display,
-      session: draft.session,
-      prompts: draft.prompts,
-    }) !==
-      JSON.stringify({
-        space: config.space,
-        agent: config.agent,
-        display: config.display,
-        session: config.session,
-        prompts: config.prompts,
-      });
+  function adoptSaved(next: RedactedConfig) {
+    baselineRef.current = next;
+    setBaseline(next);
+    setDraft(next);
+    previewSent.current = null;
+    onConfig(next);
+  }
+
+  const dirty = Boolean(password || apiKey || clearKey) || draftDiffers(draft, baseline);
 
   async function requestClose() {
     if (dirty && !(await confirm({ title: t("confirm.titleDiscard"), message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
@@ -152,8 +179,19 @@ export function Settings({
   const currentAdapter = adapters.find((a) => a.id === draft.agent.adapter) ?? adapters[0];
   const caps = currentAdapter?.capabilities;
 
+  /* A config from elsewhere (a reconnect, another device saving) moves the baseline. Sections
+     the operator has not touched follow it; edits in progress are kept. */
   useEffect(() => {
-    setDraft(config);
+    if (config === previewSent.current) return;
+    const prev = baselineRef.current;
+    baselineRef.current = config;
+    setBaseline(config);
+    const rebased = rebaseDraft(draftRef.current, prev, config);
+    setDraft(rebased);
+    if (previewSent.current && rebased.space !== config.space && sectionDiffers(rebased.space, config.space)) {
+      showSpace(rebased.space);
+    }
+    // The refs carry everything else this needs; only a new config should run it.
   }, [config]);
 
   useEffect(() => {
@@ -327,8 +365,7 @@ export function Settings({
         operatorPassword: password || undefined,
         currentPassword: password ? currentPassword : undefined,
       });
-      onConfig(next);
-      setDraft(next);
+      adoptSaved(next);
       setApiKey("");
       setClearKey(false);
       const rotatedPassword = Boolean(password);
@@ -410,9 +447,14 @@ export function Settings({
         const endpoint = await disableWebPush();
         if (endpoint) await api.pushUnsubscribe(endpoint);
       }
-      const next = await api.saveConfig({ session: { notifyOnComplete: on } });
-      setDraft(next);
-      onConfig(next);
+      const saved = await api.saveConfig({ session: { notifyOnComplete: on } });
+      /* Only the notify switch was saved; anything else drafted stays a draft. */
+      const prev = baselineRef.current;
+      baselineRef.current = saved;
+      setBaseline(saved);
+      setDraft((d) => ({ ...rebaseDraft(d, prev, saved), session: { ...d.session, notifyOnComplete: on } }));
+      previewSent.current = null;
+      onConfig(saved);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       setNotifyNote(msg.includes("denied") || msg.includes("permission") ? t("settings.notifyDenied") : operatorError(msg, t));
@@ -608,7 +650,7 @@ export function Settings({
                 type="button"
                 className="ghost"
                 onClick={() => {
-                  setDraft(config);
+                  setDraft(baselineRef.current);
                   setApiKey("");
                   setClearKey(false);
                   setPassword("");

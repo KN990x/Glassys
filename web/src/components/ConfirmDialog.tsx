@@ -65,7 +65,14 @@ export function ConfirmDialog({
   }, []);
 
   return (
-    <div className="confirm-overlay" onClick={() => onResolve(false)}>
+    <div
+      className="confirm-overlay"
+      onClick={(e) => {
+        /* A confirm can sit inside another overlay (Settings); its backdrop must not close that too. */
+        e.stopPropagation();
+        onResolve(false);
+      }}
+    >
       <div
         className="confirm-panel"
         role="alertdialog"

@@ -2225,6 +2225,9 @@ mark {
 .composer-send:disabled { background: var(--surface-3); color: var(--faint); opacity: 1; }
 .composer-send svg { width: var(--icon-md); height: var(--icon-md); }
 .composer-send.stop svg { width: var(--icon-sm); height: var(--icon-sm); }
+/* Beside a live Send, Stop steps back so Send reads as the primary action. */
+.composer-send.stop.beside { background: var(--surface-3); color: var(--text); }
+.composer-send.stop.beside:hover { background: var(--surface-2); }
 
 .thumbs { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .thumbs img, .thumb-remove img {

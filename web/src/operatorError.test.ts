@@ -25,15 +25,20 @@ describe("shouldSubmitOnEnter", () => {
     vi.unstubAllGlobals();
   });
 
-  it("submits on Enter on a desktop keyboard", () => {
-    vi.stubGlobal("navigator", { maxTouchPoints: 0 });
+  const pointer = (coarseOnly: boolean) =>
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q === "(pointer: coarse)" ? coarseOnly : q === "(any-pointer: fine)" ? !coarseOnly : false,
+    }));
+
+  it("submits on Enter on a desktop keyboard, touch screen or not", () => {
+    pointer(false);
     expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: false })).toBe(true);
     expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: true })).toBe(false);
     expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: false, nativeEvent: { isComposing: true } })).toBe(false);
   });
 
-  it("does not submit on Enter when the device has a touch screen", () => {
-    vi.stubGlobal("navigator", { maxTouchPoints: 5 });
+  it("does not submit on Enter on a phone, where Enter is the soft keyboard's newline", () => {
+    pointer(true);
     expect(shouldSubmitOnEnter({ key: "Enter", shiftKey: false })).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
-import { act } from "react";
+import { act, useState } from "react";
 import { defaultConfig, type RedactedConfig } from "@glassys/protocol";
 import { I18nProvider } from "../i18n";
 
@@ -212,5 +212,68 @@ describe("Settings notify and schedules", () => {
     expect(createSchedule).toHaveBeenCalledWith(
       expect.objectContaining({ text: "df -h", threadId: "t1", cron: "0 6 * * *", cwd: "/tmp/ws" }),
     );
+  });
+});
+
+describe("Settings draft against a live config", () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+    document.body.style.overflow = "";
+  });
+
+  it("keeps an appearance edit drafted, previews it, and survives a config from elsewhere", async () => {
+    const { Settings } = await import("./Settings");
+    const shown: RedactedConfig[] = [];
+    let push!: (c: RedactedConfig) => void;
+    /* App's role: hold the config, apply what Settings previews, and receive server updates. */
+    function Harness() {
+      const [config, setConfig] = useState(cfg());
+      push = setConfig;
+      shown.push(config);
+      return (
+        <I18nProvider locale="en">
+          <Settings config={config} onClose={() => undefined} onConfig={setConfig} onLogout={() => undefined} />
+        </I18nProvider>
+      );
+    }
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(<Harness />);
+    });
+    const name = host.querySelector("#set-host-label") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(name, "edge-01");
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelector(".settings-dirty")).not.toBeNull();
+    expect(shown.at(-1)?.space.name).toBe("edge-01");
+
+    /* A reconnect delivers the server's config again, with an unrelated change. */
+    await act(async () => {
+      push({ ...cfg(), session: { ...cfg().session, stallSeconds: 42 } });
+    });
+    expect((host.querySelector("#set-host-label") as HTMLInputElement).value).toBe("edge-01");
+    expect(host.querySelector(".settings-dirty")).not.toBeNull();
+    expect(shown.at(-1)?.space.name).toBe("edge-01");
+  });
+});
+
+describe("rebaseDraft", () => {
+  it("takes untouched sections from the new config and keeps edited ones", async () => {
+    const { rebaseDraft, draftDiffers } = await import("./Settings");
+    const base = cfg();
+    const draft = { ...base, space: { ...base.space, name: "mine" } };
+    const next = { ...base, session: { ...base.session, stallSeconds: 9 } };
+    const rebased = rebaseDraft(draft, base, next);
+    expect(rebased.space.name).toBe("mine");
+    expect(rebased.session.stallSeconds).toBe(9);
+    expect(draftDiffers(rebased, next)).toBe(true);
+    expect(draftDiffers(next, next)).toBe(false);
   });
 });
