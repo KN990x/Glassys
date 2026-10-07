@@ -31,7 +31,7 @@ describe("verifyEdge", () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-edge-"));
     process.env.GLASSYS_DATA_DIR = dir;
     const cfg = defaultConfig();
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
     over(cfg);
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     const { verifyEdge } = await import("./auth.js");

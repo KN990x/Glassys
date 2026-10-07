@@ -13,6 +13,7 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Workspace path must be absolute": "error.cwdAbsolute",
   "Workspace path is not a directory": "error.cwdNotDir",
   "Workspace path does not exist": "error.cwdMissing",
+  "Workspace path is inside the Glassys data directory": "error.cwdDataDir",
   "Only jpeg, png, webp, gif, and text/log uploads are allowed": "error.uploadMime",
   "Queue is full": "error.queueFull",
   "invalid thread id": "error.invalidThreadId",
@@ -32,6 +33,8 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Notification permission denied": "settings.notifyDenied",
   "current password is incorrect": "error.currentPassword",
   "too many attempts": "error.tooManyAttempts",
+  "setup code required": "setup.codeWrong",
+  "operator password is set by GLASSYS_OPERATOR_PASSWORD_HASH": "error.passwordFromEnv",
 };
 
 export function operatorError(message: string, t: (key: string) => string): string {

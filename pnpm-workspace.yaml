@@ -24,7 +24,14 @@ minimumReleaseAge: 10080
 # fast-uri and ip-address arrive through @anthropic-ai/claude-agent-sdk >
 # @modelcontextprotocol/sdk (ajv, express-rate-limit), whose ranges already accept the
 # patched releases; the floors only stop the lockfile from holding the vulnerable ones.
+#
+# @modelcontextprotocol/sdk is a peer of @anthropic-ai/claude-agent-sdk (^1.29.0); 1.30 lets an
+# MCP server steer the OAuth client's credentials to an authorization server of its choosing
+# (GHSA-6qxp-vccf-f47h). proxy-addr arrives through its express and is spoofable via an
+# IPv4-mapped IPv6 trust subnet below 2.0.8. Both floors sit inside the parents' ranges.
 overrides:
   undici: '^6.28.1'
   fast-uri: '^3.1.8'
   ip-address: '^10.7.1'
+  '@modelcontextprotocol/sdk': '^1.31.0'
+  proxy-addr: '^2.0.8'

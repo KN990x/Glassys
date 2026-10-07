@@ -3,9 +3,10 @@ import { dirname } from "node:path";
 import { writeFileAtomic } from "./atomic.js";
 import { createMutex } from "./lock.js";
 import { paths } from "./paths.js";
+import { loadSecrets, patchSecrets } from "./secrets.js";
 
 /** Logged-out session ids, kept only until the token would have expired anyway. */
-const MAX_REVOKED = 1000;
+export const MAX_REVOKED = 1000;
 const withRevoked = createMutex();
 let cache: { path: string; entries: Map<string, number> } | null = null;
 
@@ -16,11 +17,6 @@ function nowSeconds(): number {
 function prune(entries: Map<string, number>): Map<string, number> {
   const now = nowSeconds();
   for (const [jti, exp] of entries) if (exp <= now) entries.delete(jti);
-  while (entries.size > MAX_REVOKED) {
-    const oldest = entries.keys().next().value;
-    if (oldest === undefined) break;
-    entries.delete(oldest);
-  }
   return entries;
 }
 
@@ -43,8 +39,15 @@ export async function revokeSession(jti: string, exp: number): Promise<void> {
   await withRevoked(async () => {
     const entries = prune(await load());
     entries.set(jti, exp);
+    /* Dropping the oldest revocation would bring that token back to life. Past the cap, end
+       every session instead (a new epoch) and start the list over. */
+    if (entries.size > MAX_REVOKED) {
+      const { jwtEpoch } = await loadSecrets();
+      await patchSecrets({ jwtEpoch: (jwtEpoch ?? 0) + 1 });
+      entries.clear();
+    }
     await mkdir(dirname(paths.revokedSessions()), { recursive: true });
-    await writeFileAtomic(paths.revokedSessions(), JSON.stringify({ revoked: Object.fromEntries(prune(entries)) }));
+    await writeFileAtomic(paths.revokedSessions(), JSON.stringify({ revoked: Object.fromEntries(entries) }));
   });
 }
 

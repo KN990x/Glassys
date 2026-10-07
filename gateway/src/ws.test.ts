@@ -79,7 +79,7 @@ describe("websocket handshake", () => {
     delete process.env.GLASSYS_JWT_SECRET;
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = await mkdtemp(join(tmpdir(), "glassys-wscwd-"));
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     await loadSecrets();
     await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
@@ -111,6 +111,20 @@ describe("websocket handshake", () => {
     await shutdownRuntime();
     await closeWs(wss);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  });
+
+  it("keeps anonymous sockets from taking the operator's slots", async () => {
+    const { MAX_WS_ANONYMOUS } = await import("./ws.js");
+    const anonymous = await Promise.all(Array.from({ length: MAX_WS_ANONYMOUS }, () => openClient(url, origin)));
+    await expect(openClient(url, origin)).rejects.toThrow(/503/);
+    /* The PWA's upgrade carries the session cookie and still gets in. */
+    const operator = new WebSocket(`${url.replace("http", "ws")}/ws`, { origin, headers: { Cookie: `glassys_session=${token}` } });
+    await new Promise<void>((resolve, reject) => {
+      operator.once("open", () => resolve());
+      operator.once("error", reject);
+    });
+    operator.close();
+    for (const ws of anonymous) ws.close();
   });
 
   it("rejects an incompatible protocol version", async () => {

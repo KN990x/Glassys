@@ -340,6 +340,15 @@ function ensureBuilt(root) {
   }
 }
 
+/** The one-time code the gateway writes until the operator password is set, if any. */
+export function readSetupCode(dataDir) {
+  try {
+    return readFileSync(join(dataDir, "setup-code"), "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function printNextSteps(opts, health) {
   console.log("");
   console.log("Glassys is installed as a background service.");
@@ -353,6 +362,13 @@ function printNextSteps(opts, health) {
   if (health.ok) console.log(`Health  ok${health.commit ? ` (${health.commit.slice(0, 7)})` : ""}`);
   else if (health.reason !== "skipped") {
     console.warn(`Health  ${health.reason}. Check service:status.`);
+  }
+  const setupCode = health.ok ? readSetupCode(opts.dataDir) : null;
+  if (setupCode) {
+    /* Setup from any other device (or through a proxy) asks for this code once. */
+    console.log("");
+    console.log(`Setup code  ${setupCode}`);
+    console.log(`First run   ${openUrl(opts.listen)}/?setup=${encodeURIComponent(setupCode)}`);
   }
   console.log("");
   console.log("pnpm run service:status     # is it running?");

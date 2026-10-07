@@ -65,10 +65,13 @@ export const api = {
     req<LogPage>(`/api/host/logs${query(p)}`),
   hostFiles: (path: string) => req<DirListing>(`/api/host/files${query({ path })}`),
   hostFile: (path: string) => req<FilePreview>(`/api/host/file${query({ path })}`),
-  status: () => req<{ setupComplete: boolean; onboarded: boolean }>("/api/auth/status"),
+  status: () => req<{ setupComplete: boolean; onboarded: boolean; setupNeedsCode?: boolean }>("/api/auth/status"),
   me: () => req<{ onboarded: boolean; setupComplete: boolean }>("/api/auth/me"),
-  setup: (password: string) =>
-    req<{ token: string }>("/api/auth/setup", { method: "POST", body: JSON.stringify({ password }) }),
+  setup: (password: string, setupCode?: string) =>
+    req<{ token: string }>("/api/auth/setup", {
+      method: "POST",
+      body: JSON.stringify({ password, ...(setupCode ? { setupCode } : {}) }),
+    }),
   login: (password: string) =>
     req<{ token: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => req<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),

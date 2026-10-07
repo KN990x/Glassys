@@ -99,7 +99,7 @@ describe("password rotation", () => {
     const YAML = (await import("yaml")).default;
     const { defaultConfig } = await import("@glassys/protocol");
     const cfg = defaultConfig();
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     const { loadSecrets, patchSecrets, hashPassword } = await import("./secrets.js");
     await loadSecrets();
@@ -120,7 +120,7 @@ describe("password rotation", () => {
     const YAML = (await import("yaml")).default;
     const { defaultConfig } = await import("@glassys/protocol");
     const cfg = defaultConfig();
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     const { loadSecrets, patchSecrets, hashPassword } = await import("./secrets.js");
     await loadSecrets();

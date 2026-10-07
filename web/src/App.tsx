@@ -71,6 +71,7 @@ function applyDocumentTheme(resolved: ResolvedTheme, stored: Theme) {
 export function App() {
   const [gate, setGate] = useState<Gate>("boot");
   const [config, setConfig] = useState<RedactedConfig | null>(null);
+  const [setupNeedsCode, setSetupNeedsCode] = useState(false);
   const [bootLocale, setBootLocale] = useState<Locale>(() => readStoredLocale() ?? readNavigatorLocale());
   const [prefersLight, setPrefersLight] = useState(readPrefersLight);
 
@@ -78,6 +79,7 @@ export function App() {
     try {
       const status = await api.status();
       if (!status.setupComplete) {
+        setSetupNeedsCode(Boolean(status.setupNeedsCode));
         setGate("setup");
         return;
       }
@@ -141,7 +143,7 @@ export function App() {
         {gate === "unreachable" && (
           <Unreachable onRetry={() => { setGate("boot"); void refresh(); }} />
         )}
-        {gate === "setup" && <Setup locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
+        {gate === "setup" && <Setup locale={bootLocale} onLocale={setBootLocale} needsCode={setupNeedsCode} onDone={() => void refresh()} />}
         {gate === "login" && <Login locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
         {gate === "wizard" && config && (
           <Suspense fallback={<BootScreen />}>

@@ -5,6 +5,7 @@ import { initBuildInfo } from "./build-info.js";
 import { loadConfig } from "./config.js";
 import { listenBind, listenPort } from "./listen.js";
 import { handleHttp } from "./http.js";
+import { ensureSetupCode } from "./setup-token.js";
 import { log, secureDataDir, webDir } from "./paths.js";
 import { initRuntime, shutdownRuntime } from "./runtime.js";
 import { setRestartHandler } from "./restart.js";
@@ -95,12 +96,12 @@ async function main(): Promise<void> {
     void shutdown(1);
   });
 
-  if (bind === "0.0.0.0" || bind === "::") {
-    const flags = secretsFlags(await loadSecrets());
-    if (!flags.operatorPassword) {
-      log("warn", "listening on all interfaces before operator setup");
-    }
+  const unclaimed = !secretsFlags(await loadSecrets()).operatorPassword;
+  if (unclaimed && (bind === "0.0.0.0" || bind === "::")) {
+    log("warn", "listening on all interfaces before operator setup");
   }
+  /* Until the operator password is set, setup from anywhere but this host needs this code. */
+  const setupCode = unclaimed ? await ensureSetupCode() : null;
   server.once("listening", () => {
     listening = true;
     log("info", "glassys listening", {
@@ -108,6 +109,7 @@ async function main(): Promise<void> {
       port,
       web: webDir(),
     });
+    if (setupCode) log("info", "first-run setup code (needed unless you open Glassys on this host)", { setupCode });
   });
   server.listen(port, bind);
 }

@@ -4,7 +4,7 @@ import {
   listenBind,
   listenPort,
   resolveAllowedOrigin,
-  setupOriginAllowed,
+  isLoopbackOrigin,
   CORS_ALLOW_METHODS,
 } from "./cors.js";
 
@@ -121,43 +121,12 @@ describe("CORS methods", () => {
   });
 });
 
-describe("setupOriginAllowed", () => {
-  it("allows loopback clients even without Origin", () => {
-    expect(setupOriginAllowed({ origin: undefined, remoteAddress: "127.0.0.1", publicUrl: "", allowedOrigins: [] })).toBe(
-      true,
-    );
-    expect(setupOriginAllowed({ origin: undefined, remoteAddress: "::1", publicUrl: "", allowedOrigins: [] })).toBe(
-      true,
-    );
-  });
-
-  it("allows a loopback Origin from a non-loopback remote address", () => {
-    expect(
-      setupOriginAllowed({
-        origin: "http://127.0.0.1:8787",
-        remoteAddress: "10.0.0.1",
-        publicUrl: "",
-        allowedOrigins: [],
-      }),
-    ).toBe(true);
-  });
-
-  it("rejects LAN setup unless the origin is allowlisted", () => {
-    expect(
-      setupOriginAllowed({
-        origin: "http://192.168.1.10:8787",
-        remoteAddress: "192.168.1.10",
-        publicUrl: "",
-        allowedOrigins: [],
-      }),
-    ).toBe(false);
-    expect(
-      setupOriginAllowed({
-        origin: "https://glassys.example",
-        remoteAddress: "192.168.1.10",
-        publicUrl: "https://glassys.example",
-        allowedOrigins: [],
-      }),
-    ).toBe(true);
+describe("isLoopbackOrigin", () => {
+  it("is true only for this machine's names", () => {
+    expect(isLoopbackOrigin("http://127.0.0.1:8787")).toBe(true);
+    expect(isLoopbackOrigin("http://localhost:5173")).toBe(true);
+    expect(isLoopbackOrigin("http://[::1]:8787")).toBe(true);
+    expect(isLoopbackOrigin("https://glassys.example.com")).toBe(false);
+    expect(isLoopbackOrigin("not a url")).toBe(false);
   });
 });

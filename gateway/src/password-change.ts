@@ -13,6 +13,11 @@ const CHANGE_LANE = "password-change";
  */
 export async function assertPasswordChangeAllowed(patch: ConfigPatch): Promise<void> {
   if (typeof patch.operatorPassword !== "string" || patch.operatorPassword.length === 0) return;
+  /* The env hash wins over the file on every load: a change here would sign every device out
+     and leave the old password in force. */
+  if (process.env.GLASSYS_OPERATOR_PASSWORD_HASH) {
+    throw new HttpError(409, "operator password is set by GLASSYS_OPERATOR_PASSWORD_HASH");
+  }
   const { operatorPasswordHash } = await loadSecrets();
   if (!operatorPasswordHash) return;
   const current = typeof patch.currentPassword === "string" ? patch.currentPassword : "";

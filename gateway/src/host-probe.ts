@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { open, lstat, readdir, readFile, realpath } from "node:fs/promises";
 import os from "node:os";
-import { dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type {
   DirListing,
@@ -362,9 +362,31 @@ function entryType(st: { isFile(): boolean; isDirectory(): boolean; isSymbolicLi
 }
 
 /**
+ * Credential files the agents Glassys drives keep in the operator's home, plus SSH private keys.
+ * Like the data dir, a stolen session must not be able to read them through a view.
+ */
+const SENSITIVE_HOME_FILES = [
+  ".cursor/sdk/auth.json",
+  ".claude/.credentials.json",
+  ".codex/auth.json",
+  ".local/share/opencode/auth.json",
+  ".gemini/oauth_creds.json",
+];
+
+export function isSensitiveFile(real: string, home = os.homedir()): boolean {
+  if (SENSITIVE_HOME_FILES.some((rel) => real === join(home, rel))) return true;
+  const sshDir = join(home, ".ssh");
+  if (dirname(real) === sshDir) {
+    const name = basename(real);
+    return name.startsWith("id_") && !name.endsWith(".pub");
+  }
+  return false;
+}
+
+/**
  * Resolve a requested path and refuse Glassys's own data directory: it holds
  * the operator password hash, the session secret and adapter keys, which the
- * views must never be able to show.
+ * views must never be able to show. Vendor credential files get the same treatment.
  */
 async function guardedPath(raw: string): Promise<string> {
   if (!raw || !isAbsolute(raw)) throw new HttpError(400, "path must be absolute");
@@ -382,6 +404,7 @@ async function guardedPath(raw: string): Promise<string> {
     data = resolve(defaultDataDir());
   }
   if (real === data || real.startsWith(data + sep)) throw new HttpError(403, "the Glassys data directory is not browsable");
+  if (isSensitiveFile(real)) throw new HttpError(403, "credential files are not shown");
   return real;
 }
 

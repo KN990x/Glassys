@@ -33,7 +33,7 @@ async function loadSdk(): Promise<{ GeminiCliAgent: GeminiAgentCtor }> {
     return (await import("@google/gemini-cli-sdk")) as { GeminiCliAgent: GeminiAgentCtor };
   } catch (err) {
     throw new AdapterError(
-      `Gemini CLI SDK is not available: ${errorMessage(err)}. @google/gemini-cli-sdk is not on npm yet; install the Gemini CLI on this host or link the SDK from the gemini-cli repo.`,
+      `Gemini CLI SDK is not available: ${errorMessage(err)}. @google/gemini-cli-sdk is not on npm yet; until it is, use Gemini through the ACP adapter (pick "Gemini" from its agent list, or run \`gemini --acp\`).`,
       "startup",
     );
   }

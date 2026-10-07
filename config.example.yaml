@@ -36,6 +36,10 @@ network:
   publicUrl: ""
   allowedOrigins: []
   wsKeepaliveSeconds: 25 # Clamped to 15–30. Applied per WebSocket connection.
+  # true when a reverse proxy on this host (Caddy, cloudflared) fronts the gateway: login limits
+  # then key on X-Forwarded-For instead of 127.0.0.1, so one visitor cannot lock everyone out.
+  # Leave false when the gateway is reachable directly. Env: GLASSYS_TRUST_PROXY=1.
+  trustProxy: false
 
 security:
   # none | cloudflare-access | header

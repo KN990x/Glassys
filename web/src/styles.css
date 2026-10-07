@@ -413,6 +413,7 @@ label {
   color: var(--muted);
 }
 label > input, label > select, label > textarea { color: var(--text); font-size: var(--fs-base); }
+label > .field-hint { font-size: var(--fs-xs); }
 
 /* ---------------------------------------------------------------------------
    Text utilities

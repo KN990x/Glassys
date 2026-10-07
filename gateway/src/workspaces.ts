@@ -1,7 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { HttpError } from "./errors.js";
+import { defaultDataDir } from "./paths.js";
 
 const MAX_HITS = 50;
 const MAX_DEPTH = 2;
@@ -85,8 +86,11 @@ export async function listWorkspaces(root: string): Promise<WorkspaceHit[]> {
   }
   const seen = new Set<string>();
   const unique: WorkspaceHit[] = [];
+  const data = resolve(defaultDataDir());
   for (const hit of hits) {
     if (seen.has(hit.path)) continue;
+    /* The data dir is not a workspace; validateCwd refuses it too. */
+    if (hit.path === data || hit.path.startsWith(data + sep)) continue;
     seen.add(hit.path);
     unique.push(hit);
   }

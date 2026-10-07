@@ -7,6 +7,13 @@ export function listenBind(cfg: Pick<GlassysConfig, "network">, env: NodeJS.Proc
   return env.GLASSYS_BIND || cfg.network.bind;
 }
 
+/** Whether to read the client address from X-Forwarded-For (env GLASSYS_TRUST_PROXY over yaml). */
+export function trustProxy(cfg: Pick<GlassysConfig, "network">, env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.GLASSYS_TRUST_PROXY?.trim().toLowerCase();
+  if (raw) return raw === "1" || raw === "true" || raw === "yes";
+  return cfg.network.trustProxy === true;
+}
+
 export function parseListenPort(raw: string | number | undefined): number {
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isInteger(n) || n < 1 || n > 65535) {

@@ -103,6 +103,8 @@ async function waitUntil(fn: () => boolean | Promise<boolean>, ms = 2000): Promi
 
 describe("runtime queue", () => {
   let dir: string;
+  /** The agent's workspace: never the data dir, which validateCwd refuses. */
+  let ws: string;
 
   beforeEach(async () => {
     control.go();
@@ -112,10 +114,11 @@ describe("runtime queue", () => {
     control.creates = 0;
     control.resumes = [];
     dir = await mkdtemp(join(tmpdir(), "glassys-rt-"));
+    ws = await mkdtemp(join(tmpdir(), "glassys-ws-"));
     process.env.GLASSYS_DATA_DIR = dir;
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     cfg.agent.adapter = "cursor";
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
   });
@@ -146,7 +149,7 @@ describe("runtime queue", () => {
 
   it("rejects messages before onboarding is complete", async () => {
     const cfg = defaultConfig();
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     const { enqueueMessage, readTranscript } = await import("./runtime.js");
     await enqueueMessage("hello");
@@ -155,12 +158,22 @@ describe("runtime queue", () => {
     expect(events.some((e) => e.type === "user.message")).toBe(false);
   });
 
+  it("refuses the data dir, or a folder inside it, as a workspace", async () => {
+    const { validateCwd } = await import("./runtime.js");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(dir, "threads"), { recursive: true });
+    expect(await validateCwd(dir)).toMatchObject({ ok: false, error: expect.stringMatching(/data directory/) });
+    expect(await validateCwd(join(dir, "threads"))).toMatchObject({ ok: false });
+    expect(await validateCwd(ws)).toEqual({ ok: true });
+    expect(await validateCwd(42)).toMatchObject({ ok: false });
+  });
+
   it("rejects completing onboarding without a valid cwd", async () => {
     const cfg = defaultConfig();
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
     const { cwdErrorInPatch } = await import("./runtime.js");
     expect(await cwdErrorInPatch({ onboarding: { completed: true } })).toMatch(/Workspace path/);
-    expect(await cwdErrorInPatch({ onboarding: { completed: true }, agent: { cwd: dir } })).toBeNull();
+    expect(await cwdErrorInPatch({ onboarding: { completed: true }, agent: { cwd: ws } })).toBeNull();
   });
 
   it("queues a second message while the first run is in flight", async () => {
@@ -428,7 +441,7 @@ describe("runtime queue", () => {
     expect(await readTranscript()).toEqual([]);
     const listed = await listLiveThreads();
     expect(listed.length).toBeGreaterThanOrEqual(2);
-    expect(listed.some((t) => t.cwd === dir || t.title.includes("one"))).toBe(true);
+    expect(listed.some((t) => t.cwd === ws || t.title.includes("one"))).toBe(true);
   });
 
   it("retracts queued jobs when identity changes", async () => {
@@ -645,7 +658,7 @@ describe("runtime queue", () => {
   it("resumes after switchLiveThread even when resumeOnStart is false", async () => {
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     cfg.agent.adapter = "cursor";
     cfg.session.resumeOnStart = false;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
@@ -690,7 +703,7 @@ describe("runtime queue", () => {
   it("creates after switchLiveThread when resume fails", async () => {
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     cfg.agent.adapter = "cursor";
     cfg.session.resumeOnStart = false;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
@@ -732,7 +745,7 @@ describe("runtime queue", () => {
   it("errors when none of the attachment ids can be resolved", async () => {
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     cfg.agent.adapter = "cursor";
     cfg.session.stallSeconds = 1;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
@@ -847,7 +860,7 @@ describe("runtime queue", () => {
     control.hold();
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     cfg.agent.adapter = "cursor";
     cfg.session.stallSeconds = 1;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
@@ -884,7 +897,7 @@ describe("runtime queue", () => {
   it("adds run.usage to the all-time ledger and thread summary", async () => {
     const cfg = defaultConfig();
     cfg.onboarding.completed = true;
-    cfg.agent.cwd = dir;
+    cfg.agent.cwd = ws;
     cfg.agent.adapter = "cursor";
     cfg.session.stallSeconds = 0;
     await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");

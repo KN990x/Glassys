@@ -11,6 +11,7 @@ export const paths = {
   data: () => defaultDataDir(),
   config: () => join(defaultDataDir(), "config.yaml"),
   secrets: () => join(defaultDataDir(), "secrets.json"),
+  setupCode: () => join(defaultDataDir(), "setup-code"),
   state: () => join(defaultDataDir(), "state.json"),
   legacyTranscript: () => join(defaultDataDir(), "transcript.jsonl"),
   threads: () => join(defaultDataDir(), "threads"),

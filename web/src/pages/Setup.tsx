@@ -6,16 +6,31 @@ import { GlassysMark } from "../components/Icon";
 import { Callout } from "../components/Primitives";
 import { operatorError } from "../operatorError";
 
+/** The code from a `?setup=` link the installer printed; read once and dropped from the address bar. */
+function takeSetupCodeFromUrl(): string {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("setup") ?? "";
+  if (code) {
+    url.searchParams.delete("setup");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }
+  return code;
+}
+
 export function Setup({
   onDone,
   locale,
   onLocale,
+  needsCode = false,
 }: {
   onDone: () => void;
   locale: Locale;
   onLocale: (locale: Locale) => void;
+  needsCode?: boolean;
 }) {
   const t = useT();
+  const [code, setCode] = useState(takeSetupCodeFromUrl);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -27,10 +42,11 @@ export function Setup({
     if (password.length < 8) return setError(t("setup.short"));
     if (password.length > 256) return setError(t("setup.long"));
     if (password !== confirm) return setError(t("setup.mismatch"));
+    if (needsCode && !code.trim()) return setError(t("setup.codeMissing"));
     setSubmitting(true);
     setError("");
     try {
-      await api.setup(password);
+      await api.setup(password, needsCode ? code.trim() : undefined);
       try {
         await api.saveConfig({ space: { locale } });
       } catch {
@@ -63,6 +79,22 @@ export function Setup({
             <p className="muted">{t("setup.body")}</p>
           </div>
           <form onSubmit={submit} className="stack">
+            {needsCode && (
+              <label>
+                {t("setup.code")}
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  autoComplete="one-time-code"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  aria-describedby="setup-code-hint"
+                />
+                <span id="setup-code-hint" className="muted field-hint">
+                  {t("setup.codeHint")}
+                </span>
+              </label>
+            )}
             <label>
               {t("setup.password")}
               <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />

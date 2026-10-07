@@ -1,5 +1,5 @@
 import { mkdir, realpath, stat } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { AdapterError } from "@glassys/adapter-contract";
 import type { AdapterRun, AdapterSession } from "@glassys/adapter-contract";
@@ -235,16 +235,23 @@ async function broadcastConfig(restart?: boolean): Promise<void> {
   hub.broadcast({ type: "config", config: await redacted(undefined, restart) });
 }
 
-export async function validateCwd(cwd: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!cwd) return { ok: false, error: "Workspace path is required" };
+export async function validateCwd(cwd: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!cwd || typeof cwd !== "string") return { ok: false, error: "Workspace path is required" };
   if (!isAbsolute(cwd)) return { ok: false, error: "Workspace path must be absolute" };
   try {
     const s = await stat(cwd);
     if (!s.isDirectory()) return { ok: false, error: "Workspace path is not a directory" };
-    return { ok: true };
   } catch {
     return { ok: false, error: "Workspace path does not exist" };
   }
+  /* An agent working inside the data dir would be working on the secrets and transcripts. */
+  const real = await realpath(cwd).catch(() => resolve(cwd));
+  for (const data of await protectedPaths()) {
+    if (real === data || real.startsWith(data + sep)) {
+      return { ok: false, error: "Workspace path is inside the Glassys data directory" };
+    }
+  }
+  return { ok: true };
 }
 
 export async function cwdErrorInPatch(patch: ConfigPatch): Promise<string | null> {

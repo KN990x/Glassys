@@ -163,6 +163,11 @@ export interface NetworkConfig {
   publicUrl: string;
   allowedOrigins: string[];
   wsKeepaliveSeconds: number;
+  /**
+   * The gateway sits behind a reverse proxy on this host (Caddy, cloudflared): take the client
+   * address from X-Forwarded-For on loopback connections, so login limits are per visitor.
+   */
+  trustProxy: boolean;
 }
 
 export interface SecurityConfig {
@@ -447,6 +452,7 @@ export function defaultConfig(): GlassysConfig {
       publicUrl: "",
       allowedOrigins: [],
       wsKeepaliveSeconds: DEFAULT_KEEPALIVE_SECONDS,
+      trustProxy: false,
     },
     security: {
       edgeAuth: "none",

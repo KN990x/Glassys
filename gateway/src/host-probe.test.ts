@@ -219,3 +219,17 @@ describe("files", () => {
     await expect(listDir(join(root, "notes.txt"))).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe("isSensitiveFile", () => {
+  it("refuses vendor credential files and SSH private keys, not their neighbours", async () => {
+    const { isSensitiveFile } = await import("./host-probe.js");
+    const home = "/home/ops";
+    expect(isSensitiveFile("/home/ops/.claude/.credentials.json", home)).toBe(true);
+    expect(isSensitiveFile("/home/ops/.codex/auth.json", home)).toBe(true);
+    expect(isSensitiveFile("/home/ops/.cursor/sdk/auth.json", home)).toBe(true);
+    expect(isSensitiveFile("/home/ops/.ssh/id_ed25519", home)).toBe(true);
+    expect(isSensitiveFile("/home/ops/.ssh/id_ed25519.pub", home)).toBe(false);
+    expect(isSensitiveFile("/home/ops/.ssh/config", home)).toBe(false);
+    expect(isSensitiveFile("/home/ops/.claude/settings.json", home)).toBe(false);
+  });
+});

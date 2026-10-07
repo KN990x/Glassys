@@ -123,29 +123,11 @@ function isLoopbackHostname(hostname: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
-/** First-user setup: loopback clients, loopback Origin, or an explicit allowlist / publicUrl. */
-export function setupOriginAllowed(opts: {
-  origin: string | undefined;
-  remoteAddress?: string;
-  publicUrl: string;
-  allowedOrigins: string[];
-}): boolean {
-  if (isLoopbackAddress(opts.remoteAddress)) return true;
-  if (opts.origin) {
-    try {
-      if (isLoopbackHostname(new URL(opts.origin).hostname)) return true;
-    } catch {
-      return false;
-    }
-    const allowed = new Set(opts.allowedOrigins.filter(Boolean));
-    if (opts.publicUrl) {
-      try {
-        allowed.add(new URL(opts.publicUrl).origin);
-      } catch {
-        /* ignore */
-      }
-    }
-    if (allowed.has(opts.origin)) return true;
+/** An Origin whose host is this machine (localhost, 127.0.0.1, ::1). */
+export function isLoopbackOrigin(origin: string): boolean {
+  try {
+    return isLoopbackHostname(new URL(origin).hostname);
+  } catch {
+    return false;
   }
-  return false;
 }

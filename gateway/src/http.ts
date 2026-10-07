@@ -16,7 +16,9 @@ import { attemptLogin } from "./login-limit.js";
 import { log } from "./paths.js";
 import { revalidateSockets } from "./sessions.js";
 import { hashPassword, loadSecrets, operatorPasswordError, patchSecrets, secretsFlags } from "./secrets.js";
-import { originAllowed, setCors, setupOriginAllowed } from "./cors.js";
+import { isLoopbackAddress, originAllowed, setCors } from "./cors.js";
+import { trustProxy } from "./listen.js";
+import { clearSetupCode, isDirectLocalRequest, setupCodeMatches } from "./setup-token.js";
 import { UnknownAdapterError } from "./adapters.js";
 import { requestRestart } from "./restart.js";
 import { HttpError, publicErrorMessage } from "./errors.js";
@@ -128,9 +130,22 @@ async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function clientIp(req: IncomingMessage): string {
-  const addr = req.socket.remoteAddress || "unknown";
-  return addr.replace(/^::ffff:/, "");
+/**
+ * The address login limits are kept per. Behind a reverse proxy on this host every connection
+ * comes from 127.0.0.1, so with `network.trustProxy` the proxy's X-Forwarded-For (last hop, the
+ * one the proxy itself added) names the visitor instead. Only a loopback peer is believed.
+ */
+export function clientIp(req: IncomingMessage, trust: boolean): string {
+  const addr = (req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+  if (!trust || !isLoopbackAddress(addr)) return addr;
+  const header = req.headers["x-forwarded-for"];
+  const raw = Array.isArray(header) ? header.join(",") : header;
+  const hops = (raw ?? "").split(",").map((h) => h.trim()).filter(Boolean);
+  return hops.length ? hops[hops.length - 1]!.replace(/^::ffff:/, "") : addr;
+}
+
+async function requestClientIp(req: IncomingMessage): Promise<string> {
+  return clientIp(req, trustProxy(await loadConfig()));
 }
 
 async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
@@ -176,22 +191,28 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     send(res, 200, {
       setupComplete: flags.operatorPassword,
       onboarded: cfg.onboarding.completed,
+      /* Whether this browser must show the setup code: everything but a direct local one does. */
+      ...(flags.operatorPassword ? {} : { setupNeedsCode: !isDirectLocalRequest(req) }),
     });
     return true;
   }
 
   if (method === "POST" && path === "/api/auth/setup") {
     if (!(await requireEdge(req, res))) return true;
-    const cfg = await loadConfig();
-    if (
-      !setupOriginAllowed({
-        origin: typeof req.headers.origin === "string" ? req.headers.origin : undefined,
-        remoteAddress: req.socket.remoteAddress,
-        publicUrl: cfg.network.publicUrl,
-        allowedOrigins: cfg.network.allowedOrigins,
-      })
-    ) {
-      send(res, 403, { error: "setup is only allowed from localhost or an allowed origin" });
+    const body = (await readJson(req, 4096)) as { password?: string; setupCode?: unknown };
+    /* Wrong codes go through the login limiter's lane, so the code cannot be guessed at speed. */
+    const allowed = isDirectLocalRequest(req)
+      ? true
+      : await attemptLogin(await requestClientIp(req), async () => {
+          const ok = await setupCodeMatches(body.setupCode);
+          return { ok, value: ok };
+        });
+    if (allowed === "busy") {
+      send(res, 429, { error: "too many attempts" });
+      return true;
+    }
+    if (!allowed) {
+      send(res, 403, { error: "setup code required" });
       return true;
     }
     return withSetupLock(async () => {
@@ -200,8 +221,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
         send(res, 409, { error: "operator already configured" });
         return true;
       }
-      const body = (await readJson(req)) as { password?: string };
-      const password = body.password || "";
+      const password = typeof body.password === "string" ? body.password : "";
       const passwordErr = operatorPasswordError(password);
       if (passwordErr) {
         send(res, 400, { error: passwordErr });
@@ -213,6 +233,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
         return true;
       }
       await patchSecrets({ operatorPasswordHash: await hashPassword(password) });
+      await clearSetupCode();
       const token = await signSession();
       res.setHeader("Set-Cookie", await buildSessionCookie(token, req));
       send(res, 200, { token, setupComplete: true });
@@ -224,7 +245,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireEdge(req, res))) return true;
     const body = (await readJson(req, 4096)) as { password?: unknown };
     const password = typeof body.password === "string" ? body.password : "";
-    const token = await attemptLogin(clientIp(req), async () => {
+    const token = await attemptLogin(await requestClientIp(req), async () => {
       const signed = await loginWithPassword(password);
       return { ok: signed !== null, value: signed };
     });

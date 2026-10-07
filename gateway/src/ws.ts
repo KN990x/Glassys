@@ -9,7 +9,7 @@ import {
   type ConfigPatch,
 } from "@glassys/protocol";
 import { requestSessionToken, verifyEdge, verifySession } from "./auth.js";
-import { revalidateSockets, trackSocketSession, untrackSocket } from "./sessions.js";
+import { revalidateSocket, revalidateSockets, trackSocketSession, trackedSocketCount, untrackSocket } from "./sessions.js";
 import { originAllowed } from "./cors.js";
 import { redacted, loadConfig } from "./config.js";
 import { hub, flushHandshakeBuffer } from "./hub.js";
@@ -37,6 +37,11 @@ const MAX_WS_PAYLOAD = 1_000_000;
 export const WS_HANDSHAKE_TIMEOUT_MS = 15_000;
 /** One operator: a few tabs and devices. Far more than this is a leak or a flood. */
 export const MAX_WS_CONNECTIONS = 32;
+/**
+ * Sockets that have not authenticated yet and brought no session cookie. Kept small and apart
+ * from the operator's own sockets, so anonymous connections cannot take every slot.
+ */
+export const MAX_WS_ANONYMOUS = 8;
 /** Client messages are handled one at a time per socket; a backlog this deep means a flood. */
 export const MAX_WS_PENDING_MESSAGES = 64;
 
@@ -60,7 +65,13 @@ export function attachWs(
     verifyClient: (info, cb) => {
       void (async () => {
         try {
-          if (wss.clients.size >= MAX_WS_CONNECTIONS) {
+          const authed = trackedSocketCount();
+          if (authed >= MAX_WS_CONNECTIONS) {
+            cb(false, 503, "too many connections");
+            return;
+          }
+          /* The PWA's upgrade carries its session cookie; one without it has to wait its turn. */
+          if (wss.clients.size - authed >= MAX_WS_ANONYMOUS && (await requestSessionToken(info.req)) === null) {
             cb(false, 503, "too many connections");
             return;
           }
@@ -111,6 +122,7 @@ export function attachWs(
         }
         state.alive = false;
         ws.ping();
+        if (state.auth) void revalidateSocket(ws).catch(() => undefined);
       }, beat);
     };
 

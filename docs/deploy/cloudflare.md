@@ -6,6 +6,8 @@ Glassys does **not** depend on Cloudflare. Use this only if you already want Tun
 
 Point a tunnel at the gateway bind (usually `http://127.0.0.1:8787` on the host). Enable WebSocket. Do not use SSE; Glassys already uses WebSocket with keepalive because Cloudflare and other proxies cut long HTTP around ~100s.
 
+`cloudflared` runs on the host, so Glassys sees every visitor as `127.0.0.1`. Set `network.trustProxy: true` (or `GLASSYS_TRUST_PROXY=1`) so login limits key on `X-Forwarded-For`. Until the operator password is set, setup through the tunnel asks for the one-time setup code the installer printed.
+
 ## Access
 
 1. Put Access in front of the hostname.
