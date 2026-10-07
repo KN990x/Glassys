@@ -1,14 +1,10 @@
 import { useEffect, useEffectEvent, useState } from "react";
+import { cwdBasename } from "../format";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { operatorError } from "../operatorError";
 import { Disclosure } from "./Primitives";
 import { IconFolder, IconSearch } from "./Icon";
-
-function cwdName(path: string): string {
-  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
-  return parts[parts.length - 1] || path;
-}
 
 export function WorkspacePicker({
   value,
@@ -56,7 +52,7 @@ export function WorkspacePicker({
           {[...pins, ...recents.filter((p) => !pins.includes(p))].map((p) => (
             <button key={p} type="button" className="ghost picker-item" onClick={() => onChange(p)}>
               <IconFolder />
-              <strong>{cwdName(p)}</strong>
+              <strong>{cwdBasename(p)}</strong>
               <span className="muted">{p}</span>
             </button>
           ))}

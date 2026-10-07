@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCopy } from "../useCopy";
 import { useT } from "../i18n";
 import { truncateMiddle } from "../format";
 import { IconServer } from "./Icon";
@@ -25,17 +25,14 @@ export function HostContext({
   onCopyFailed: () => void;
 }) {
   const t = useT();
-  const [copied, setCopied] = useState(false);
+  const { state: copyState, copy: copyText } = useCopy();
+  const copied = copyState === "copied";
 
   function copy() {
     if (!info.cwd) return;
-    void navigator.clipboard.writeText(info.cwd).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      onCopyFailed,
-    );
+    void copyText(info.cwd).then((ok) => {
+      if (!ok) onCopyFailed();
+    });
   }
 
   if (variant === "rail") {

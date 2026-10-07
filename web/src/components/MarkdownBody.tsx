@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCopy } from "../useCopy";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useT } from "../i18n";
@@ -92,7 +93,7 @@ export function codeLanguage(node: ReactNode): string {
 
 function CodeBlock({ children, language }: { children?: ReactNode; language?: string }) {
   const t = useT();
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const { state: copyState, copy } = useCopy(1200);
   const text = extractText(children);
   return (
     <div className="code-wrap">
@@ -105,16 +106,7 @@ function CodeBlock({ children, language }: { children?: ReactNode; language?: st
           type="button"
           aria-label={t("chat.copy")}
           title={copyState === "copied" ? t("chat.copied") : copyState === "failed" ? t("chat.copyFailed") : t("chat.copy")}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(text);
-              setCopyState("copied");
-              setTimeout(() => setCopyState("idle"), 1200);
-            } catch {
-              setCopyState("failed");
-              setTimeout(() => setCopyState("idle"), 1800);
-            }
-          }}
+          onClick={() => void copy(text)}
         >
           {copyState === "copied" ? <IconCheck /> : copyState === "failed" ? <IconAlert /> : <IconCopy />}
           <span className="visually-hidden" aria-live="polite">

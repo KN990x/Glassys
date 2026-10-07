@@ -232,6 +232,10 @@
   --switch-w: 32px;
   --switch-h: 18px;
   --switch-knob: 14px;
+  /* How far the knob slides: the track less the knob and its 2px inset on each side. */
+  --switch-travel: calc(var(--switch-w) - var(--switch-knob) - 4px);
+  /* The soft focus halo around a field with focus inside it. */
+  --ring-w: 3px;
 
   /* Stacking order, so a new overlay is placed rather than guessed. */
   --z-sticky: 2;
@@ -592,7 +596,7 @@ h2[tabindex="-1"]:focus { outline: none; }
 }
 .switch[aria-checked="true"] .switch-knob {
   background: #fff;
-  transform: translateX(calc(var(--switch-w) - var(--switch-knob) - 4px));
+  transform: translateX(var(--switch-travel));
 }
 
 /* A borderless track two pixels around 28px segments: a 32px control, the
@@ -684,11 +688,10 @@ h2[tabindex="-1"]:focus { outline: none; }
   color: var(--text);
   min-width: 0;
 }
-.callout-icon { color: var(--muted); }
 /* The icon sits in a box one small control tall, and the text is padded so its
    first line centres on that box: a one-line callout lines up with a Retry
    button beside it, and a three-line one keeps the icon on its first line. */
-.callout-icon { display: grid; place-items: center; height: var(--control-h-sm); flex: none; }
+.callout-icon { display: grid; place-items: center; height: var(--control-h-sm); flex: none; color: var(--muted); }
 .callout-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-block: calc((var(--control-h-sm) - 1lh) / 2); }
 .callout .ghost.tiny { flex: none; }
 /* A whole paragraph in amber was the loudest thing on any screen it sat on.
@@ -1633,7 +1636,6 @@ button.host-copy:hover { color: var(--text); }
    emits in reply stays tight against it. */
 .transcript-inner > .bubble.user { margin-top: var(--s-6); }
 .transcript-inner > .bubble.user:first-child { margin-top: 0; }
-.transcript-inner { gap: var(--s-3); }
 .transcript-inner > .tool-group + .tool-group,
 .transcript-inner > .tool + .tool { margin-top: calc(var(--s-2) - var(--s-3)); }
 /* One search field: the rail filter, the transcript search and the palette all
@@ -2106,7 +2108,7 @@ mark {
 }
 .composer-box:focus-within {
   border-color: var(--stroke-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 var(--ring-w) color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .composer.dragging .composer-box {
   border-color: var(--accent);
@@ -2712,8 +2714,7 @@ mark {
 .settings-note { margin: 0; font-size: var(--fs-sm); }
 .settings-section > button,
 .settings-section .stack > button,
-.settings-section > .row { justify-self: start; }
-.settings-section > .row { flex-wrap: wrap; }
+.settings-section > .row { justify-self: start; flex-wrap: wrap; }
 
 .usage-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .usage-table th, .usage-table td { padding: var(--s-2); border-bottom: 1px solid var(--stroke); text-align: left; }

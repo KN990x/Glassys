@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
+import { useCopy } from "../useCopy";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { Callout } from "./Primitives";
@@ -15,7 +16,6 @@ export function ReachabilityCard() {
   const pageOrigin = typeof window !== "undefined" ? window.location.origin : "";
   const [url, setUrl] = useState(pageOrigin);
   const [loopback, setLoopback] = useState(true);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     api
@@ -28,15 +28,9 @@ export function ReachabilityCard() {
       .catch(() => undefined);
   }, [pageOrigin]);
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  }
+  const { state: copyState, copy: copyText } = useCopy();
+  const copied = copyState === "copied";
+  const copy = () => copyText(url);
 
   return (
     <div className="reach">

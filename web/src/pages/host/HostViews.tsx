@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCopy } from "../../useCopy";
 import type {
   DirListing,
   FileEntry,
@@ -745,7 +746,8 @@ export function FilesView({
   const t = useT();
   const [dir, setDir] = useState(start || "/");
   const [file, setFile] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { state: copyState, copy: copyPath } = useCopy();
+  const copied = copyState === "copied";
   const listing = useLoad<DirListing>(() => source.hostFiles(dir), [source, dir]);
   const preview = useLoad<FilePreview | null>(
     () => (file ? source.hostFile(file) : Promise.resolve(null)),
@@ -822,12 +824,7 @@ export function FilesView({
               className="icon-btn sm"
               aria-label={t("files.copyPath")}
               title={copied ? t("chat.copied") : t("files.copyPath")}
-              onClick={() =>
-                void navigator.clipboard.writeText(file).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                })
-              }
+              onClick={() => void copyPath(file)}
             >
               {copied ? <IconCheck /> : <IconCopy />}
             </button>

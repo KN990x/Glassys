@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCopy } from "../useCopy";
 import type { MessageAttachment, PromptTemplate, QueueItem } from "@glassys/protocol";
 import type { Block, ToolBlock } from "../transcript";
 import { useT } from "../i18n";
@@ -71,24 +72,16 @@ export function Highlight({ text, query }: { text: string; query: string }) {
 
 function CopyTurn({ text }: { text: string }) {
   const t = useT();
-  const [copied, setCopied] = useState(false);
+  const { state, copy } = useCopy();
   return (
     <button
       type="button"
       className="icon-btn sm turn-copy"
       aria-label={t("chat.copy")}
-      title={copied ? t("chat.copied") : t("chat.copy")}
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(
-          () => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          },
-          () => undefined,
-        );
-      }}
+      title={state === "copied" ? t("chat.copied") : state === "failed" ? t("chat.copyFailed") : t("chat.copy")}
+      onClick={() => void copy(text)}
     >
-      {copied ? <IconCheck /> : <IconCopy />}
+      {state === "copied" ? <IconCheck /> : state === "failed" ? <IconAlert /> : <IconCopy />}
     </button>
   );
 }

@@ -5,17 +5,18 @@ import {
   blockMatchesQuery,
   cwdBasename,
   formatBytes,
-  formatRelativeTime,
+  formatRelativeShort,
   formatUptime,
   groupThreadsByCwd,
   slashQuery,
 } from "./format";
 
 describe("format", () => {
-  it("formats relative times", () => {
+  it("formats compact relative ages", () => {
     const now = Date.parse("2026-01-02T00:00:00.000Z");
-    expect(formatRelativeTime("2026-01-01T23:00:00.000Z", now, "en")).toMatch(/hour/i);
-    expect(formatRelativeTime("not-a-date", now)).toBe("");
+    expect(formatRelativeShort("2026-01-01T23:00:00.000Z", now, "en")).toBe("1h");
+    expect(formatRelativeShort("2026-01-01T23:59:50.000Z", now, "es")).toBe("ahora");
+    expect(formatRelativeShort("not-a-date", now)).toBe("");
   });
 
   it("groups threads by cwd in first-seen order", () => {

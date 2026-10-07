@@ -1,6 +1,6 @@
 import type { RedactedConfig } from "@glassys/protocol";
 import { isTheme } from "@glassys/protocol";
-import { useT } from "../../i18n";
+import { LOCALES, useT } from "../../i18n";
 import { SettingGroup, SettingRow } from "../../components/Primitives";
 import { Switch } from "../../components/Switch";
 
@@ -21,8 +21,11 @@ export function AppearanceTab({
             value={draft.space.locale}
             onChange={(e) => setDraft({ ...draft, space: { ...draft.space, locale: e.target.value } })}
           >
-            <option value="en">English</option>
-            <option value="es">Español</option>
+            {LOCALES.map((l) => (
+              <option key={l.value} value={l.value}>
+                {l.label}
+              </option>
+            ))}
           </select>
         </SettingRow>
         <SettingRow label={t("settings.theme")} htmlFor="set-theme">

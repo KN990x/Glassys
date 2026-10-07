@@ -1,18 +1,5 @@
 import type { ThreadSummary } from "@glassys/protocol";
 
-export function formatRelativeTime(iso: string, now = Date.now(), locale = "en"): string {
-  const then = Date.parse(iso);
-  if (!Number.isFinite(then)) return "";
-  const diffSec = Math.round((then - now) / 1000);
-  const abs = Math.abs(diffSec);
-  const rtf = new Intl.RelativeTimeFormat(locale.startsWith("es") ? "es" : "en", { numeric: "auto" });
-  if (abs < 60) return rtf.format(diffSec, "second");
-  if (abs < 3600) return rtf.format(Math.trunc(diffSec / 60), "minute");
-  if (abs < 86400) return rtf.format(Math.trunc(diffSec / 3600), "hour");
-  if (abs < 86400 * 40) return rtf.format(Math.trunc(diffSec / 86400), "day");
-  return rtf.format(Math.trunc(diffSec / (86400 * 30)), "month");
-}
-
 /**
  * Compact age for a list row: "now", "6m", "2h", "3d", then a date. The full
  * phrase ("6 minutes ago") pushed the thread title out of a 268px rail.

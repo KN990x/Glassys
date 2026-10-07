@@ -28,6 +28,9 @@ const SCALED = new Set([
   "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
   "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
   "border-radius", "background-size",
+  "width", "height", "min-width", "min-height", "max-width", "max-height",
+  "top", "right", "bottom", "left", "inset",
+  "transform", "translate", "box-shadow", "outline-offset",
 ]);
 
 /**
@@ -35,7 +38,6 @@ const SCALED = new Set([
  * a single element, not a rhythm value, so a token would only add indirection.
  */
 const ALLOWED = new Map([
-  ["--", "token definitions are the scale itself"],
   [".composer-box textarea", "optical centring against the send button, derived from its em box"],
   [".visually-hidden", "the standard clip pattern"],
   [".md :not(pre) > code", "inline code tracks its paragraph, so em not px"],

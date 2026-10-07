@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import type { RedactedConfig } from "@glassys/protocol";
 import { isTheme, resolveTheme, type Theme } from "@glassys/protocol";
-import { I18nProvider, useT, type Locale } from "./i18n";
+import { I18nProvider, isLocale, useT, type Locale } from "./i18n";
 import { ApiError, api, setUnauthorizedHandler } from "./api";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
@@ -32,7 +32,7 @@ function readStoredTheme(): Theme | null {
 function readStoredLocale(): Locale | null {
   try {
     const value = localStorage.getItem(LOCALE_KEY);
-    return value === "es" || value === "en" ? value : null;
+    return isLocale(value) ? value : null;
   } catch {
     return null;
   }
@@ -121,7 +121,7 @@ export function App() {
   const locale: Locale =
     gate === "setup" || gate === "login" || gate === "boot" || gate === "unreachable"
       ? bootLocale
-      : config?.space.locale === "es" || config?.space.locale === "en"
+      : isLocale(config?.space.locale)
         ? config.space.locale
         : bootLocale;
   const themePref: Theme =

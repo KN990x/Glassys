@@ -5,6 +5,16 @@ import es from "./locales/es.json";
 const catalogs = { en, es } as const;
 export type Locale = keyof typeof catalogs;
 
+/** Every language the PWA speaks, named in itself. Adding one means a catalog and a line here. */
+export const LOCALES: ReadonlyArray<{ value: Locale; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+];
+
+export function isLocale(value: unknown): value is Locale {
+  return LOCALES.some((l) => l.value === value);
+}
+
 const I18nContext = createContext<{
   locale: Locale;
   t: (key: string) => string;

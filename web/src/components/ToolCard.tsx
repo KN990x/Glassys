@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCopy } from "../useCopy";
 import { useT } from "../i18n";
 import type { ToolBlock } from "../transcript";
 import {
@@ -160,8 +161,9 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
   const t = useT();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
+  const { state: copyState, copy: copyText } = useCopy();
+  const copied = copyState === "copied";
+  const copyFailed = copyState === "failed";
   /* Reads and greps used to open by default, so a run that touched a dozen
      files buried the answer. Only unfinished, failed and diff-bearing calls
      open themselves now. */
@@ -175,15 +177,7 @@ export function ToolCard({ block, shellLines, showDiff }: { block: ToolBlock; sh
   async function copyCommand(e: { stopPropagation: () => void }) {
     e.stopPropagation();
     if (!block.command) return;
-    try {
-      await navigator.clipboard.writeText(block.command);
-      setCopyFailed(false);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-      setCopyFailed(true);
-    }
+    await copyText(block.command);
   }
 
   const statusLabel =

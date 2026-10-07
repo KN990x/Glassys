@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { LocaleSwitch } from "../components/LocaleSwitch";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -11,7 +12,7 @@ import type {
 } from "@glassys/protocol";
 import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
-import { useT } from "../i18n";
+import { isLocale, useT, type Locale } from "../i18n";
 import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
@@ -107,11 +108,11 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   const [adaptersError, setAdaptersError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [discover, setDiscover] = useState<AdapterDiscoverItem[]>([]);
-  const [locale, setLocale] = useState(() => {
-    if (config.space.locale === "es" || config.space.locale === "en") return config.space.locale;
+  const [locale, setLocale] = useState<Locale>(() => {
+    if (isLocale(config.space.locale)) return config.space.locale;
     try {
       const stored = localStorage.getItem("glassys_locale");
-      if (stored === "es" || stored === "en") return stored;
+      if (isLocale(stored)) return stored;
     } catch {
       /* private mode */
     }
@@ -368,21 +369,13 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
   return (
     <main className="gate wide">
       <div className="gate-corner">
-        <label className="locale-switch">
-          <span className="visually-hidden">{t("settings.locale")}</span>
-          <select
-            value={locale}
-            aria-label={t("settings.locale")}
-            onChange={(e) => {
-              const next = e.target.value;
-              setLocale(next);
-              void api.saveConfig({ space: { locale: next, theme } }).then(onConfig).catch(() => undefined);
-            }}
-          >
-            <option value="en">English</option>
-            <option value="es">Español</option>
-          </select>
-        </label>
+        <LocaleSwitch
+          locale={locale}
+          onChange={(next) => {
+            setLocale(next);
+            void api.saveConfig({ space: { locale: next, theme } }).then(onConfig).catch(() => undefined);
+          }}
+        />
         <label className="locale-switch">
           <span className="visually-hidden">{t("settings.theme")}</span>
           <select
