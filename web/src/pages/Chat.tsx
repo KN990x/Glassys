@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
+import { Suspense, lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type FormEvent } from "react";
+import { useStableCallback } from "../useStableCallback";
 import type {
   AdapterPublicInfo,
   ClientMessage,
@@ -47,6 +48,7 @@ const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Setti
 const HostViews = lazy(() => import("./host/HostViews").then((m) => ({ default: m.HostViews })));
 
 const COMPOSER_MAX_PX = 160;
+const NO_PALETTE_ITEMS: ReturnType<typeof buildPaletteItems> = [];
 /** How long a sent message may go unechoed before it is handed back to the composer. */
 const SEND_CONFIRM_MS = 10_000;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
@@ -507,8 +509,11 @@ export function Chat({
   }, []);
 
   const waiting = queueItems.length > 0 || queued;
-  const liveUsage = (() => {
-    const meta = threads.find((th) => th.id === currentThreadId)?.usage;
+  /* Derived per change of what they read, not per render: a streamed token re-renders this
+     screen every frame. */
+  const currentThreadUsage = threads.find((th) => th.id === currentThreadId)?.usage;
+  const liveUsage = useMemo(() => {
+    const meta = currentThreadUsage;
     if (meta && (meta.inputTokens || meta.outputTokens)) return meta;
     let inputTokens = 0;
     let outputTokens = 0;
@@ -520,11 +525,20 @@ export function Chat({
     }
     if (!inputTokens && !outputTokens) return null;
     return { inputTokens, outputTokens };
-  })();
-  const visibleBlocks = search.trim() ? blocks.filter((b) => blockMatchesQuery(b, search)) : blocks;
+  }, [blocks, currentThreadUsage]);
+  const visibleBlocks = useMemo(
+    () => (search.trim() ? blocks.filter((b) => blockMatchesQuery(b, search)) : blocks),
+    [blocks, search],
+  );
   const canSend = Boolean(text.trim() || drafts.length) && conn === "connected" && snapshotReady && protocolError === null;
-  const queuedIds = new Set(queueItems.map((item) => item.id));
-  const lastTool = [...blocks].reverse().find((b) => b.kind === "tool" && b.status === "running");
+  const queuedIds = useMemo(() => new Set(queueItems.map((item) => item.id)), [queueItems]);
+  const lastTool = useMemo(() => {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i]!;
+      if (b.kind === "tool" && b.status === "running") return b;
+    }
+    return undefined;
+  }, [blocks]);
   const opsChipSet = new Set<string>(OPS_CHIP_IDS);
   const opsChips = (config.prompts?.templates ?? []).filter((tpl) => {
     return opsChipSet.has(tpl.id) || opsChipSet.has(tpl.slash.replace(/^\//, ""));
@@ -762,7 +776,8 @@ export function Chat({
     });
   }
 
-  const paletteItems = buildPaletteItems({
+  /* Built only while the palette is open: it makes a row (and JSX) for every thread and workspace. */
+  const paletteItems = !paletteOpen ? NO_PALETTE_ITEMS : buildPaletteItems({
     t,
     theme: config.space.theme,
     railCollapsed,
@@ -900,33 +915,68 @@ export function Chat({
   const spaceName = config.space.name.trim() || t("app.name");
   const currentThread = threads.find((th) => th.id === currentThreadId);
   const threadTitle = currentThread?.title || t("threads.untitled");
-  const hostInfo: HostInfo = {
-    hostLabel,
-    cwd: config.agent.cwd,
-    git,
-    adapter: currentAdapter?.displayName || config.agent.adapter,
-  };
-  const onCopyFailed = () => setSendError(t("chat.copyFailed"));
+  const adapterLabel = currentAdapter?.displayName || config.agent.adapter;
+  const hostInfo: HostInfo = useMemo(
+    () => ({ hostLabel, cwd: config.agent.cwd, git, adapter: adapterLabel }),
+    [hostLabel, config.agent.cwd, git, adapterLabel],
+  );
+  const onCopyFailed = useStableCallback(() => setSendError(t("chat.copyFailed")));
 
-  const threadListProps = {
-    threads,
-    currentId: currentThreadId,
-    locale: config.space.locale,
-    busy,
-    waiting,
-    onSwitch: (id: string) => void onSwitchThread(id),
-    onDelete: (id: string, e: { stopPropagation: () => void }) => void onDeleteThread(id, e),
-    onRename: onRenameThread,
-    git,
-    currentCwd: config.agent.cwd,
-    currentAdapter: config.agent.adapter,
-    adapterNames: Object.fromEntries(adapters.map((a) => [a.id, a.displayName])),
-    pins,
-    recents,
-    onOpenCwd: (cwd: string) => void onOpenCwd(cwd),
-    onPin: (cwd: string) => void onPin(cwd),
-    onUnpin: (cwd: string) => void onUnpin(cwd),
-  };
+  const switchThread = useStableCallback((id: string) => void onSwitchThread(id));
+  const deleteThread = useStableCallback((id: string, e: { stopPropagation: () => void }) => void onDeleteThread(id, e));
+  const renameThread = useStableCallback((id: string, title: string) => onRenameThread(id, title));
+  const openCwd = useStableCallback((cwd: string) => void onOpenCwd(cwd));
+  const pinCwd = useStableCallback((cwd: string) => void onPin(cwd));
+  const unpinCwd = useStableCallback((cwd: string) => void onUnpin(cwd));
+  const adapterNames = useMemo(() => Object.fromEntries(adapters.map((a) => [a.id, a.displayName])), [adapters]);
+  const threadListProps = useMemo(
+    () => ({
+      threads,
+      currentId: currentThreadId,
+      locale: config.space.locale,
+      busy,
+      waiting,
+      onSwitch: switchThread,
+      onDelete: deleteThread,
+      onRename: renameThread,
+      git,
+      currentCwd: config.agent.cwd,
+      currentAdapter: config.agent.adapter,
+      adapterNames,
+      pins,
+      recents,
+      onOpenCwd: openCwd,
+      onPin: pinCwd,
+      onUnpin: unpinCwd,
+    }),
+    [
+      threads,
+      currentThreadId,
+      config.space.locale,
+      busy,
+      waiting,
+      switchThread,
+      deleteThread,
+      renameThread,
+      git,
+      config.agent.cwd,
+      config.agent.adapter,
+      adapterNames,
+      pins,
+      recents,
+      openCwd,
+      pinCwd,
+      unpinCwd,
+    ],
+  );
+  const railNew = useStableCallback(() => void onNewThread());
+  const railSearch = useStableCallback(() => {
+    setSlashOpen(false);
+    setPaletteQuery("");
+    setPaletteOpen(true);
+  });
+  const railSettings = useStableCallback(() => openSettings());
+  const railTheme = useStableCallback((next: Theme) => void changeTheme(next));
 
   const navTarget: NavTarget = settings
     ? "settings"
@@ -1039,18 +1089,14 @@ export function Chat({
             host={hostInfo}
             threads={threadListProps}
             settingsRef={settingsBtn}
-            onNew={() => void onNewThread()}
-            onSearch={() => {
-              setSlashOpen(false);
-              setPaletteQuery("");
-              setPaletteOpen(true);
-            }}
-            onSettings={() => openSettings()}
+            onNew={railNew}
+            onSearch={railSearch}
+            onSettings={railSettings}
             onCopyFailed={onCopyFailed}
             collapsed={railCollapsed}
             onCollapse={collapseRail}
             theme={config.space.theme}
-            onTheme={(next) => void changeTheme(next)}
+            onTheme={railTheme}
           />
         ) : null
       }

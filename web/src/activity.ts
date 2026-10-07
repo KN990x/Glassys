@@ -28,6 +28,20 @@ export type Activity = {
 
 const CHANGE_KINDS = new Set(["write", "edit"]);
 
+/* Lines of a command's output, counted without splitting up to 64 KB into an array; remembered
+   per chunk string, since the panel re-derives on every streamed frame and most chunks are done. */
+const lineCounts = new Map<string, number>();
+function lineCount(chunk: string): number {
+  if (!chunk) return 0;
+  const known = lineCounts.get(chunk);
+  if (known !== undefined) return known;
+  let n = 1;
+  for (let i = chunk.indexOf("\n"); i >= 0; i = chunk.indexOf("\n", i + 1)) n++;
+  if (lineCounts.size > 500) lineCounts.clear();
+  lineCounts.set(chunk, n);
+  return n;
+}
+
 /**
  * What this thread actually did to the host, read back off the transcript.
  *
@@ -55,7 +69,7 @@ export function deriveActivity(blocks: Block[]): Activity {
         command: block.command,
         title: block.title,
         status: block.status,
-        lines: block.chunk ? block.chunk.split("\n").length : 0,
+        lines: lineCount(block.chunk),
       });
     }
 

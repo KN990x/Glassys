@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { ThreadSummary } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { cwdBasename, formatRelativeShort, groupThreadsByCwd, truncateMiddle } from "../format";
@@ -71,7 +71,7 @@ export function buildWorkspaces(input: {
 }
 
 /** The tree is the same in the desktop rail and the mobile sheet. */
-export function ThreadList({
+export const ThreadList = memo(function ThreadList({
   threads,
   currentId,
   locale,
@@ -270,4 +270,4 @@ export function ThreadList({
       </nav>
     </div>
   );
-}
+});

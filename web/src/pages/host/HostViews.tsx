@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   DirListing,
   FileEntry,
@@ -458,6 +458,33 @@ function priorityClass(p: number): string {
 /** A log line with a key that survives Follow trimming the head of the list. */
 type KeyedEntry = LogEntry & { key: number };
 
+/** One row, memoized: Follow appends every few seconds and must not reformat 5,000 timestamps. */
+const LogLine = memo(function LogLine({
+  entry,
+  selected,
+  locale,
+  onToggle,
+}: {
+  entry: KeyedEntry;
+  selected: boolean;
+  locale: string;
+  onToggle: (key: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      className={`log-line ${priorityClass(entry.priority)}${selected ? " selected" : ""}`}
+      onClick={() => onToggle(entry.key)}
+    >
+      <span className="log-time nums">{formatLogTime(entry.ts, Date.now(), locale)}</span>
+      <span className="log-unit truncate">{entry.unit ?? ""}</span>
+      <span className="log-msg">{entry.message}</span>
+    </button>
+  );
+});
+
 export function LogsView({
   source,
   caps,
@@ -486,6 +513,14 @@ export function LogsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const nextKey = useRef(0);
   const keyed = (list: LogEntry[]): KeyedEntry[] => list.map((e) => ({ ...e, key: nextKey.current++ }));
+  const toggleLine = useCallback((key: number) => {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   const cursor = useRef<string | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
   const units = useLoad(
@@ -622,25 +657,7 @@ export function LogsView({
         <div className="log-list" ref={listRef} role="listbox" aria-multiselectable="true" aria-label={t("nav.logs")}>
           {entries.length === 0 ? <p className="muted host-empty">{t("logs.empty")}</p> : null}
           {entries.map((e) => (
-            <button
-              key={e.key}
-              type="button"
-              role="option"
-              aria-selected={selected.has(e.key)}
-              className={`log-line ${priorityClass(e.priority)}${selected.has(e.key) ? " selected" : ""}`}
-              onClick={() =>
-                setSelected((cur) => {
-                  const next = new Set(cur);
-                  if (next.has(e.key)) next.delete(e.key);
-                  else next.add(e.key);
-                  return next;
-                })
-              }
-            >
-              <span className="log-time nums">{formatLogTime(e.ts, Date.now(), locale)}</span>
-              <span className="log-unit truncate">{e.unit ?? ""}</span>
-              <span className="log-msg">{e.message}</span>
-            </button>
+            <LogLine key={e.key} entry={e} selected={selected.has(e.key)} locale={locale} onToggle={toggleLine} />
           ))}
         </div>
       ) : null}

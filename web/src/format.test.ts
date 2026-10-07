@@ -69,3 +69,18 @@ describe("newMessageId", () => {
     for (const id of ids) expect(isMessageId(id)).toBe(true);
   });
 });
+
+describe("qrPath", () => {
+  it("draws every dark module once, merged into runs", async () => {
+    const { qrPath } = await import("./components/QrCode");
+    const { encode } = await import("uqr");
+    const value = "http://192.168.1.20:8787";
+    const { size, d } = qrPath(value);
+    const qr = encode(value, { ecc: "L" });
+    const flat = (qr.data as boolean[][]).flat();
+    const dark = flat.filter(Boolean).length;
+    const drawn = [...d.matchAll(/h(\d+)v1/g)].reduce((n, m) => n + Number(m[1]), 0);
+    expect(size).toBe(qr.size);
+    expect(drawn).toBe(dark);
+  });
+});

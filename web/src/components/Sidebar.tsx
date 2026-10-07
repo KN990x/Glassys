@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import { memo, type Ref } from "react";
 import type { Theme } from "@glassys/protocol";
 import { shortcutLabel } from "../keyboard";
 import { useT } from "../i18n";
@@ -31,7 +31,8 @@ export function nextTheme(current: Theme): Theme {
  * the topbar and the inspector; its foot is one row. It collapses to a 56px
  * strip so a narrow laptop can give the transcript the width instead.
  */
-export function Sidebar({
+/** Memoized: the chat screen re-renders per streamed frame; the rail has nothing new then. */
+export const Sidebar = memo(function Sidebar({
   spaceName,
   statusClass,
   statusLabel,
@@ -186,4 +187,4 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});
