@@ -37,3 +37,6 @@ overrides:
   proxy-addr: '^2.0.8'
   # Dev only: concurrently (pnpm run dev) still pins shell-quote 1.9.
   shell-quote: '^1.11.0'
+  # Dev only: postcss (vite, vitest) still accepts source-map-js 1.2.1, whose indexed
+  # source-map sections can stall the event loop (GHSA-68fv-2mgg-jv7q).
+  source-map-js: '^1.2.2'
