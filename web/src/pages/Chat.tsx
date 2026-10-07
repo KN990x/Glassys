@@ -1,26 +1,20 @@
 import { Suspense, lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type FormEvent } from "react";
 import { useStableCallback } from "../useStableCallback";
+import { useGatewaySession } from "../useGatewaySession";
 import type {
   AdapterPublicInfo,
-  ClientMessage,
   HostCapabilities,
   MessageAttachment,
   ModelCatalogItem,
   ModelListSource,
   ModelParam,
-  QueueItem,
   RedactedConfig,
-  ServerMessage,
   Theme,
   ThreadSummary,
-  TranscriptEvent,
 } from "@glassys/protocol";
-import { PROTOCOL_VERSION, MAX_ATTACHMENTS, isTranscriptEvent } from "@glassys/protocol";
+import { PROTOCOL_VERSION, MAX_ATTACHMENTS } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { api } from "../api";
-import { openSocket, type ConnState } from "../socket";
-import { reduceTranscriptBatch, replay, type Block } from "../transcript";
-import { createEventBatcher } from "../eventBatch";
 import { Composer } from "../components/Composer";
 import { ThreadDrawer } from "../components/ThreadDrawer";
 import { operatorError } from "../operatorError";
@@ -28,6 +22,7 @@ import { blockMatchesQuery, formatElapsed, newMessageId, slashQuery } from "../f
 import { loadDraft, saveDraft } from "../draftStorage";
 import { CommandPalette } from "../components/CommandPalette";
 import { buildPaletteItems } from "./chatPalette";
+import { handleChatKey } from "./chatShortcuts";
 import { ActivityPanel } from "../components/ActivityPanel";
 import type { HostViewId } from "./host/HostViews";
 import { type AppView } from "../components/ViewTabs";
@@ -81,19 +76,44 @@ export function Chat({
 }) {
   const t = useT();
   const { confirm, confirmDialog } = useConfirm();
-  const [blocks, setBlocks] = useState<Block[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [queued, setQueued] = useState(false);
-  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const {
+    conn,
+    protocolError,
+    newVersion,
+    blocks,
+    snapshotReady,
+    transcriptTruncated,
+    busy,
+    runStartedAt,
+    queued,
+    queueItems,
+    threads,
+    setThreads,
+    currentThreadId,
+    setCurrentThreadId,
+    send,
+    beginTranscriptSwap,
+    rollbackTranscript,
+  } = useGatewaySession({
+    keepaliveSeconds: config.network.wsKeepaliveSeconds,
+    onConfig,
+    onLogout,
+    onEcho: (id) => {
+      const pending = unconfirmed.current;
+      if (pending && id === pending.id) {
+        clearTimeout(pending.timer);
+        unconfirmed.current = null;
+      }
+    },
+    onRefusal: (message) => {
+      if (unconfirmed.current) restoreRef.current(operatorError(message, tRef.current));
+    },
+    onConfigError: (message) => setConfigError(message ? operatorError(message, tRef.current) : ""),
+  });
   const [threadOpen, setThreadOpen] = useState(false);
-  const [runStartedAt, setRunStartedAt] = useState<number | undefined>();
   const [drafts, setDrafts] = useState<MessageAttachment[]>([]);
   const [attachError, setAttachError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const [conn, setConn] = useState<ConnState>("connecting");
-  const [protocolError, setProtocolError] = useState<number | null>(null);
   const [configError, setConfigError] = useState("");
   const [sendError, setSendError] = useState("");
   const [modelError, setModelError] = useState("");
@@ -115,8 +135,6 @@ export function Chat({
     }
   });
   const [git, setGit] = useState<{ branch: string; dirty: boolean } | undefined>();
-  const [snapshotReady, setSnapshotReady] = useState(false);
-  const [transcriptTruncated, setTranscriptTruncated] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -148,16 +166,11 @@ export function Chat({
   const [recents, setRecents] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const [restartNote, setRestartNote] = useState("");
-  /* The gateway commit this page loaded against; a reconnect to another one means an upgrade. */
-  const gatewayCommitRef = useRef<string | undefined>(undefined);
-  const [newVersion, setNewVersion] = useState(false);
-  const sendRef = useRef<(msg: ClientMessage) => boolean>(() => false);
   /**
    * The message just sent, until the gateway echoes it back. A socket can look open while the
    * link is dead; without this, the composer was cleared and the message silently lost.
    */
   const unconfirmed = useRef<{ id: string; text: string; drafts: MessageAttachment[]; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const keepaliveRef = useRef<(seconds: number) => void>(() => undefined);
   const scroller = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const threadBtn = useRef<HTMLButtonElement>(null);
@@ -181,7 +194,6 @@ export function Chat({
   const tRef = useRef(t);
   tRef.current = t;
 
-  const snapshotReadyRef = useRef(false);
 
   const currentAdapter = adapters.find((a) => a.id === config.agent.adapter);
   const caps = currentAdapter?.capabilities;
@@ -201,106 +213,10 @@ export function Chat({
     }
   }, []);
 
+  /* Clears the "restarting" note once the gateway is back. */
   useEffect(() => {
-    /* One batch per frame; a snapshot replaces the transcript and drops what is pending. */
-    const batcher = createEventBatcher<TranscriptEvent>((batch) => setBlocks((cur) => reduceTranscriptBatch(cur, batch)));
-    /* The newest persisted event this screen holds; anything at or below it is a repeat. */
-    let lastSeq = 0;
-    const sock = openSocket({
-      onState: (s) => {
-        if (s === "connecting" || s === "reconnecting") {
-          snapshotReadyRef.current = false;
-          setSnapshotReady(false);
-        }
-        if (s === "connected") setRestartNote("");
-        setConn(s);
-      },
-      onEvent: (msg: ServerMessage) => {
-        if (msg.type === "auth.error") {
-          void api.logout().finally(() => onLogoutRef.current());
-          return;
-        }
-        if (msg.type === "hello.incompatible") {
-          setProtocolError(msg.protocolVersion);
-          return;
-        }
-        if (msg.type === "hello.ok" && msg.commit) {
-          if (!gatewayCommitRef.current) gatewayCommitRef.current = msg.commit;
-          else if (gatewayCommitRef.current !== msg.commit) setNewVersion(true);
-          return;
-        }
-        if (msg.type === "config.error") {
-          setConfigError(operatorError(msg.message, tRef.current));
-          return;
-        }
-        if (msg.type === "threads.snapshot") {
-          setThreads(msg.threads);
-          setCurrentThreadId(msg.currentId);
-        }
-        if (msg.type === "transcript.snapshot") {
-          snapshotCount.current += 1;
-          batcher.drop();
-          snapshotReadyRef.current = true;
-          setSnapshotReady(true);
-          setTranscriptTruncated(Boolean(msg.truncated));
-          setBlocks(replay(msg.events));
-          lastSeq = msg.lastSeq ?? 0;
-          return;
-        }
-        if (msg.type === "session") {
-          setBusy(msg.busy);
-          if (!msg.busy) {
-            setQueued(false);
-            setRunStartedAt(undefined);
-          } else if (msg.runStartedAt) {
-            setRunStartedAt(msg.runStartedAt);
-          }
-          if (msg.threadId) setCurrentThreadId(msg.threadId);
-        }
-        if (msg.type === "queue.snapshot") {
-          setQueueItems(msg.items);
-          setQueued(msg.items.length > 0);
-        }
-        if (msg.type === "config") {
-          setConfigError("");
-          onConfig(msg.config);
-          keepaliveRef.current(msg.config.network.wsKeepaliveSeconds);
-        }
-        if (msg.type === "run.queued") setQueued(true);
-        if (msg.type === "run.start") setQueued(false);
-        if (msg.type === "user.message" || msg.type === "user.retracted") {
-          const pending = unconfirmed.current;
-          if (pending && msg.id === pending.id) {
-            clearTimeout(pending.timer);
-            unconfirmed.current = null;
-          }
-        }
-        /* A refusal (queue full, gateway busy) comes back to this socket alone, unnumbered. */
-        if (msg.type === "run.error" && msg.phase === "startup" && msg.seq === undefined && unconfirmed.current) {
-          restoreRef.current(operatorError(msg.message, tRef.current));
-        }
-        if (isTranscriptEvent(msg)) {
-          if (!snapshotReadyRef.current) return;
-          if (typeof msg.seq === "number") {
-            if (msg.seq <= lastSeq) return;
-            lastSeq = msg.seq;
-          }
-          batcher.push(msg);
-        }
-      },
-    });
-    sendRef.current = sock.send;
-    /* The effect below applies the configured keepalive, now and on every change. */
-    keepaliveRef.current = sock.setKeepalive;
-    return () => {
-      batcher.drop();
-      sock.close();
-    };
-  }, [onConfig]);
-
-  useEffect(() => {
-    keepaliveRef.current(config.network.wsKeepaliveSeconds);
-  }, [config.network.wsKeepaliveSeconds]);
+    if (conn === "connected") setRestartNote("");
+  }, [conn]);
 
   const loadAdapters = useCallback(() => {
     setAdaptersError("");
@@ -336,7 +252,7 @@ export function Chat({
         setPins(r.pins || []);
       })
       .catch(() => undefined);
-  }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd]);
+  }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd, setThreads, setCurrentThreadId]);
 
   /* Read at a thread change only: the draft being left is whatever the composer holds then. */
   const composerState = useRef({ text, drafts });
@@ -438,58 +354,41 @@ export function Chat({
 
   /* The global shortcuts read whatever is current at the key press (an effect event), so none of
      them sees a stale value; ⌘⇧O used an old "waiting". */
-  const onGlobalKey = useEffectEvent((e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
-      e.preventDefault();
-      toggleActivity(!activityOpen);
-      return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-      e.preventDefault();
-      collapseRail(!railCollapsed);
-      return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
-      e.preventDefault();
-      setSearchOpen(true);
-      queueMicrotask(() => searchRef.current?.focus());
-      return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "o") {
-      e.preventDefault();
-      void onNewThread();
-      return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-      e.preventDefault();
-      setSlashOpen(false);
-      setPaletteQuery("");
-      setPaletteOpen((v) => !v);
-      return;
-    }
-    if (e.key !== "Escape") return;
-    if (paletteOpen || slashOpen) {
-      setPaletteOpen(false);
-      setSlashOpen(false);
-      return;
-    }
-    if (searchOpen) {
-      setSearchOpen(false);
-      setSearch("");
-      return;
-    }
-    /* Escape is the shortcut the run strip advertises, in the chat. Escape in a host view's
-       filter or a rename field means "leave this field", not "stop the agent". */
-    const target = e.target as HTMLElement | null;
-    const inOtherField =
-      target instanceof HTMLElement &&
-      target !== composer.current &&
-      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-    if (busy && view === "chat" && !inOtherField && !settings && !threadOpen && caps?.cancel !== false) {
-      cancelRun();
-      return;
-    }
-  });
+  const onGlobalKey = useEffectEvent((e: KeyboardEvent) =>
+    handleChatKey(e, {
+      activityOpen,
+      railCollapsed,
+      paletteOpen,
+      slashOpen,
+      searchOpen,
+      busy,
+      view,
+      overlayOpen: settings || threadOpen,
+      canCancel: caps?.cancel !== false,
+      composer: composer.current,
+      toggleActivity,
+      collapseRail,
+      openSearch: () => {
+        setSearchOpen(true);
+        queueMicrotask(() => searchRef.current?.focus());
+      },
+      closeSearch: () => {
+        setSearchOpen(false);
+        setSearch("");
+      },
+      newThread: () => void onNewThread(),
+      togglePalette: () => {
+        setSlashOpen(false);
+        setPaletteQuery("");
+        setPaletteOpen((v) => !v);
+      },
+      closePalettes: () => {
+        setPaletteOpen(false);
+        setSlashOpen(false);
+      },
+      cancelRun,
+    }),
+  );
   useEffect(() => {
     const listener = (e: KeyboardEvent) => onGlobalKey(e);
     window.addEventListener("keydown", listener);
@@ -558,25 +457,6 @@ export function Chat({
     setCurrentThreadId(r.currentId);
   }
 
-  /** Snapshots received so far; a thread change that fails only rolls back if none came meanwhile. */
-  const snapshotCount = useRef(0);
-
-  function beginThreadChange(): number {
-    snapshotReadyRef.current = false;
-    setSnapshotReady(false);
-    setBlocks([]);
-    return snapshotCount.current;
-  }
-
-  /*
-   * The request failed, but the gateway may still have switched (a timeout after the work was
-   * done) and sent its snapshot. Only put the old blocks back when it did not.
-   */
-  function rollbackThreadChange(prevBlocks: Block[], countAtStart: number) {
-    snapshotReadyRef.current = true;
-    setSnapshotReady(true);
-    if (snapshotCount.current === countAtStart) setBlocks(prevBlocks);
-  }
 
   async function onNewThread() {
     if (busy || waiting) {
@@ -584,14 +464,14 @@ export function Chat({
       return;
     }
     const prevBlocks = blocks;
-    let mark = snapshotCount.current;
+    let mark = 0;
     try {
-      mark = beginThreadChange();
+      mark = beginTranscriptSwap();
       applyThreadList(await api.newThread());
       closeThreads();
       setSendError("");
     } catch (err) {
-      rollbackThreadChange(prevBlocks, mark);
+      rollbackTranscript(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -622,14 +502,14 @@ export function Chat({
       return;
     }
     const prevBlocks = blocks;
-    let mark = snapshotCount.current;
+    let mark = 0;
     try {
-      mark = beginThreadChange();
+      mark = beginTranscriptSwap();
       applyThreadList(await api.switchThread(id));
       closeThreads();
       setSendError("");
     } catch (err) {
-      rollbackThreadChange(prevBlocks, mark);
+      rollbackTranscript(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -712,9 +592,9 @@ export function Chat({
     if (!hasThread && !(await confirm({ title: t("confirm.titleArchive"), message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" })))
       return;
     const prevBlocks = blocks;
-    let mark = snapshotCount.current;
+    let mark = 0;
     try {
-      mark = beginThreadChange();
+      mark = beginTranscriptSwap();
       const r = await api.openWorkspace(cwd);
       applyThreadList(r);
       onConfig(r.config);
@@ -722,7 +602,7 @@ export function Chat({
       setSendError("");
       await refreshSites();
     } catch (err) {
-      rollbackThreadChange(prevBlocks, mark);
+      rollbackTranscript(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
     }
   }
@@ -835,7 +715,7 @@ export function Chat({
     const value = text.trim();
     if ((!value && !drafts.length) || conn !== "connected" || !snapshotReady || protocolError !== null) return;
     const id = newMessageId();
-    if (!sendRef.current({
+    if (!send({
       type: "user.message",
       text: value,
       id,
@@ -871,7 +751,7 @@ export function Chat({
   restoreRef.current = restoreUnconfirmed;
 
   function cancelRun() {
-    if (!sendRef.current({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));
+    if (!send({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));
   }
 
   async function changeTheme(next: Theme) {
@@ -1264,7 +1144,7 @@ export function Chat({
             onCancel={cancelRun}
             queue={queueItems}
             onQueueCancel={(id) => {
-              if (!sendRef.current({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
+              if (!send({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
             }}
             templates={config.prompts?.templates ?? []}
             onTemplate={insertTemplate}
