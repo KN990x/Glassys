@@ -5,12 +5,10 @@ Glassys is a pnpm workspace. Node **22.13+** (see `.nvmrc`). Use the pnpm versio
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-pnpm test
-pnpm lint
-pnpm typecheck
-pnpm build
-pnpm budget
+pnpm check
 ```
+
+`pnpm check` runs what CI runs, in the same order: lint, build, typecheck, the tests (`test:run`) and the bundle budget. It has to pass before a change lands.
 
 `pnpm lint` checks the i18n catalogs (same keys in both, no unused or missing keys), the design tokens (`scripts/ui-audit.mjs`) and the PWA's React hook dependencies (ESLint). `pnpm budget` checks the built PWA's chunk sizes; raise a limit on purpose, never to turn a check green.
 
@@ -74,4 +72,4 @@ Without an account, `scripts/fake-acp-agent.mjs` stands in for one. It speaks AC
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).
