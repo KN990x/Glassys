@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted chat face for systems work via local coding agents",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "KN <hello@kn990x.dev>",
   "repository": {
     "type": "git",

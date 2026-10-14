@@ -211,7 +211,7 @@ Glassys with auto-run and a host workspace is **operator access to that machine*
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).
 
 ---
 
@@ -384,4 +384,4 @@ Glassys con auto-run y un workspace del host es **acceso de operador a esa máqu
 
 ## Licencia
 
-MIT. Véase [LICENSE](LICENSE).
+Apache-2.0. Véase [LICENSE](LICENSE).
