@@ -227,6 +227,10 @@ export function Composer(props: ComposerProps) {
             value={text}
             placeholder={t("chat.placeholderHint")}
             aria-label={t("chat.placeholder")}
+            /* A combobox so aria-expanded and aria-activedescendant mean something to a screen
+               reader: on a plain textarea they are ignored, and the slash list went unannounced. */
+            role="combobox"
+            aria-multiline="true"
             aria-autocomplete="list"
             aria-expanded={slashOpen}
             aria-controls={slashOpen ? slashListId : undefined}

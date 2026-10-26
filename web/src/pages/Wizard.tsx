@@ -418,47 +418,51 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                   {adaptersError}
                 </Callout>
               )}
-              {adapters.map((a) => {
-                const selectable = adapterSelectable(a);
-                return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className={`adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
-                    aria-pressed={adapterId === a.id}
-                    disabled={!selectable}
-                    onClick={() => setAdapterId(a.id)}
-                  >
-                    <span className="adapter-mono" aria-hidden="true">
-                      {a.displayName.slice(0, 1)}
-                    </span>
-                    <span className="adapter-card-body">
-                      <strong>{a.displayName}</strong>
-                      {adapterDescription(t, a) ? <span className="muted">{adapterDescription(t, a)}</span> : null}
-                      {!selectable && a.available && !a.available.ok && a.available.error ? (
-                        <span className="muted adapter-error" title={a.available.error}>
-                          {a.available.error}
-                        </span>
-                      ) : a.id === "acp" && selectable ? (
-                        <span className="muted">{t("wizard.acp.needsCommand")}</span>
-                      ) : null}
-                    </span>
-                    <span className="adapter-card-state">
-                      {selectable ? (
-                        adapterId === a.id ? (
-                          <span className="adapter-check">
-                            <IconCheck />
+              {/* One choice among several: a radio group, not a row of toggles. */}
+              <div className="stack" role="radiogroup" aria-label={t("wizard.step.adapter")}>
+                {adapters.map((a) => {
+                  const selectable = adapterSelectable(a);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      role="radio"
+                      className={`adapter-card${adapterId === a.id ? " current" : ""}${selectable ? "" : " disabled"}`}
+                      aria-checked={adapterId === a.id}
+                      disabled={!selectable}
+                      onClick={() => setAdapterId(a.id)}
+                    >
+                      <span className="adapter-mono" aria-hidden="true">
+                        {a.displayName.slice(0, 1)}
+                      </span>
+                      <span className="adapter-card-body">
+                        <strong>{a.displayName}</strong>
+                        {adapterDescription(t, a) ? <span className="muted">{adapterDescription(t, a)}</span> : null}
+                        {!selectable && a.available && !a.available.ok && a.available.error ? (
+                          <span className="muted adapter-error" title={a.available.error}>
+                            {a.available.error}
                           </span>
-                        ) : null
-                      ) : (
-                        <StatusBadge tone="danger" dot>
-                          {t("wizard.adapter.unavailableShort")}
-                        </StatusBadge>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
+                        ) : a.id === "acp" && selectable ? (
+                          <span className="muted">{t("wizard.acp.needsCommand")}</span>
+                        ) : null}
+                      </span>
+                      <span className="adapter-card-state">
+                        {selectable ? (
+                          adapterId === a.id ? (
+                            <span className="adapter-check">
+                              <IconCheck />
+                            </span>
+                          ) : null
+                        ) : (
+                          <StatusBadge tone="danger" dot>
+                            {t("wizard.adapter.unavailableShort")}
+                          </StatusBadge>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

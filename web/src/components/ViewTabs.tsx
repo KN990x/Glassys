@@ -43,6 +43,8 @@ export function ViewTabs({
         >
           {item.glyph}
           <span>{t(`nav.${item.id}`)}</span>
+          {/* Dimmed is not said by the colour alone. Still a button: opening it explains why. */}
+          {item.missing && <span className="visually-hidden">, {t("nav.viewMissing")}</span>}
         </button>
       ))}
     </nav>

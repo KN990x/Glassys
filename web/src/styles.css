@@ -530,7 +530,13 @@ h2[tabindex="-1"]:focus { outline: none; }
   .settings-tab { min-height: var(--tap); }
   .icon-btn.sm { width: var(--tap); height: var(--tap); min-height: var(--tap); }
   /* Controls that were 18 to 36px tall: a fingertip needs the shared 40px target. */
-  .segment, .segmented.sm .segment, .disclosure-toggle, .hunk-head, .tool-head { min-height: var(--tap); }
+  .segment, .segmented.sm .segment, .disclosure-toggle, .hunk-head, .tool-head, .tool-group-head, .log-line { min-height: var(--tap); }
+  /* Small on purpose: the twisty keeps its look and an invisible margin around it takes the tap,
+     as the switch's does. The subtitle line clips its overflow, so it grows a padding instead and
+     a negative margin of the same size keeps the topbar where it was. */
+  .ws-twisty { position: relative; }
+  .ws-twisty::before { content: ""; position: absolute; inset: calc((var(--s-5) - var(--tap)) / 2); }
+  button.host-copy { padding-block: calc((var(--tap) - 1lh) / 2); margin-block: calc((1lh - var(--tap)) / 2); }
   .crumbs button { display: inline-flex; align-items: center; min-height: var(--tap); }
   /* The switch keeps its look; an invisible margin around it takes the tap. */
   .switch::before { content: ""; position: absolute; inset: calc((var(--switch-h) - var(--tap)) / 2); }

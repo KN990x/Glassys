@@ -188,15 +188,17 @@ export function Topbar({
                 type="button"
                 className="icon-btn"
                 aria-expanded={menuOpen}
+                aria-haspopup="menu"
                 aria-label={t("chat.more")}
                 title={t("chat.more")}
                 onClick={() => setMenuOpen((v) => !v)}
               >
                 <IconMore />
               </button>
-              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} label={t("chat.more")} side="bottom" align="end" className="pop-menu">
+              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} label={t("chat.more")} side="bottom" align="end" className="pop-menu" menu>
                 <button
                   type="button"
+                  role="menuitem"
                   className="ghost picker-item"
                   disabled={!threadId}
                   onClick={() => {
@@ -209,6 +211,7 @@ export function Topbar({
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   className="ghost picker-item"
                   disabled={!threadId}
                   onClick={() => {
@@ -222,6 +225,7 @@ export function Topbar({
                 <div className="pop-divider" role="separator" />
                 <button
                   type="button"
+                  role="menuitem"
                   className="ghost picker-item danger-item"
                   disabled={!threadId}
                   onClick={() => {

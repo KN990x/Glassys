@@ -413,6 +413,7 @@
   "nav.files": "Files",
   "nav.host": "Host",
   "nav.views": "Views",
+  "nav.viewMissing": "not available on this host",
   "host.uptime": "Uptime",
   "host.cores": "cores",
   "host.load": "Load",

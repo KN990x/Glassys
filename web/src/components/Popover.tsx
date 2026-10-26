@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
 type PopoverSide = "top" | "bottom";
 type PopoverAlign = "start" | "end";
@@ -21,6 +21,7 @@ export function Popover({
   id,
   wide,
   className,
+  menu,
 }: {
   open: boolean;
   onClose: () => void;
@@ -32,6 +33,11 @@ export function Popover({
   wide?: boolean;
   /** `pop-menu` for a list of commands: tighter rows, no section padding. */
   className?: string;
+  /**
+   * A list of commands (its items carry role="menuitem"): announced as a menu, and the arrow keys,
+   * Home and End move between its items, as in any other menu.
+   */
+  menu?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -76,12 +82,31 @@ export function Popover({
       ref={panel}
       id={id}
       className={`pop pop-${side} pop-${align}${wide ? " pop-wide" : ""}${className ? ` ${className}` : ""}`}
-      role="dialog"
+      role={menu ? "menu" : "dialog"}
       aria-label={label}
+      onKeyDown={menu ? moveInMenu : undefined}
     >
       {children}
     </div>
   );
+}
+
+function moveInMenu(e: ReactKeyboardEvent<HTMLDivElement>) {
+  const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+  if (!keys.includes(e.key)) return;
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')];
+  if (!items.length) return;
+  e.preventDefault();
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  const next =
+    e.key === "Home"
+      ? 0
+      : e.key === "End"
+        ? items.length - 1
+        : e.key === "ArrowDown"
+          ? (at + 1) % items.length
+          : (at - 1 + items.length) % items.length;
+  items[next]?.focus();
 }
 
 /** The anchor a popover measures itself against. */
