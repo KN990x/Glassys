@@ -19,6 +19,7 @@ import { log } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { runningBuild } from "./build-info.js";
 import { createMutex } from "./lock.js";
+import { snapshotMessage } from "./transcript.js";
 import {
   applyConfigPatch,
   cancelQueued,
@@ -269,12 +270,7 @@ async function handleClient(
       const snap = await readTranscriptSnapshot();
       hub.send(ws, { type: "auth.ok" });
       hub.send(ws, { type: "config", config });
-      hub.send(ws, {
-        type: "transcript.snapshot",
-        events: snap.events,
-        ...(snap.truncated ? { truncated: true } : {}),
-        lastSeq: snap.lastSeq,
-      });
+      hub.send(ws, snapshotMessage(snap));
       for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
         hub.send(ws, buffered);
       }
@@ -294,12 +290,7 @@ async function handleClient(
         hub.add(ws, { buffer: true });
         await drainEmit();
         const fresh = await readTranscriptSnapshot();
-        hub.send(ws, {
-          type: "transcript.snapshot",
-          events: fresh.events,
-          ...(fresh.truncated ? { truncated: true } : {}),
-          lastSeq: fresh.lastSeq,
-        });
+        hub.send(ws, snapshotMessage(fresh));
         for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), fresh.lastSeq)) hub.send(ws, leftover);
         hub.release(ws);
       }

@@ -48,6 +48,7 @@ import { loadState } from "./state.js";
 import { listWorkspaces } from "./workspaces.js";
 import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
 import { liveThreadId } from "./threads.js";
+import { createMutex } from "./lock.js";
 import { readGitContext } from "./host-git.js";
 import { hostCapabilities, hostOverview, listDir, listServices, previewFile, readLogs } from "./host-probe.js";
 import { ensureVapidKeys, removePushSubscription, savePushSubscription } from "./push.js";
@@ -137,20 +138,11 @@ async function requireAuth(req: IncomingMessage, res: ServerResponse): Promise<b
   return true;
 }
 
-let setupLock: Promise<void> = Promise.resolve();
+const withSetupLock = createMutex();
 
-async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
-  let release: () => void = () => undefined;
-  const prev = setupLock;
-  setupLock = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await prev;
-  try {
-    return await fn();
-  } finally {
-    release();
-  }
+/** What every thread change answers: the list, and which one is live now. */
+async function threadsReply() {
+  return { threads: await listLiveThreads(), currentId: liveThreadId() };
 }
 
 /**
@@ -531,14 +523,14 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "GET" && path === "/api/threads") {
     if (!(await requireAuth(req, res))) return true;
-    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    send(res, 200, await threadsReply());
     return true;
   }
 
   if (method === "POST" && path === "/api/threads") {
     if (!(await requireAuth(req, res))) return true;
     await startNewLiveThread();
-    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    send(res, 200, await threadsReply());
     return true;
   }
 
@@ -546,7 +538,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/threads/".length, -"/switch".length));
     await switchLiveThread(id);
-    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    send(res, 200, await threadsReply());
     return true;
   }
 
@@ -555,7 +547,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     const id = decodePathParam(path.slice("/api/threads/".length));
     const body = (await readJson(req)) as { title?: string };
     await renameLiveThread(id, typeof body.title === "string" ? body.title : "");
-    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    send(res, 200, await threadsReply());
     return true;
   }
 
@@ -575,7 +567,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/threads/".length));
     await deleteLiveThread(id);
-    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
+    send(res, 200, await threadsReply());
     return true;
   }
 
@@ -678,7 +670,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const body = (await readJson(req)) as { cwd?: string };
     await openWorkspace(String(body.cwd || ""));
-    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId(), config: await redacted() });
+    send(res, 200, { ...(await threadsReply()), config: await redacted() });
     return true;
   }
 

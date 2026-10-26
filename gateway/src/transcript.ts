@@ -1,5 +1,5 @@
 import { open, readFile } from "node:fs/promises";
-import type { TranscriptEvent } from "@glassys/protocol";
+import type { ServerMessage, TranscriptEvent } from "@glassys/protocol";
 import { ensureLiveThread, flushLiveTranscript, liveTranscriptPath, refreshLiveTitle, stageLiveEvent } from "./threads.js";
 import { parseJsonl } from "./jsonl.js";
 
@@ -81,6 +81,16 @@ export async function readTranscriptTail(path: string, maxBytes = TRANSCRIPT_SNA
 }
 
 /** The live thread's latest events, everything staged included. */
+/** The `transcript.snapshot` message for a snapshot read from disk. */
+export function snapshotMessage(snap: TranscriptSnapshot): ServerMessage {
+  return {
+    type: "transcript.snapshot",
+    events: snap.events,
+    ...(snap.truncated ? { truncated: true } : {}),
+    lastSeq: snap.lastSeq,
+  };
+}
+
 export async function readTranscriptSnapshot(): Promise<TranscriptSnapshot> {
   try {
     await flushLiveTranscript();

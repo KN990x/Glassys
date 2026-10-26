@@ -41,12 +41,16 @@ export async function secureDataDir(): Promise<void> {
   }
 }
 
+/** Found once and kept: every static request asked the disk twice. Until a build exists, it asks again. */
+let foundWebDir: string | null = null;
+
 export function webDir(): string {
   if (process.env.GLASSYS_WEB_DIR) return process.env.GLASSYS_WEB_DIR;
+  if (foundWebDir) return foundWebDir;
   const fromMeta = join(fileURLToPath(new URL(".", import.meta.url)), "../../web/dist");
   const fromCwd = join(process.cwd(), "web/dist");
-  if (existsSync(fromCwd)) return fromCwd;
-  if (existsSync(fromMeta)) return fromMeta;
+  if (existsSync(fromCwd)) return (foundWebDir = fromCwd);
+  if (existsSync(fromMeta)) return (foundWebDir = fromMeta);
   return fromCwd;
 }
 
