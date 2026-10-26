@@ -25,7 +25,7 @@ import { invalidateAdapterInfoCache } from "./adapter-info.js";
 import { hub } from "./hub.js";
 import { log, paths, isSafeId } from "./paths.js";
 import { loadState, saveState, addUsageTotals } from "./state.js";
-import { appendTranscript, readTranscript, readTranscriptSnapshot } from "./transcript.js";
+import { appendTranscript, readTranscript, readTranscriptSnapshot, snapshotMessage } from "./transcript.js";
 import { HttpError, isActiveRunError } from "./errors.js";
 import { createMutex } from "./lock.js";
 import {
@@ -418,13 +418,7 @@ async function restoreQueuedUserMessages(current?: QueueJob): Promise<void> {
 }
 
 async function broadcastTranscriptSnapshot(): Promise<void> {
-  const snap = await readTranscriptSnapshot();
-  hub.broadcast({
-    type: "transcript.snapshot",
-    events: snap.events,
-    ...(snap.truncated ? { truncated: true } : {}),
-    lastSeq: snap.lastSeq,
-  });
+  hub.broadcast(snapshotMessage(await readTranscriptSnapshot()));
 }
 
 async function rotateToNewThread(previousAgentId: string | null): Promise<void> {
@@ -433,10 +427,7 @@ async function rotateToNewThread(previousAgentId: string | null): Promise<void> 
   const previousAgent = runtime.identityAgent ?? resetFromAgent ?? undefined;
   resetFromAgent = null;
   await rotateLiveThread(previousAgentId, previousAgent);
-  runtime.agentId = null;
-  runtime.fingerprint = null;
-  runtime.identityAgent = null;
-  await saveState({ agentId: null });
+  await forgetAgent();
   await gcUploads();
 }
 
@@ -560,9 +551,6 @@ async function waitRun(run: AdapterRun): Promise<"finished" | "error" | "cancell
   }
 }
 
-function delay(ms: number): Promise<"timeout"> {
-  return new Promise((resolve) => setTimeout(() => resolve("timeout"), ms));
-}
 
 async function abandonTimedOutRun(): Promise<"cancelled"> {
   /* The run ignored its cancel: dropping the session is the only way left to stop it. Its wait()
@@ -598,8 +586,34 @@ async function cancelAndWait(run: AdapterRun): Promise<"finished" | "error" | "c
   } catch {
     /* ignore */
   }
-  const raced = await Promise.race([waitRun(run), delay(runCancelTimeoutMs)]);
+  /* Cleared once the run answers: every cancel used to leave a 15s timer behind. */
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), runCancelTimeoutMs);
+  });
+  let raced: Awaited<ReturnType<typeof waitRun>> | "timeout";
+  try {
+    raced = await Promise.race([waitRun(run), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
   return raced === "timeout" ? abandonTimedOutRun() : raced;
+}
+
+/** Nothing is running or about to: call under the queue lock. */
+function markIdleUnlocked(): void {
+  processing = false;
+  runtime.busy = false;
+  currentJobId = null;
+  runStartedAt = undefined;
+}
+
+/** The live agent is gone: the next send creates (or resumes) one and saves its id. */
+async function forgetAgent(): Promise<void> {
+  runtime.agentId = null;
+  runtime.fingerprint = null;
+  runtime.identityAgent = null;
+  await saveState({ agentId: null });
 }
 
 async function processQueue(): Promise<void> {
@@ -676,10 +690,7 @@ async function processQueue(): Promise<void> {
       const more = await withQueueLock(async () => {
         if (pendingIdentityReset) return true;
         if (queue.some((j) => j.generation === identityGeneration)) return true;
-        processing = false;
-        runtime.busy = false;
-        currentJobId = null;
-        runStartedAt = undefined;
+        markIdleUnlocked();
         return false;
       });
       if (!more) {
@@ -690,12 +701,7 @@ async function processQueue(): Promise<void> {
       }
     }
   } catch (err) {
-    await withQueueLock(async () => {
-      processing = false;
-      runtime.busy = false;
-      currentJobId = null;
-      runStartedAt = undefined;
-    });
+    await withQueueLock(async () => markIdleUnlocked());
     log("error", "processQueue crashed", { error: String(err) });
     /* Outside any run (those end in runOnce's own catch): tell the screens, keep it out of the thread. */
     hub.broadcast({
@@ -1059,7 +1065,7 @@ export async function applyConfigPatch(patch: ConfigPatch): Promise<{ restart: b
 
 async function applyConfigPatchUnlocked(
   patch: ConfigPatch,
-  opts?: { identity?: "auto" | "preserve"; replaceAgentOptions?: boolean },
+  opts?: { identity?: "auto" | "preserve"; replaceAgentOptions?: boolean; switching?: boolean },
 ): Promise<{ restart: boolean }> {
   await assertPasswordChangeAllowed(patch);
   const before = await loadConfig();
@@ -1093,8 +1099,11 @@ async function applyConfigPatchUnlocked(
     }
   }
   await broadcastConfig(restart);
-  await broadcastSession();
-  await broadcastThreads();
+  /* A thread switch sends these itself once the new thread is live; sent here they named the old one. */
+  if (!opts?.switching) {
+    await broadcastSession();
+    await broadcastThreads();
+  }
   return { restart };
 }
 
@@ -1156,10 +1165,7 @@ async function startNewLiveThreadUnlocked(opts?: { fresh?: boolean }): Promise<v
     await disposeSession();
     runtime.fingerprint = null;
     await startNewThread(previous, opts);
-    runtime.agentId = null;
-    runtime.fingerprint = null;
-    runtime.identityAgent = null;
-    await saveState({ agentId: null });
+    await forgetAgent();
     await broadcastTranscriptSnapshot();
     await broadcastConfig();
     await broadcastSession();
@@ -1206,7 +1212,7 @@ async function switchLiveThreadUnlocked(id: string): Promise<void> {
     await archiveLiveThread(runtime.agentId);
     await disposeSession();
     runtime.fingerprint = null;
-    await applyConfigPatchUnlocked({ agent: loaded.agent }, { identity: "preserve", replaceAgentOptions: true });
+    await applyConfigPatchUnlocked({ agent: loaded.agent }, { identity: "preserve", replaceAgentOptions: true, switching: true });
     await activateThread(id, loaded.meta.agentId);
     runtime.agentId = loaded.meta.agentId;
     await broadcastTranscriptSnapshot();
@@ -1314,6 +1320,8 @@ export async function initRuntime(): Promise<void> {
         const opts = await createOpts();
         const canResume =
           adapter.capabilities.resume || (adapter.shouldResume ? await adapter.shouldResume(agentId, opts) : false);
+        /* Stopped while that was asked: opening a session now would outlive shutdownAdapters(). */
+        if (shuttingDown) return;
         if (canResume) await ensureSessionShared(undefined, { startup: true });
         /* Stopped while the resume was still out: nothing else will close what it opened. */
         if (shuttingDown) await disposeSession();

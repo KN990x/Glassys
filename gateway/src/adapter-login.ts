@@ -90,7 +90,9 @@ export async function startLoginJob(
   const doneSlot = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
-  job = { adapterId, status: "starting", abort, done: doneSlot };
+  /* This call's job: `job` itself can be replaced by another adapter's login while this one waits. */
+  const mine: Job = { adapterId, status: "starting", abort, done: doneSlot };
+  job = mine;
 
   const done = login({
     onLoginUrl: (url) => {
@@ -128,19 +130,22 @@ export async function startLoginJob(
     | { kind: "timeout" }
     | { kind: "aborted" };
 
+  /* Ends the URL wait once the race is decided, so its timer does not outlive the request. */
+  const raceOver = new AbortController();
   const outcome: Outcome = await Promise.race([
     urlPromise.then((url) => ({ kind: "url" as const, url })),
     done.then(
       () => ({ kind: "done" as const }),
       (err: unknown) => ({ kind: "error" as const, err }),
     ),
-    sleep(urlWaitMs, abort.signal).then((ended) =>
+    sleep(urlWaitMs, AbortSignal.any([abort.signal, raceOver.signal])).then((ended) =>
       ended === "aborted" ? { kind: "aborted" as const } : { kind: "timeout" as const },
     ),
   ]);
+  raceOver.abort();
 
   if (outcome.kind === "url") return { url: outcome.url };
-  if (outcome.kind === "done") return job.url ? { url: job.url } : {};
+  if (outcome.kind === "done") return mine.url ? { url: mine.url } : {};
   if (outcome.kind === "error") {
     throw outcome.err instanceof Error ? outcome.err : new Error(String(outcome.err));
   }
