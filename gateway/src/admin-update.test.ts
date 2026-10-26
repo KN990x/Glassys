@@ -16,6 +16,7 @@ import {
   setUpgradeSpawnForTests,
   stalledUpgradeReason,
   startUpgrade,
+  upgradeEnv,
 } from "./admin-update.js";
 
 describe("admin update", () => {
@@ -126,5 +127,12 @@ describe("admin update", () => {
     const status = await readUpgradeStatus();
     expect(status.phase).toBe("idle");
     expect(status.pid).toBeUndefined();
+  });
+});
+
+describe("upgradeEnv", () => {
+  it("keeps the gateway's environment but not the provider keys", () => {
+    const env = upgradeEnv({ PATH: "/usr/bin", HOME: "/home/ops", ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o", CURSOR_API_KEY: "c" });
+    expect(env).toEqual({ PATH: "/usr/bin", HOME: "/home/ops" });
   });
 });

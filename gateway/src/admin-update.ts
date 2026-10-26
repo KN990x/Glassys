@@ -17,9 +17,20 @@ import { GATEWAY_VERSION, repoRoot, runningBuild } from "./build-info.js";
 import { paths, log } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { SAFE_GIT_ARGS, safeGitEnv } from "./host-git.js";
+import { listAdapters } from "./adapters.js";
 
 const SERVICE_LABEL = "dev.kn990x.glassys";
 const SYSTEMD_UNIT = "glassys.service";
+
+/**
+ * The upgrade's environment: the gateway's, minus the provider keys. `pnpm install` runs every
+ * dependency's lifecycle scripts, and none of them needs an Anthropic or OpenAI key. The session
+ * secrets are already sealed out of process.env at startup.
+ */
+export function upgradeEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const keys = new Set(listAdapters().flatMap((a) => a.capabilities.auth.envNames));
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !keys.has(name)));
+}
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -271,7 +282,7 @@ async function startUpgradeUnlocked(): Promise<void> {
         cwd: repoRoot(),
         detached: true,
         stdio: ["ignore", out, out],
-        env: { ...process.env, GLASSYS_UPGRADE_STRICT: "1", GLASSYS_UPGRADE_STARTED_AT: startedAt },
+        env: { ...upgradeEnv(), GLASSYS_UPGRADE_STRICT: "1", GLASSYS_UPGRADE_STARTED_AT: startedAt },
       });
       const fail = (err: Error) => {
         try {
