@@ -8,7 +8,6 @@ import type {
   SettingSource,
 } from "@glassys/protocol";
 import { adapterSelectable } from "@glassys/protocol";
-import { api } from "../../api";
 import { adapterDescription, useT } from "../../i18n";
 import { ModelPicker } from "../../components/ModelPicker";
 import { CatalogFallbackNotice } from "../../components/CatalogFallback";
@@ -26,15 +25,14 @@ export function AgentTab({
   draft,
   setDraft,
   adapters,
-  setAdapters,
   adaptersError,
-  setAdaptersError,
+  onRetryAdapters,
   currentAdapter,
   models,
   modelSource,
   modelError,
   auth,
-  setAuth,
+  onSignedIn,
   discover,
   apiKey,
   setApiKey,
@@ -42,22 +40,20 @@ export function AgentTab({
   setClearKey,
   keyConfigured,
   keyFromEnv,
-  loadModels,
   pickAdapter,
   toggleSource,
 }: {
   draft: RedactedConfig;
   setDraft: (next: RedactedConfig) => void;
   adapters: AdapterPublicInfo[];
-  setAdapters: (next: AdapterPublicInfo[]) => void;
   adaptersError: string;
-  setAdaptersError: (value: string) => void;
+  onRetryAdapters: () => void;
   currentAdapter?: AdapterPublicInfo;
   models: ModelCatalogItem[];
   modelSource: ModelListSource;
   modelError: string;
   auth: { loggedIn: boolean; email?: string; apiKeyConfigured: boolean } | null;
-  setAuth: (next: { loggedIn: boolean; email?: string; apiKeyConfigured: boolean } | null) => void;
+  onSignedIn: () => Promise<void>;
   discover: AdapterDiscoverItem[];
   apiKey: string;
   setApiKey: (value: string) => void;
@@ -65,7 +61,6 @@ export function AgentTab({
   setClearKey: (value: boolean) => void;
   keyConfigured: boolean;
   keyFromEnv: boolean;
-  loadModels: (adapterId: string) => Promise<ModelCatalogItem[]>;
   pickAdapter: (id: string) => void;
   toggleSource: (source: SettingSource, on: boolean) => void;
 }) {
@@ -113,16 +108,7 @@ export function AgentTab({
             <button
               type="button"
               className="ghost"
-              onClick={() => {
-                setAdaptersError("");
-                api
-                  .adapters()
-                  .then((r) => {
-                    setAdapters(r.adapters);
-                    setAdaptersError(r.adapters.length ? "" : t("wizard.adapters.empty"));
-                  })
-                  .catch(() => setAdaptersError(t("wizard.adapters.failed")));
-              }}
+              onClick={onRetryAdapters}
             >
               {t("wizard.adapters.retry")}
             </button>
@@ -324,10 +310,7 @@ export function AgentTab({
             <SettingRow label={t("wizard.cred.login")} hint={t("wizard.cred.loginHint")}>
               <SdkLoginControls
                 adapterId={draft.agent.adapter}
-                onSignedIn={async () => {
-                  setAuth(await api.adapterStatus(draft.agent.adapter));
-                  await loadModels(draft.agent.adapter);
-                }}
+                onSignedIn={onSignedIn}
               />
             </SettingRow>
           )}

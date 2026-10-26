@@ -1,5 +1,5 @@
 import { confirmAndRestart } from "../restart";
-import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -267,7 +267,8 @@ export function Settings({
    */
   const tRef = useRef(t);
   tRef.current = t;
-  useEffect(() => {
+  const reloadAdapters = useCallback(() => {
+    setAdaptersError("");
     api
       .adapters()
       .then((r) => {
@@ -279,6 +280,13 @@ export function Settings({
         setAdaptersError(tRef.current("wizard.adapters.failed"));
       });
   }, []);
+  useEffect(reloadAdapters, [reloadAdapters]);
+
+  /* After an SDK sign-in: the account it shows, and the catalog that sign-in may have opened. */
+  async function onSignedIn() {
+    setAuth(await api.adapterStatus(draft.agent.adapter).catch(() => null));
+    await loadModels(draft.agent.adapter);
+  }
 
   useEffect(() => {
     api
@@ -372,12 +380,6 @@ export function Settings({
       setError(t("wizard.acp.commandRequired"));
       return;
     }
-    if (
-      archivesLiveThread(config.agent, draft.agent) &&
-      !(await confirm({ title: t("confirm.titleArchive"), message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" }))
-    ) {
-      return;
-    }
     if (password && password.length < 8) {
       setError(t("setup.short"));
       return;
@@ -388,6 +390,13 @@ export function Settings({
     }
     if (password && password.length > 256) {
       setError(t("setup.long"));
+      return;
+    }
+    /* Last: a confirmed archive must not then fail on a check that needed no answer. */
+    if (
+      archivesLiveThread(config.agent, draft.agent) &&
+      !(await confirm({ title: t("confirm.titleArchive"), message: t("settings.archiveConfirm"), confirmLabel: t("confirm.archive"), kind: "archive" }))
+    ) {
       return;
     }
     setSubmitting(true);
@@ -600,15 +609,14 @@ export function Settings({
                   draft={draft}
                   setDraft={setDraft}
                   adapters={adapters}
-                  setAdapters={setAdapters}
                   adaptersError={adaptersError}
-                  setAdaptersError={setAdaptersError}
+                  onRetryAdapters={reloadAdapters}
                   currentAdapter={currentAdapter}
                   models={models}
                   modelSource={modelSource}
                   modelError={modelError}
                   auth={auth}
-                  setAuth={setAuth}
+                  onSignedIn={onSignedIn}
                   discover={discover}
                   apiKey={apiKey}
                   setApiKey={setApiKey}
@@ -616,7 +624,6 @@ export function Settings({
                   setClearKey={setClearKey}
                   keyConfigured={Boolean(keyConfigured)}
                   keyFromEnv={keyFromEnv}
-                  loadModels={loadModels}
                   pickAdapter={pickAdapter}
                   toggleSource={toggleSource}
                 />
