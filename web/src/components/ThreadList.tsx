@@ -205,6 +205,17 @@ export const ThreadList = memo(function ThreadList({
                             value={draftTitle}
                             aria-label={t("threads.rename")}
                             onChange={(e) => setDraftTitle(e.target.value)}
+                            /* As the topbar's rename: leaving the field or Escape cancels; focus
+                               moving to Save is not leaving it. */
+                            onBlur={(e) => {
+                              if (!e.currentTarget.form?.contains(e.relatedTarget as Node | null)) setEditing(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Escape") return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setEditing(null);
+                            }}
                             autoFocus
                           />
                           <button type="submit" className="ghost tiny">

@@ -38,6 +38,20 @@ describe("handleChatKey", () => {
     expect(c.toggleActivity).toHaveBeenCalledWith(true);
   });
 
+  it("leaves the panel shortcuts alone behind Settings or the thread sheet, but not the palette", () => {
+    const c = ctx({ overlayOpen: true });
+    handleChatKey(key("O", { metaKey: true, shiftKey: true }), c);
+    handleChatKey(key("i", { ctrlKey: true }), c);
+    handleChatKey(key("b", { ctrlKey: true }), c);
+    handleChatKey(key("f", { ctrlKey: true }), c);
+    expect(c.newThread).not.toHaveBeenCalled();
+    expect(c.toggleActivity).not.toHaveBeenCalled();
+    expect(c.collapseRail).not.toHaveBeenCalled();
+    expect(c.openSearch).not.toHaveBeenCalled();
+    handleChatKey(key("k", { ctrlKey: true }), c);
+    expect(c.togglePalette).toHaveBeenCalled();
+  });
+
   it("uses Escape to close what is open before it cancels a run", () => {
     const c = ctx({ paletteOpen: true });
     handleChatKey(key("Escape"), c);

@@ -8,7 +8,7 @@ export type ChatShortcutContext = {
   busy: boolean;
   /** The view on screen; Escape only cancels from the chat. */
   view: string;
-  /** Settings or the thread sheet is open: Escape belongs to them. */
+  /** Settings or the thread sheet is open: Escape and the panel shortcuts belong to them. */
   overlayOpen: boolean;
   canCancel: boolean;
   composer: HTMLElement | null;
@@ -35,6 +35,9 @@ function inOtherField(target: EventTarget | null, composer: HTMLElement | null):
 export function handleChatKey(e: KeyboardEvent, c: ChatShortcutContext): void {
   const mod = e.metaKey || e.ctrlKey;
   const key = e.key.toLowerCase();
+  /* Behind Settings or the thread sheet, the chat's panels and a new thread are not what the keys
+     are for: ⌘⇧O used to start a thread under an open Settings. The palette may still stack on top. */
+  if (c.overlayOpen && mod && key !== "k") return;
   if (mod && key === "i") {
     e.preventDefault();
     c.toggleActivity(!c.activityOpen);
