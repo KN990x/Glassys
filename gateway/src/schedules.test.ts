@@ -285,4 +285,27 @@ describe("schedules", () => {
     await tickSchedulesForTests();
     expect((await listSchedules())[0]?.lastError).toBe("Queue is full");
   });
+
+  it("fires a re-enabled one-shot again at the same time", async () => {
+    const enqueued: string[] = [];
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+    });
+    const { patchSchedule } = await import("./schedules.js");
+    const job = await createSchedule({ text: "once", cwd: dir, at: new Date(Date.now() - 1000).toISOString() });
+    await tickSchedulesForTests();
+    await tickSchedulesForTests();
+    expect(enqueued).toEqual(["once"]);
+    await patchSchedule(job.id, { enabled: true });
+    await tickSchedulesForTests();
+    expect(enqueued).toEqual(["once", "once"]);
+  });
 });

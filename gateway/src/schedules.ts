@@ -33,6 +33,11 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let firing = false;
 let idlePollMs = 500;
 let idleWaitMaxMs = 180_000;
+/**
+ * The last slot each job fired for. An arm computed just before a tick fired that slot can land
+ * after it and arm the same slot again; this keeps a slot to one fire.
+ */
+const firedSlots = new Map<string, number>();
 
 export function setScheduleIdlePollMsForTests(ms: number): void {
   idlePollMs = ms;
@@ -180,6 +185,8 @@ export async function patchSchedule(id: string, raw: unknown): Promise<ScheduleJ
     await writeJobs(jobs);
     return next;
   });
+  /* An edit (re-enabling a one-shot, say) may mean the same slot again, on purpose. */
+  firedSlots.delete(id);
   armTimer();
   return updated;
 }
@@ -339,8 +346,9 @@ async function tickSchedules(): Promise<void> {
   firing = true;
   try {
     const due = await dueNow();
-    if (due) {
+    if (due && firedSlots.get(due.job.id) !== due.at) {
       armed = null;
+      firedSlots.set(due.job.id, due.at);
       /*
        * Never fire ahead of the slot: re-arming from a moment still before it finds that same cron
        * slot again, and the message went out twice.
@@ -365,6 +373,7 @@ export function stopSchedules(): void {
   /* An arm still reading the jobs must not set a timer after the stop. */
   armGeneration++;
   armed = null;
+  firedSlots.clear();
 }
 
 export async function tickSchedulesForTests(): Promise<void> {
