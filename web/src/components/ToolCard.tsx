@@ -3,18 +3,16 @@ import { useCopy } from "../useCopy";
 import { useT } from "../i18n";
 import { workspacePath } from "../format";
 import type { ToolBlock } from "../transcript";
+import { ToolStateIcon, toolStateLabel } from "./toolState";
 import {
   IconAlert,
   IconCheck,
   IconChevronRight,
   IconCopy,
-  IconError,
   IconFile,
   IconFileEdit,
   IconFolder,
   IconSearch,
-  IconSpinner,
-  IconStop,
   IconTerminal,
 } from "./Icon";
 
@@ -31,25 +29,17 @@ const KIND_GLYPH: Record<string, ReactNode> = {
 
 /** A step that worked is not news. Only trouble gets a colour and a word. */
 function ToolState({ status, label }: { status: string; label: string }) {
-  if (status === "running") {
+  if (status === "running" || status === "done") {
     return (
-      <span className="tool-state running" title={label}>
-        <IconSpinner />
-        <span className="visually-hidden">{label}</span>
-      </span>
-    );
-  }
-  if (status === "done") {
-    return (
-      <span className="tool-state done" title={label}>
-        <IconCheck />
+      <span className={`tool-state ${status}`} title={label}>
+        <ToolStateIcon status={status} />
         <span className="visually-hidden">{label}</span>
       </span>
     );
   }
   return (
     <span className={`tool-state ${status}`}>
-      {status === "denied" ? <IconAlert /> : status === "stopped" ? <IconStop /> : <IconError />}
+      <ToolStateIcon status={status} />
       {label}
     </span>
   );
@@ -111,6 +101,7 @@ export function ToolGroup({
   /* A group whose only failures are refusals says so, as its rows do. */
   const errored = blocks.some((b) => b.status === "error");
   const stopped = blocks.some((b) => b.status === "stopped");
+  const groupStatus = running ? "running" : errored ? "error" : failed ? "denied" : stopped ? "stopped" : "done";
   /* Open, a group whose changes all sit in one row would print that row's
      totals twice; the head keeps them when folded or when they add up. */
   const statRows = blocks.filter((b) => b.stats).length;
@@ -145,12 +136,7 @@ export function ToolGroup({
               <span className="add">+{add}</span> <span className="del">−{del}</span>
             </span>
           ) : null}
-          <ToolState
-            status={running ? "running" : errored ? "error" : failed ? "denied" : stopped ? "stopped" : "done"}
-            label={
-              running ? t("tool.running") : errored ? t("tool.error") : failed ? t("tool.denied") : stopped ? t("tool.stopped") : t("tool.done")
-            }
-          />
+          <ToolState status={groupStatus} label={toolStateLabel(groupStatus, t)} />
         </span>
       </div>
       {open && (
@@ -200,16 +186,7 @@ export function ToolCard({
     await copyText(block.command);
   }
 
-  const statusLabel =
-    block.status === "running"
-      ? t("tool.running")
-      : block.status === "denied"
-        ? t("tool.denied")
-        : block.status === "error"
-          ? t("tool.error")
-          : block.status === "stopped"
-            ? t("tool.stopped")
-            : t("tool.done");
+  const statusLabel = toolStateLabel(block.status, t);
 
   return (
     <article className={`tool ${block.status}`} id={`tool-${block.id}`}>

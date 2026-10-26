@@ -6,7 +6,8 @@ import { formatTokens, truncateMiddle, workspacePath } from "../format";
 import { SegmentedControl } from "./SegmentedControl";
 import { Disclosure, ListRow } from "./Primitives";
 import { Hunk, REVEAL_EVENT } from "./ToolCard";
-import { IconAlert, IconCheck, IconClose, IconError, IconFileEdit, IconFile, IconSpinner, IconStop, IconTerminal } from "./Icon";
+import { IconClose, IconFileEdit, IconFile, IconTerminal } from "./Icon";
+import { ToolStateIcon } from "./toolState";
 
 type ActivityTab = "commands" | "files";
 
@@ -38,17 +39,7 @@ function revealBlock(id: string): void {
 function StateGlyph({ status }: { status: string }) {
   return (
     <span className={`activity-state ${status}`}>
-      {status === "running" ? (
-        <IconSpinner />
-      ) : status === "done" ? (
-        <IconCheck />
-      ) : status === "denied" ? (
-        <IconAlert />
-      ) : status === "stopped" ? (
-        <IconStop />
-      ) : (
-        <IconError />
-      )}
+      <ToolStateIcon status={status} />
     </span>
   );
 }
