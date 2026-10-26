@@ -2207,7 +2207,7 @@ mark {
   min-width: 0;
 }
 .composer-meta > * { flex: none; }
-.composer-meta > .model-chip, .composer-meta > .pop-anchor { flex: 0 1 auto; min-width: 0; }
+.composer-meta > .model-chip, .composer-meta > .pop-anchor { flex: 0 1 auto; min-width: var(--control-h); }
 /* Chips in the bar are borderless; hover gives them a surface. */
 .composer-meta .chip-btn {
   min-height: var(--control-h);
@@ -2231,6 +2231,10 @@ mark {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A narrow bar takes the room from the hint first: the chips shrank to nothing before it, and
+     the hint was painted over the permission glyph. */
+  flex: 0 100 auto;
+  min-width: 0;
 }
 
 /* Send and stop are one control in two states: an ink square on the card's
@@ -2299,7 +2303,18 @@ mark {
   white-space: nowrap;
 }
 
-.queue-list { display: grid; gap: var(--s-05); list-style: none; margin: 0; padding: 0; }
+/* Up to 32 messages can wait: past a few rows the list scrolls instead of pushing the composer
+   up over the whole transcript (on a phone it filled the screen). */
+.queue-list {
+  display: grid;
+  gap: var(--s-05);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 30dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .queue-list li {
   display: flex;
   justify-content: space-between;
