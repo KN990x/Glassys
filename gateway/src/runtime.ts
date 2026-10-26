@@ -204,9 +204,10 @@ function reportPersistFailure(err: unknown): void {
   persistFailing = true;
   /* Not persisted itself: the transcript is what cannot be written. */
   hub.broadcast({
-    type: "run.error",
+    type: "notice",
+    level: "error",
     message: `Glassys could not save this transcript: ${err instanceof Error ? err.message : String(err)}`,
-    phase: "run",
+    about: "transcript",
   });
 }
 

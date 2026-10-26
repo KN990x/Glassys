@@ -496,6 +496,44 @@ describe("Chat composer and layout", () => {
     }
   });
 
+  it("hands a refused message back without ending the run that is still going", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "session", profileId: "p", agentId: "a", busy: true, runStartedAt: Date.now() });
+      socket.emit({
+        type: "transcript.snapshot",
+        lastSeq: 3,
+        events: [
+          { type: "user.message", text: "check disk", id: "m1", seq: 1 },
+          { type: "run.start", messageId: "m1", seq: 2 },
+          { type: "tool.start", callId: "c1", kind: "shell", title: "df -h", command: "df -h", seq: 3 },
+        ],
+      });
+    });
+    expect(host.querySelector(".tool-state.running")).toBeTruthy();
+    await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "and memory");
+    await act(async () => {
+      host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      socket.emit({ type: "notice", level: "error", message: "Queue is full", about: "message" });
+    });
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("and memory");
+    expect(host.textContent).toMatch(/queue is full/i);
+    expect(host.querySelector(".tool-state.running")).toBeTruthy();
+  });
+
+  it("shows other notices as a dismissable alert", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+      socket.emit({ type: "notice", level: "error", message: "Glassys could not save this transcript: EACCES", about: "transcript" });
+    });
+    expect(host.querySelector(".alert-stack")?.textContent).toMatch(/could not save this transcript/);
+  });
+
   it("offers saved operations on the empty transcript and inserts without sending", async () => {
     await renderChat();
     await act(async () => {

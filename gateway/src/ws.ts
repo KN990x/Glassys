@@ -7,6 +7,7 @@ import {
   isClientMessage,
   type ClientMessage,
   type ConfigPatch,
+  type NoticeSubject,
 } from "@glassys/protocol";
 import { requestSessionToken, verifyEdge, verifySession } from "./auth.js";
 import { revalidateSocket, revalidateSockets, trackSocketSession, trackedSocketCount, untrackSocket } from "./sessions.js";
@@ -33,6 +34,14 @@ import {
 } from "./runtime.js";
 
 const MAX_WS_PAYLOAD = 1_000_000;
+/** A failed client request becomes a notice about what it asked for, never a `run.error`. */
+function noticeSubject(type: ClientMessage["type"]): NoticeSubject {
+  if (type === "user.message") return "message";
+  if (type === "run.cancel" || type === "queue.cancel") return "cancel";
+  if (type === "thread.new" || type === "thread.switch") return "thread";
+  return "request";
+}
+
 export const WS_HANDSHAKE_TIMEOUT_MS = 15_000;
 /** One operator: a few tabs and devices. Far more than this is a leak or a flood. */
 export const MAX_WS_CONNECTIONS = 32;
@@ -163,11 +172,11 @@ export function attachWs(
           parsed = JSON.parse(String(raw));
         } catch {
           log("warn", "invalid ws json");
-          if (state.auth) hub.send(ws, { type: "config.error", message: "invalid json" });
+          if (state.auth) hub.send(ws, { type: "notice", level: "error", message: "invalid json", about: "request" });
           return;
         }
         if (!isClientMessage(parsed)) {
-          if (state.auth) hub.send(ws, { type: "config.error", message: "unknown message" });
+          if (state.auth) hub.send(ws, { type: "notice", level: "error", message: "unknown message", about: "request" });
           return;
         }
         try {
@@ -176,12 +185,10 @@ export function attachWs(
           log("error", "ws handler", { error: String(err) });
           if (!state.auth) return;
           const message = err instanceof HttpError ? err.message : "internal error";
-          if (parsed.type === "run.cancel") {
-            hub.send(ws, { type: "run.error", message, phase: "run" });
-          } else if (parsed.type === "user.message") {
-            hub.send(ws, { type: "run.error", message, phase: "startup" });
-          } else {
+          if (parsed.type === "config.set" || parsed.type === "config.get") {
             hub.send(ws, { type: "config.error", message });
+          } else {
+            hub.send(ws, { type: "notice", level: "error", message, about: noticeSubject(parsed.type) });
           }
         }
       })
@@ -285,7 +292,7 @@ async function handleClient(
   switch (msg.type) {
     case "user.message":
       await enqueueMessage(msg.text, msg.attachments, msg.id, "user", (message) =>
-        hub.send(ws, { type: "run.error", message, phase: "startup" }),
+        hub.send(ws, { type: "notice", level: "error", message, about: "message" }),
       );
       break;
     case "run.cancel":
@@ -298,20 +305,14 @@ async function handleClient(
       try {
         await startNewLiveThread();
       } catch (err) {
-        hub.send(ws, {
-          type: "config.error",
-          message: err instanceof Error ? err.message : String(err),
-        });
+        hub.send(ws, { type: "notice", level: "error", message: err instanceof Error ? err.message : String(err), about: "thread" });
       }
       break;
     case "thread.switch":
       try {
         await switchLiveThread(msg.id);
       } catch (err) {
-        hub.send(ws, {
-          type: "config.error",
-          message: err instanceof Error ? err.message : String(err),
-        });
+        hub.send(ws, { type: "notice", level: "error", message: err instanceof Error ? err.message : String(err), about: "thread" });
       }
       break;
     case "config.get":

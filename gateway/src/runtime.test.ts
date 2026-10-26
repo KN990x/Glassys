@@ -682,7 +682,8 @@ describe("runtime queue", () => {
       await enqueueMessage("two");
       await waitUntil(() => sent.some((m) => m.type === "run.done"));
       await drainEmit();
-      const failures = sent.filter((m) => m.type === "run.error" && /could not save/.test(m.message ?? ""));
+      const failures = sent.filter((m) => m.type === "notice" && /could not save/.test(m.message ?? ""));
+      expect(sent.some((m) => m.type === "run.error")).toBe(false);
       expect(failures).toHaveLength(1);
       expect(sent.some((m) => m.type === "text.delta" && m.text === "echo:two")).toBe(true);
     } finally {

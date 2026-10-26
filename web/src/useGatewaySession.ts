@@ -24,8 +24,10 @@ export function useGatewaySession(opts: {
   onLogout: () => void;
   /** The gateway echoed a message this screen sent (or took it back). */
   onEcho?: (id: string) => void;
-  /** A refusal addressed to this socket alone: queue full, gateway busy, onboarding. */
+  /** A message this socket sent was refused: queue full, gateway busy, onboarding. */
   onRefusal?: (message: string) => void;
+  /** Any other notice: a failed cancel or thread change, transcript writes failing. */
+  onNotice?: (message: string, level: "error" | "warn") => void;
   /** A config.error for this socket. */
   onConfigError?: (message: string) => void;
 }) {
@@ -84,6 +86,12 @@ export function useGatewaySession(opts: {
           o.onConfigError?.(msg.message);
           return;
         }
+        /* Notices end no run: a refusal during a run must not close its open cards. */
+        if (msg.type === "notice") {
+          if (msg.about === "message") o.onRefusal?.(msg.message);
+          else o.onNotice?.(msg.message, msg.level);
+          return;
+        }
         if (msg.type === "threads.snapshot") {
           setThreads(msg.threads);
           setCurrentThreadId(msg.currentId);
@@ -120,8 +128,6 @@ export function useGatewaySession(opts: {
         if (msg.type === "run.queued") setQueued(true);
         if (msg.type === "run.start") setQueued(false);
         if ((msg.type === "user.message" || msg.type === "user.retracted") && msg.id) o.onEcho?.(msg.id);
-        /* A refusal comes back to this socket alone, unnumbered. */
-        if (msg.type === "run.error" && msg.phase === "startup" && msg.seq === undefined) o.onRefusal?.(msg.message);
         if (isTranscriptEvent(msg)) {
           if (!snapshotReadyRef.current) return;
           if (typeof msg.seq === "number") {

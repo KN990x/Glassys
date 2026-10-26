@@ -106,8 +106,11 @@ export function Chat({
       }
     },
     onRefusal: (message) => {
-      if (unconfirmed.current) restoreRef.current(operatorError(message, tRef.current));
+      const text = operatorError(message, tRef.current);
+      if (unconfirmed.current) restoreRef.current(text);
+      else setSendError(text);
     },
+    onNotice: (message, level) => setNotice({ text: operatorError(message, tRef.current), level }),
     onConfigError: (message) => setConfigError(message ? operatorError(message, tRef.current) : ""),
   });
   const [threadOpen, setThreadOpen] = useState(false);
@@ -116,6 +119,7 @@ export function Chat({
   const fileRef = useRef<HTMLInputElement>(null);
   const [configError, setConfigError] = useState("");
   const [sendError, setSendError] = useState("");
+  const [notice, setNotice] = useState<{ text: string; level: "error" | "warn" } | null>(null);
   const [modelError, setModelError] = useState("");
   const [text, setText] = useState("");
   const [draftModel, setDraftModel] = useState<{ id: string; params: ModelParam[] } | null>(null);
@@ -925,6 +929,7 @@ export function Chat({
     alerts.push({ id: "restart-note", tone: "info", text: restartNote });
   }
   if (sendError) alerts.push({ id: "send", tone: "error", text: sendError, onDismiss: () => setSendError("") });
+  if (notice) alerts.push({ id: "notice", tone: notice.level, text: notice.text, onDismiss: () => setNotice(null) });
   if (attachError) alerts.push({ id: "attach", tone: "error", text: attachError, onDismiss: () => setAttachError("") });
   if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
 

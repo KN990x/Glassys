@@ -205,6 +205,28 @@ describe("websocket handshake", () => {
     ws.close();
   });
 
+  it("answers a refused message with a notice, never a run.error", async () => {
+    const ws = await openClient(url, origin);
+    const types: string[] = [];
+    ws.on("message", (raw) => types.push((JSON.parse(String(raw)) as { type: string }).type));
+    ws.send(JSON.stringify({ type: "hello", protocolVersion: PROTOCOL_VERSION }));
+    await waitMessage(ws, "hello.ok");
+    const snap = waitMessage(ws, "transcript.snapshot");
+    ws.send(JSON.stringify({ type: "auth", token }));
+    await snap;
+    const refused = waitMessage(ws, "notice");
+    const attachment = { id: "a", mime: "image/png", name: "a.png" };
+    ws.send(JSON.stringify({ type: "user.message", text: "hi", attachments: Array(5).fill(attachment) }));
+    const notice = await refused;
+    expect(notice).toMatchObject({ level: "error", message: "Too many attachments", about: "message" });
+    const unknown = waitMessage(ws, "notice");
+    ws.send(JSON.stringify({ type: "nonsense" }));
+    expect(await unknown).toMatchObject({ about: "request" });
+    expect(types).not.toContain("run.error");
+    expect(types).not.toContain("config.error");
+    ws.close();
+  });
+
   it("closes sockets that never finish hello/auth", async () => {
     await closeWs(wss);
     wss = attachWs(server, 25, 80);

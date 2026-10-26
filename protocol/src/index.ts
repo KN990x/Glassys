@@ -288,6 +288,12 @@ export interface ThreadSummary {
   usage?: ThreadUsage;
 }
 
+/**
+ * What a notice is about: `message` is a refused `user.message`, which the client hands back to
+ * the composer; `agent` is a non-fatal error the agent reported while its run goes on.
+ */
+export type NoticeSubject = "message" | "cancel" | "thread" | "transcript" | "request" | "agent";
+
 export type ClientMessage =
   | { type: "hello"; protocolVersion: number }
   | { type: "auth"; token: string }
@@ -374,6 +380,12 @@ export type ServerMessage =
   | { type: "threads.snapshot"; threads: ThreadSummary[]; currentId: string | null }
   | { type: "config"; config: RedactedConfig }
   | { type: "config.error"; message: string }
+  /**
+   * Something the operator should know that ends no run: a refused message ("Queue is full"), a
+   * failed cancel or thread change, transcript writes failing. Never persisted, never reduced into
+   * the transcript; `run.error` is only ever the end of a run.
+   */
+  | { type: "notice"; level: "error" | "warn"; message: string; about?: NoticeSubject }
   | { type: "transcript.snapshot"; events: TranscriptEvent[]; truncated?: boolean; lastSeq?: number }
   | TranscriptEvent;
 
