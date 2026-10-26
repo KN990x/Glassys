@@ -232,4 +232,20 @@ describe("isSensitiveFile", () => {
     expect(isSensitiveFile("/home/ops/.ssh/config", home)).toBe(false);
     expect(isSensitiveFile("/home/ops/.claude/settings.json", home)).toBe(false);
   });
+
+  it("refuses the common tools' logins, any SSH key whatever its name, and .env files but not their templates", async () => {
+    const { isSensitiveFile } = await import("./host-probe.js");
+    const home = "/home/ops";
+    for (const rel of [".aws/credentials", ".config/gh/hosts.yml", ".docker/config.json", ".kube/config", ".netrc", ".pgpass"]) {
+      expect(isSensitiveFile(`${home}/${rel}`, home), rel).toBe(true);
+    }
+    expect(isSensitiveFile("/home/ops/.ssh/deploy_key", home)).toBe(true);
+    expect(isSensitiveFile("/home/ops/.ssh/known_hosts", home)).toBe(false);
+    expect(isSensitiveFile("/home/ops/.ssh/authorized_keys", home)).toBe(false);
+    expect(isSensitiveFile("/srv/app/.env", home)).toBe(true);
+    expect(isSensitiveFile("/srv/app/.env.production", home)).toBe(true);
+    expect(isSensitiveFile("/srv/app/.env.example", home)).toBe(false);
+    expect(isSensitiveFile("/srv/app/environment.ts", home)).toBe(false);
+    expect(isSensitiveFile("/home/ops/.aws/config", home)).toBe(false);
+  });
 });

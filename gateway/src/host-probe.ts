@@ -362,8 +362,9 @@ function entryType(st: { isFile(): boolean; isDirectory(): boolean; isSymbolicLi
 }
 
 /**
- * Credential files the agents Glassys drives keep in the operator's home, plus SSH private keys.
- * Like the data dir, a stolen session must not be able to read them through a view.
+ * Credential files in the operator's home: the agents' own, and the common tools' a host
+ * administrator keeps (cloud, registry, git and database logins). Like the data dir, a stolen
+ * session must not be able to read them through a view; the agent, if allowed, still can.
  */
 const SENSITIVE_HOME_FILES = [
   ".cursor/sdk/auth.json",
@@ -371,16 +372,33 @@ const SENSITIVE_HOME_FILES = [
   ".codex/auth.json",
   ".local/share/opencode/auth.json",
   ".gemini/oauth_creds.json",
+  ".aws/credentials",
+  ".config/gh/hosts.yml",
+  ".config/rclone/rclone.conf",
+  ".docker/config.json",
+  ".git-credentials",
+  ".kube/config",
+  ".my.cnf",
+  ".netrc",
+  ".npmrc",
+  ".pgpass",
+  ".pypirc",
 ];
+
+/** What may be read in ~/.ssh: everything else there is a key, whatever its name. */
+const SSH_PUBLIC = new Set(["authorized_keys", "config", "known_hosts", "known_hosts.old"]);
+
+/** `.env`, `.env.production`…, but not the templates projects commit next to them. */
+function isEnvFile(name: string): boolean {
+  if (name !== ".env" && !name.startsWith(".env.")) return false;
+  return !/\.(example|sample|template|dist)$/.test(name);
+}
 
 export function isSensitiveFile(real: string, home = os.homedir()): boolean {
   if (SENSITIVE_HOME_FILES.some((rel) => real === join(home, rel))) return true;
-  const sshDir = join(home, ".ssh");
-  if (dirname(real) === sshDir) {
-    const name = basename(real);
-    return name.startsWith("id_") && !name.endsWith(".pub");
-  }
-  return false;
+  const name = basename(real);
+  if (dirname(real) === join(home, ".ssh")) return !name.endsWith(".pub") && !SSH_PUBLIC.has(name);
+  return isEnvFile(name);
 }
 
 let realHome: Promise<string> | null = null;
