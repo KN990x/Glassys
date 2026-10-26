@@ -13,7 +13,8 @@ import type {
 import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
 import { adapterDescription, isLocale, useT, type Locale } from "../i18n";
-import { ModelPicker, paramsForSelection } from "../components/ModelPicker";
+import { ModelPicker } from "../components/ModelPicker";
+import { paramsForSelection } from "../modelParams";
 import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
 import { WorkspacePicker } from "../components/WorkspacePicker";
@@ -25,6 +26,7 @@ import { SandboxModeSelect } from "../components/SandboxModeSelect";
 import { Switch } from "../components/Switch";
 import { GlassysMark, IconCheck } from "../components/Icon";
 import { ArgsInput } from "../components/ArgsInput";
+import { PermissionModeControl } from "../components/PermissionModeControl";
 
 type StepId = "adapter" | "workspace" | "phone" | "credential" | "model" | "rules" | "execution" | "acp";
 
@@ -632,17 +634,13 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                 />
               )}
               {caps?.toolConfirmation === "permission-mode" && (
-                <label>
-                  {t("wizard.exec.permissionMode")}
-                  <select
+                <div className="stack">
+                  <span>{t("wizard.exec.permissionMode")}</span>
+                  <PermissionModeControl
                     value={effectivePermissionMode(options)}
-                    onChange={(e) => setOptions(setPermissionMode(options, e.target.value))}
-                  >
-                    <option value="bypassPermissions">{t("wizard.exec.permission.bypass")}</option>
-                    <option value="acceptEdits">{t("wizard.exec.permission.acceptEdits")}</option>
-                    <option value="dontAsk">{t("wizard.exec.permission.dontAsk")}</option>
-                  </select>
-                </label>
+                    onChange={(next) => setOptions(setPermissionMode(options, next))}
+                  />
+                </div>
               )}
               {caps?.toolConfirmation === "auto-review-deny" && <Callout tone="warn">{t("wizard.exec.danger")}</Callout>}
               {caps?.toolConfirmation === "deny-writes" && <Callout>{t("wizard.exec.denyWrites")}</Callout>}

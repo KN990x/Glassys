@@ -7,10 +7,10 @@ import { SandboxModeSelect } from "./SandboxModeSelect";
 import { operatorError } from "../operatorError";
 import { useConfirm } from "./ConfirmDialog";
 import { PopAnchor, Popover } from "./Popover";
-import { SegmentedControl } from "./SegmentedControl";
 import { Switch } from "./Switch";
 import { Callout } from "./Primitives";
 import { IconShield, IconShieldAlert, IconShieldOff } from "./Icon";
+import { PermissionModeControl } from "./PermissionModeControl";
 
 /** How much this host is exposed right now, in one glyph. */
 export function riskTone(input: { autoRun: boolean; sandbox: boolean; sandboxSupported: boolean }): "ok" | "warn" | "danger" {
@@ -131,17 +131,10 @@ export function PermissionChip({
             />
           )}
           {caps.toolConfirmation === "permission-mode" && (
-            <SegmentedControl
-              size="sm"
+            <PermissionModeControl
               commit="confirm"
-              label={t("wizard.exec.permissionMode")}
-              value={mode === "dontAsk" ? "dontAsk" : mode === "acceptEdits" ? "acceptEdits" : "bypassPermissions"}
+              value={mode}
               onChange={(next) => void patch(setPermissionMode(config.agent.options, next))}
-              options={[
-                { value: "bypassPermissions", label: t("wizard.exec.permission.bypass") },
-                { value: "acceptEdits", label: t("wizard.exec.permission.acceptEdits") },
-                { value: "dontAsk", label: t("wizard.exec.permission.dontAsk") },
-              ]}
             />
           )}
         </div>

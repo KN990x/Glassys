@@ -17,10 +17,10 @@ import { WorkspacePicker } from "../../components/WorkspacePicker";
 import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } from "../../components/Primitives";
 import { Switch } from "../../components/Switch";
 import { SandboxModeSelect } from "../../components/SandboxModeSelect";
-import { SegmentedControl } from "../../components/SegmentedControl";
 import { takesApiKey, cwdExposesDataDir, effectivePermissionMode, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
 import { ArgsInput } from "../../components/ArgsInput";
+import { PermissionModeControl } from "../../components/PermissionModeControl";
 
 export function AgentTab({
   draft,
@@ -210,18 +210,11 @@ export function AgentTab({
         )}
         {caps?.toolConfirmation === "permission-mode" && (
           <SettingRow label={t("wizard.exec.permissionMode")} hint={t("wizard.exec.permission.hint")}>
-            <SegmentedControl
-              size="sm"
-              label={t("wizard.exec.permissionMode")}
+            <PermissionModeControl
               value={effectivePermissionMode(draft.agent.options)}
               onChange={(next) =>
                 setDraft({ ...draft, agent: { ...draft.agent, options: setPermissionMode(draft.agent.options, next) } })
               }
-              options={[
-                { value: "bypassPermissions", label: t("wizard.exec.permission.bypass") },
-                { value: "acceptEdits", label: t("wizard.exec.permission.acceptEdits") },
-                { value: "dontAsk", label: t("wizard.exec.permission.dontAsk") },
-              ]}
             />
           </SettingRow>
         )}
