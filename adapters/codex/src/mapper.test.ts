@@ -89,12 +89,12 @@ describe("mapCodexJsonl", () => {
     ).toEqual([{ type: "run.usage", inputTokens: 40, outputTokens: 9 }]);
   });
 
-  it("maps failures", () => {
+  it("ends the run on turn.failed but not on a non-fatal error item", () => {
     expect(mapCodexJsonl({ type: "turn.failed", error: { message: "quota" } })).toEqual([
       { type: "run.error", message: "quota", phase: "run" },
     ]);
     expect(mapCodexJsonl({ type: "item.completed", item: { id: "e", type: "error", message: "bad" } })).toEqual([
-      { type: "run.error", message: "bad", phase: "run" },
+      { type: "notice", level: "warn", message: "bad", about: "agent" },
     ]);
   });
 });

@@ -101,8 +101,10 @@ export function mapCodexJsonl(line: unknown, state: CodexMapState = codexMapStat
     const id = str(item.id) ?? "item";
     if (item.type === "agent_message" && str(item.text)) return textDelta(state, id, String(item.text), "text");
     if (item.type === "reasoning" && str(item.text)) return textDelta(state, `${id}:think`, String(item.text), "thinking");
+    /* The SDK's ErrorItem is "a non-fatal error surfaced as an item": the turn goes on. Only
+       turn.failed and a top-level error end it. */
     if (item.type === "error" && rec.type === "item.completed") {
-      return [{ type: "run.error", message: str(item.message) ?? "Codex error", phase: "run" }];
+      return [{ type: "notice", level: "warn", message: str(item.message) ?? "Codex error", about: "agent" }];
     }
     const tool = toolOf(item);
     if (!tool) return [];
