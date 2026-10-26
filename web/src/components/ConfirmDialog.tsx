@@ -109,9 +109,18 @@ export function ConfirmDialog({
 /** `const { confirm, confirmDialog } = useConfirm()`, then `await confirm({...})`. */
 export function useConfirm(): { confirm: (req: ConfirmRequest) => Promise<boolean>; confirmDialog: ReactNode } {
   const [pending, setPending] = useState<Pending | null>(null);
+  const pendingRef = useRef<Pending | null>(null);
 
+  /* A second ask while one is open replaces it, and the first one's caller hears "no" instead of
+     waiting on a promise nothing will ever settle. */
   const confirm = useCallback(
-    (req: ConfirmRequest) => new Promise<boolean>((resolve) => setPending({ ...req, resolve })),
+    (req: ConfirmRequest) =>
+      new Promise<boolean>((resolve) => {
+        pendingRef.current?.resolve(false);
+        const next = { ...req, resolve };
+        pendingRef.current = next;
+        setPending(next);
+      }),
     [],
   );
 
@@ -120,6 +129,7 @@ export function useConfirm(): { confirm: (req: ConfirmRequest) => Promise<boolea
       request={pending}
       onResolve={(value) => {
         pending.resolve(value);
+        if (pendingRef.current === pending) pendingRef.current = null;
         setPending(null);
       }}
     />
