@@ -28,7 +28,7 @@
     "service:status": "node scripts/host-service.mjs status",
     "service:upgrade": "node scripts/host-service.mjs upgrade",
     "test": "pnpm run build:packages && pnpm run test:run",
-    "test:run": "pnpm -r run test && node --test scripts/host-service.test.mjs scripts/install.test.mjs",
+    "test:run": "pnpm -r run test && node scripts/test-tmpdir.mjs node --test scripts/host-service.test.mjs scripts/install.test.mjs",
     "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "node scripts/lint.mjs && node scripts/ui-audit.mjs && pnpm --filter @glassys/web run lint",
     "budget": "node scripts/bundle-budget.mjs",
