@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetLiveThreadCache } from "./threads.js";
-import { assertImageMime, saveUpload, loadUpload, resolveAttachments, materializeAttachments } from "./uploads.js";
+import { normalizeUploadMime, saveUpload, loadUpload, materializeAttachments } from "./uploads.js";
 
 describe("uploads", () => {
   let dir: string;
@@ -19,9 +19,9 @@ describe("uploads", () => {
   });
 
   it("only allows image mime types under 4MB", () => {
-    expect(assertImageMime("image/png")).toBe("image/png");
-    expect(assertImageMime("image/jpg")).toBe("image/jpeg");
-    expect(() => assertImageMime("application/pdf")).toThrow(/jpeg/);
+    expect(normalizeUploadMime("image/png", "a.png")).toBe("image/png");
+    expect(normalizeUploadMime("image/jpg", "a.jpg")).toBe("image/jpeg");
+    expect(() => normalizeUploadMime("application/pdf", "a.pdf")).toThrow(/jpeg/);
   });
 
   it("allows text and log uploads and rejects binaries", async () => {
@@ -38,8 +38,6 @@ describe("uploads", () => {
     expect(att.mime).toBe("image/png");
     const stored = await loadUpload(att.id);
     expect(stored?.path).toContain(join("uploads", att.id));
-    const files = await resolveAttachments([att]);
-    expect(files[0]?.path).toBe(stored?.path);
     expect(await loadUpload("../secret")).toBeNull();
   });
 

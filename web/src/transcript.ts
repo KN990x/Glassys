@@ -25,7 +25,6 @@ export type Block =
       text: string;
       messageId?: string;
       attachments?: MessageAttachment[];
-      pending?: boolean;
       retracted?: boolean;
       /** Its run began (`run.start` named it), and then ended. */
       started?: boolean;
@@ -119,7 +118,7 @@ function applyEvent(next: Block[], event: TranscriptEvent): Block[] {
     case "user.retracted": {
       const idx = next.findIndex((b) => b.kind === "user" && b.messageId === event.id);
       if (idx >= 0 && next[idx].kind === "user") {
-        next[idx] = { ...next[idx], retracted: true, pending: false };
+        next[idx] = { ...next[idx], retracted: true };
       }
       return next;
     }

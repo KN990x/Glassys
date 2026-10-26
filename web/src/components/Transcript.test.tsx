@@ -24,7 +24,6 @@ function props(blocks: Block[], busy: boolean): TranscriptProps {
     hostLabel: "",
     cwd: "/",
     adapterName: "cursor",
-    queue: [],
     busy,
   };
 }

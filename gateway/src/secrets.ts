@@ -130,10 +130,6 @@ async function writeSecrets(next: SecretsFile): Promise<void> {
   cache = { path: paths.secrets(), file: next };
 }
 
-export async function saveSecrets(next: SecretsFile): Promise<void> {
-  return withSecretsLock(() => writeSecrets(next));
-}
-
 export async function loadSecrets(): Promise<SecretsFile> {
   const p = paths.secrets();
   if (cache?.path === p) return applyEnv(cache.file);

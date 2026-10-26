@@ -1147,7 +1147,6 @@ export function Chat({
               hostLabel,
               cwd: config.agent.cwd,
               adapterName: currentAdapter?.displayName || config.agent.adapter,
-              queue: queueItems,
               busy,
             }}
           />

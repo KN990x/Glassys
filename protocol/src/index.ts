@@ -534,11 +534,6 @@ export function isPersistedTranscriptEvent(value: ServerMessage): value is Trans
   );
 }
 
-/** Streamed text that is merged into one transcript line per burst. */
-export function isDeltaEvent(value: ServerMessage): value is Extract<TranscriptEvent, { type: "text.delta" | "thinking.delta" }> {
-  return value.type === "text.delta" || value.type === "thinking.delta";
-}
-
 const MESSAGE_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -584,10 +579,6 @@ export function optionStringArray(
 ): string[] {
   const v = options?.[key];
   return Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : fallback;
-}
-
-export function optionRecord(options: Record<string, unknown> | undefined): Record<string, unknown> {
-  return options && typeof options === "object" ? options : {};
 }
 
 export function isMessageAttachment(value: unknown): value is MessageAttachment {

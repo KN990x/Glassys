@@ -47,10 +47,6 @@ export function normalizeUploadMime(mime: string, name: string): string {
   throw new HttpError(400, "Only jpeg, png, webp, gif, and text/log uploads are allowed");
 }
 
-export function assertImageMime(mime: string): string {
-  return normalizeUploadMime(mime, "image.png");
-}
-
 function rejectBinaryText(body: Buffer, mime: string): void {
   if (isImageMime(mime)) return;
   const sample = body.subarray(0, 512);
@@ -111,18 +107,6 @@ export async function readUploadBody(id: string): Promise<{ mime: string; name: 
   } catch {
     return null;
   }
-}
-
-export async function resolveAttachments(
-  attachments?: MessageAttachment[],
-): Promise<Array<{ path: string; mime: string; name: string }>> {
-  if (!attachments?.length) return [];
-  const out: Array<{ path: string; mime: string; name: string }> = [];
-  for (const item of attachments) {
-    const stored = await loadUpload(item.id);
-    if (stored) out.push({ path: stored.path, mime: stored.mime, name: stored.name });
-  }
-  return out;
 }
 
 const UPLOAD_DIR = ".glassys-uploads";

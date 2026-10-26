@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { useCopy } from "../useCopy";
-import type { MessageAttachment, PromptTemplate, QueueItem } from "@glassys/protocol";
+import type { MessageAttachment, PromptTemplate } from "@glassys/protocol";
 import type { Block, ToolBlock } from "../transcript";
 import { useT } from "../i18n";
 import { formatTokens, isImageMime } from "../format";
@@ -103,7 +103,6 @@ export type TranscriptProps = {
   hostLabel: string;
   cwd: string;
   adapterName: string;
-  queue: QueueItem[];
   /** A run is streaming into the last text block. */
   busy?: boolean;
 };

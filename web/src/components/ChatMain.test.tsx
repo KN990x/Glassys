@@ -63,7 +63,6 @@ describe("ChatMain", () => {
               hostLabel: "host",
               cwd: "/w",
               adapterName: "ACP",
-              queue: [],
             }}
           />
         </I18nProvider>,

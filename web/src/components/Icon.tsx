@@ -15,8 +15,6 @@ import {
   ChevronRight,
   CircleAlert,
   Clock,
-  CircleDot,
-  Command,
   Copy,
   Cpu,
   Download,
@@ -26,14 +24,11 @@ import {
   FileCode,
   FileText,
   Folder,
-  FolderOpen,
   FolderTree,
   Gauge,
-  GitBranch,
   HardDrive,
   History,
   Info,
-  ListChecks,
   LayoutDashboard,
   Loader2,
   MemoryStick,
@@ -46,16 +41,13 @@ import {
   PanelLeftOpen,
   Paperclip,
   Pencil,
-  Pause,
   Pin,
   PinOff,
-  Play,
   Plus,
   RefreshCw,
   RotateCcw,
   ScrollText,
   Search,
-  Send,
   Server,
   Settings as SettingsGlyph,
   Shield,
@@ -88,7 +80,6 @@ export const IconDisk = icon(HardDrive);
 export const IconEye = icon(Eye);
 export const IconEyeOff = icon(EyeOff);
 export const IconHistory = icon(History);
-export const IconChecks = icon(ListChecks);
 export const IconLogs = icon(ScrollText);
 export const IconMonitor = icon(Monitor);
 export const IconMoon = icon(Moon);
@@ -109,14 +100,12 @@ export const IconChevronDown = icon(ChevronDown);
 export const IconChevronLeft = icon(ChevronLeft);
 export const IconChevronRight = icon(ChevronRight);
 export const IconClock = icon(Clock);
-export const IconCommand = icon(Command);
 export const IconCopy = icon(Copy);
 export const IconError = icon(CircleAlert);
 export const IconExport = icon(Download);
 export const IconFile = icon(FileText);
 export const IconFileEdit = icon(FilePen);
 export const IconFolder = icon(Folder);
-export const IconGit = icon(GitBranch);
 export const IconInfo = icon(Info);
 export const IconMore = icon(MoreHorizontal);
 export const IconAttach = icon(Paperclip);
@@ -126,7 +115,6 @@ export const IconPlus = icon(Plus);
 export const IconRefresh = icon(RefreshCw);
 export const IconRename = icon(Pencil);
 export const IconSearch = icon(Search);
-export const IconSend = icon(Send);
 export const IconServer = icon(Server);
 export const IconSettings = icon(SettingsGlyph);
 export const IconStop = icon(Square);
@@ -136,17 +124,13 @@ export const IconTrash = icon(Trash2);
 export const IconClose = icon(X);
 export const IconMention = icon(AtSign);
 export const IconServices = icon(Boxes);
-export const IconDot = icon(CircleDot);
 export const IconCpu = icon(Cpu);
 export const IconFileCode = icon(FileCode);
-export const IconFolderOpen = icon(FolderOpen);
 export const IconFiles = icon(FolderTree);
 export const IconGauge = icon(Gauge);
 export const IconOverview = icon(LayoutDashboard);
 export const IconMemory = icon(MemoryStick);
 export const IconSwap = icon(ArrowDownUp);
-export const IconPause = icon(Pause);
-export const IconPlay = icon(Play);
 export const IconRestart = icon(RotateCcw);
 
 /**

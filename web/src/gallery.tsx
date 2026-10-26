@@ -324,7 +324,6 @@ function ChatShell({
                 hostLabel="ops@web-01"
                 cwd="/srv/www/deploy/current"
                 adapterName="Cursor"
-                queue={[]}
               />
             </div>
           </div>

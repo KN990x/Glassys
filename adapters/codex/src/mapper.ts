@@ -143,7 +143,3 @@ export function threadIdFromEvent(line: unknown): string | undefined {
   return rec?.type === "thread.started" ? str(rec.thread_id) : undefined;
 }
 
-export function isCodexTurnDone(line: unknown): boolean {
-  const rec = asRecord(line);
-  return rec?.type === "turn.completed" || rec?.type === "turn.failed";
-}
