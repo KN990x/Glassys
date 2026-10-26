@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PromptTemplate } from "@glassys/protocol";
 import { useT } from "../../i18n";
+import { newMessageId } from "../../format";
 import { Disclosure, EmptyRow, SettingGroup, SettingRow } from "../../components/Primitives";
 import { IconPlus, IconTrash, IconZap } from "../../components/Icon";
 
@@ -31,7 +32,9 @@ export function PromptsTab({
       className="ghost"
       onClick={() => {
         /* Not `tpl-${length + 1}`: after a removal that reused an id still on the list. */
-        const id = `tpl-${crypto.randomUUID().slice(0, 8)}`;
+        /* newMessageId, not crypto.randomUUID: that only exists in secure contexts, and a LAN
+           install over plain http has none. */
+        const id = `tpl-${newMessageId().slice(0, 8)}`;
         setTemplates([...templates, { id, slash: "", title: "", text: "" }]);
         setEditing(id);
       }}
