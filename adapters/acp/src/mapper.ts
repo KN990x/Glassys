@@ -15,11 +15,12 @@ function mapContent(content: unknown): ServerMessage[] {
   return [];
 }
 
-function previewFromContent(content: unknown, ledger?: HostLedger): string | undefined {
-  if (typeof content === "string" && content) return content.slice(0, PREVIEW_CHARS);
+/** A tool call's content as text, whole: the preview cuts it, progress needs all of it. */
+function contentText(content: unknown, ledger?: HostLedger): string | undefined {
+  if (typeof content === "string" && content) return content;
   if (!Array.isArray(content)) {
     const rec = asRecord(content);
-    if (rec && typeof rec.text === "string") return rec.text.slice(0, PREVIEW_CHARS);
+    if (rec && typeof rec.text === "string") return rec.text || undefined;
     return undefined;
   }
   const parts: string[] = [];
@@ -40,15 +41,18 @@ function previewFromContent(content: unknown, ledger?: HostLedger): string | und
     const nested = asRecord(rec.content);
     if (nested && typeof nested.text === "string") parts.push(nested.text);
   }
-  const joined = parts.join("");
-  return joined ? joined.slice(0, PREVIEW_CHARS) : undefined;
+  return parts.join("") || undefined;
 }
 
 /**
  * Per-turn mapping state: each call's tool name, how much of its output was already shown, and
  * the host's ledger of refused calls and terminal output.
  */
-export type AcpMapState = { tools: Map<string, string>; shown: Map<string, string>; ledger?: HostLedger };
+export type AcpMapState = { tools: Map<string, string>; shown: Map<string, Shown>; ledger?: HostLedger };
+
+/** How far a call's output was shown: its length then, and its last characters to find the spot again. */
+type Shown = { length: number; tail: string };
+const TAIL_MARK = 64;
 
 export function acpMapState(ledger?: HostLedger): AcpMapState {
   return { tools: new Map(), shown: new Map(), ledger };
@@ -59,12 +63,15 @@ function rawOutputText(raw: unknown): string | undefined {
   if (typeof raw === "string") return raw || undefined;
   const rec = asRecord(raw);
   if (!rec) return undefined;
-  const joined = [str(rec.output), str(rec.stdout), str(rec.stderr)].filter(Boolean).join("\n");
-  return joined ? joined.slice(0, PREVIEW_CHARS) : undefined;
+  return [str(rec.output), str(rec.stdout), str(rec.stderr)].filter(Boolean).join("\n") || undefined;
+}
+
+function outputText(update: Record<string, unknown>, state: AcpMapState): string | undefined {
+  return contentText(update.content, state.ledger) || rawOutputText(update.rawOutput) || str(update.output);
 }
 
 function preview(update: Record<string, unknown>, state: AcpMapState): string | undefined {
-  return previewFromContent(update.content, state.ledger) || rawOutputText(update.rawOutput) || str(update.output);
+  return outputText(update, state)?.slice(0, PREVIEW_CHARS);
 }
 
 function toolEnd(id: string, status: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage {
@@ -91,15 +98,27 @@ function toolEnd(id: string, status: string, update: Record<string, unknown>, st
 
 /**
  * ACP sends a tool call's content whole on every update. Show only what is new since the last
- * one; content that was rewritten rather than extended has nothing appendable to show.
+ * one. The text either grew (most calls) or slid (a terminal past its byte limit keeps only its
+ * tail): the end of what was shown, found again, marks where the new part starts. Content that was
+ * rewritten has nothing appendable to show.
  */
 function progress(id: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage[] {
-  const full = preview(update, state);
+  const full = outputText(update, state);
   if (!full) return [];
-  const before = state.shown.get(id) ?? "";
-  state.shown.set(id, full);
-  if (!full.startsWith(before) || full.length === before.length) return [];
-  return [{ type: "tool.progress", callId: id, chunk: full.slice(before.length) }];
+  const before = state.shown.get(id);
+  state.shown.set(id, { length: full.length, tail: full.slice(-TAIL_MARK) });
+  let from = 0;
+  if (before) {
+    if (full.length >= before.length && full.slice(before.length - before.tail.length, before.length) === before.tail) {
+      from = before.length;
+    } else {
+      const at = full.lastIndexOf(before.tail);
+      if (at < 0) return [];
+      from = at + before.tail.length;
+    }
+  }
+  if (from >= full.length) return [];
+  return [{ type: "tool.progress", callId: id, chunk: full.slice(from) }];
 }
 
 function toolStart(id: string, update: Record<string, unknown>, state: AcpMapState): ServerMessage {

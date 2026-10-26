@@ -123,6 +123,23 @@ describe("mapAcpUpdate", () => {
     expect(update("one\ntwo\n")).toEqual([]);
   });
 
+  it("keeps streaming output past the preview size, and output that slides as a terminal trims it", () => {
+    const state = acpMapState();
+    const update = (text: string) =>
+      mapAcpUpdate(
+        { update: { sessionUpdate: "tool_call_update", toolCallId: "t2", status: "in_progress", content: [{ type: "content", content: { type: "text", text } }] } },
+        state,
+      );
+    const lines = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `line ${from + i}\n`).join("");
+    const first = lines(0, 800);
+    expect(first.length).toBeGreaterThan(4000);
+    expect(update(first)).toEqual([{ type: "tool.progress", callId: "t2", chunk: first }]);
+    expect(update(lines(0, 900))).toEqual([{ type: "tool.progress", callId: "t2", chunk: lines(800, 900) }]);
+    /* The terminal kept only its last 500 lines; the new ones still come through once. */
+    expect(update(lines(450, 950))).toEqual([{ type: "tool.progress", callId: "t2", chunk: lines(900, 950) }]);
+    expect(update(lines(450, 950))).toEqual([]);
+  });
+
   it("refines a call from an update without status", () => {
     const events = mapAcpUpdate({
       update: { sessionUpdate: "tool_call_update", toolCallId: "t1", title: "Edit a.ts", kind: "edit", locations: [{ path: "/w/a.ts" }] },
