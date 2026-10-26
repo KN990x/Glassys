@@ -464,6 +464,47 @@ describe("runtime queue", () => {
     expect(markdown).not.toContain("two");
   });
 
+  it("closes each thought where the answer or a tool begins, for adapters that never say", async () => {
+    const origCreate = fakeAdapter.create.bind(fakeAdapter);
+    fakeAdapter.create = async (opts) => {
+      const session = await origCreate(opts);
+      return {
+        ...session,
+        async send(_text, onEvent) {
+          return pendingRun("run-think", async () => {
+            onEvent({ type: "thinking.delta", text: "plan" } as ServerMessage);
+            onEvent({ type: "text.delta", text: "first" } as ServerMessage);
+            onEvent({ type: "thinking.delta", text: "more" } as ServerMessage);
+            onEvent({ type: "tool.start", callId: "c1", kind: "shell", title: "ls" } as ServerMessage);
+            /* An adapter that closes late, after its answer began: not a second block. */
+            onEvent({ type: "thinking.done", durationMs: 5 } as ServerMessage);
+            onEvent({ type: "tool.end", callId: "c1", kind: "shell", ok: true } as ServerMessage);
+            return "finished";
+          });
+        },
+      };
+    };
+    try {
+      const { enqueueMessage, readTranscript, drainEmit } = await import("./runtime.js");
+      await enqueueMessage("think");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+      await drainEmit();
+      const types = (await readTranscript()).map((e) => e.type).filter((t) => t !== "user.message" && t !== "run.start");
+      expect(types).toEqual([
+        "thinking.delta",
+        "thinking.done",
+        "text.delta",
+        "thinking.delta",
+        "thinking.done",
+        "tool.start",
+        "tool.end",
+        "run.done",
+      ]);
+    } finally {
+      fakeAdapter.create = origCreate;
+    }
+  });
+
   it("keeps draining the queue when a run throws", async () => {
     const origCreate = fakeAdapter.create.bind(fakeAdapter);
     let boom = true;

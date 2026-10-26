@@ -742,6 +742,8 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
     let sawRunError = false;
     let thinkingOpen = false;
     let thinkingStarted = 0;
+    /** The open thought was closed by the runtime, not the adapter. */
+    let closedByRuntime = false;
     let lastEventAt = nowFn();
     let stalledEmitted = false;
     const onEvent = (raw: ServerMessage) => {
@@ -756,9 +758,29 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       if (event.type === "run.error") sawRunError = true;
       if (event.type === "thinking.delta" && !thinkingOpen) {
         thinkingOpen = true;
+        closedByRuntime = false;
         thinkingStarted = nowFn();
       }
-      if (event.type === "thinking.done") thinkingOpen = false;
+      /*
+       * Codex, OpenCode, ACP and Gemini never say when a thought ends. The answer or a tool
+       * starting does: close the block there, with its own duration, instead of once at the end of
+       * the run timed from the first thought.
+       */
+      if (thinkingOpen && (event.type === "text.delta" || event.type === "tool.start")) {
+        thinkingOpen = false;
+        closedByRuntime = true;
+        emit({ type: "thinking.done", durationMs: Math.max(0, nowFn() - thinkingStarted) }, handle.agentId).catch(
+          () => undefined,
+        );
+      }
+      if (event.type === "thinking.done") {
+        /* The adapter's own close for a block already closed here would paint an empty block. */
+        if (closedByRuntime && !thinkingOpen) {
+          closedByRuntime = false;
+          return;
+        }
+        thinkingOpen = false;
+      }
       /* emit logs its own failures; this only keeps them from being unhandled rejections. */
       emit(event, handle.agentId).catch(() => undefined);
     };
