@@ -1237,7 +1237,7 @@ export async function initRuntime(): Promise<void> {
     }
   }
   bindScheduleRuntime({
-    enqueue: (text, source) => enqueueMessage(text, undefined, undefined, source),
+    enqueue: (text, source, onReject) => enqueueMessage(text, undefined, undefined, source, onReject),
     isIdle: () => !runtimeBusy(),
     liveThreadId,
     liveCwd: async () => (await loadConfig()).agent.cwd,

@@ -7,6 +7,7 @@ import {
   MAX_ONE_SHOT_ATTEMPTS,
   bindScheduleRuntime,
   createSchedule,
+  deleteSchedule,
   listSchedules,
   previewNextRun,
   setScheduleIdlePollMsForTests,
@@ -217,5 +218,71 @@ describe("schedules", () => {
     await tickSchedulesForTests();
     await tickSchedulesForTests();
     expect(enqueued).toEqual(["every minute"]);
+  });
+
+  /* setTimeout never fires early, and croner's nextRun(now) already skips a slot `now` has reached. */
+  it.each([0, 5, 1200])("fires a cron slot once when the timer lands %ims after it", async (late) => {
+    const enqueued: string[] = [];
+    const slot = Math.ceil((Date.now() + 1000) / 60_000) * 60_000;
+    let now = slot - 30_000;
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+      now: () => now,
+    });
+    await createSchedule({ text: "every minute", cwd: dir, cron: "* * * * *" });
+    await new Promise((r) => setTimeout(r, 30)); // let the timer arm for `slot`
+    now = slot + late;
+    await tickSchedulesForTests();
+    await tickSchedulesForTests();
+    expect(enqueued).toEqual(["every minute"]);
+    expect((await listSchedules())[0]?.lastRun).toBe(new Date(slot + late).toISOString());
+  });
+
+  it("skips a job deleted while it waited for the gateway to go idle", async () => {
+    let idle = false;
+    const enqueued: string[] = [];
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => idle,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+    });
+    const job = await createSchedule({ text: "once", cwd: dir, at: new Date(Date.now() - 1000).toISOString() });
+    const pending = tickSchedulesForTests();
+    await new Promise((r) => setTimeout(r, 30));
+    await deleteSchedule(job.id);
+    idle = true;
+    await pending;
+    expect(enqueued).toEqual([]);
+  });
+
+  it("records why the runtime refused the message", async () => {
+    bindScheduleRuntime({
+      enqueue: async (_text, _source, onReject) => {
+        onReject("Queue is full");
+        return false;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+    });
+    await createSchedule({ text: "x", cwd: dir, at: new Date(Date.now() - 1000).toISOString() });
+    await tickSchedulesForTests();
+    expect((await listSchedules())[0]?.lastError).toBe("Queue is full");
   });
 });

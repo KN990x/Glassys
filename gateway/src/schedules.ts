@@ -32,7 +32,7 @@ export interface ScheduleJob {
 }
 
 export interface ScheduleHooks {
-  enqueue: (text: string, source: "schedule") => Promise<boolean>;
+  enqueue: (text: string, source: "schedule", onReject: (message: string) => void) => Promise<boolean>;
   isIdle: () => boolean;
   liveThreadId: () => string | null;
   liveCwd: () => Promise<string>;
@@ -226,6 +226,12 @@ async function soonestDue(): Promise<{ job: ScheduleJob; at: number } | null> {
 }
 
 let armGeneration = 0;
+/**
+ * The slot the timer was armed for. Croner's `nextRun(now)` skips a slot once `now` reaches it, so
+ * a timer that lands on (or just after) its slot must fire what it was armed for instead of asking
+ * for the next run again, or a cron job never fires.
+ */
+let armed: { jobId: string; at: number } | null = null;
 
 function armTimer(): void {
   if (timer) clearTimeout(timer);
@@ -234,7 +240,9 @@ function armTimer(): void {
   if (!hooks) return;
   void (async () => {
     const due = await soonestDue();
-    if (!due || gen !== armGeneration) return;
+    if (gen !== armGeneration) return;
+    armed = due ? { jobId: due.job.id, at: due.at } : null;
+    if (!due) return;
     const wait = Math.max(0, due.at - nowMs());
     timer = setTimeout(() => {
       void tickSchedules();
@@ -268,17 +276,31 @@ function errorStatus(err: unknown): number | undefined {
   return err instanceof HttpError ? err.status : undefined;
 }
 
-async function fireJob(job: ScheduleJob): Promise<void> {
+/** The job as stored now, if it still fires at `at`: deleted, disabled or edited jobs are skipped. */
+async function stillDue(id: string, at: number): Promise<ScheduleJob | null> {
+  const job = (await readJobs()).find((j) => j.id === id);
+  if (!job) return null;
+  try {
+    return nextFireMs(job, new Date(at - 1)) === at ? job : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fireJob(due: { job: ScheduleJob; at: number }): Promise<void> {
   if (!hooks) return;
   const deadline = nowMs() + idleWaitMaxMs;
   while (!hooks.isIdle()) {
     if (nowMs() >= deadline) {
-      await failJob(job, "Gateway stayed busy");
+      await failJob(due.job, "Gateway stayed busy");
       return;
     }
     await new Promise((r) => setTimeout(r, idlePollMs));
     if (!hooks) return;
   }
+  /* The wait for idle can last minutes; the operator may have deleted or changed the job meanwhile. */
+  const job = await stillDue(due.job.id, due.at);
+  if (!job) return;
   try {
     if (job.threadId) {
       try {
@@ -293,9 +315,12 @@ async function fireJob(job: ScheduleJob): Promise<void> {
       const cwd = await hooks.liveCwd();
       if (job.cwd && cwd !== job.cwd) await hooks.applyCwd(job.cwd);
     }
-    const queued = await hooks.enqueue(job.text, "schedule");
+    let refusal = "Message was not queued";
+    const queued = await hooks.enqueue(job.text, "schedule", (message) => {
+      refusal = message;
+    });
     if (!queued) {
-      await failJob(job, "Message was not queued");
+      await failJob(job, refusal);
       return;
     }
     await patchJob(job.id, {
@@ -311,20 +336,32 @@ async function fireJob(job: ScheduleJob): Promise<void> {
   }
 }
 
+/** The armed slot once its time has come, else whatever is due from now (one-shots in the past). */
+async function dueNow(): Promise<{ job: ScheduleJob; at: number } | null> {
+  const target = armed;
+  if (target && target.at <= nowMs() + 250) {
+    const job = await stillDue(target.jobId, target.at);
+    if (job) return { job, at: target.at };
+  }
+  const due = await soonestDue();
+  return due && due.at <= nowMs() + 250 ? due : null;
+}
+
 async function tickSchedules(): Promise<void> {
   /* The tick in progress re-arms when it finishes; re-arming here would spin on a job that is already due. */
   if (firing || !hooks) return;
   firing = true;
   try {
-    const due = await soonestDue();
-    if (due && due.at <= nowMs() + 250) {
+    const due = await dueNow();
+    if (due) {
+      armed = null;
       /*
        * Never fire ahead of the slot: re-arming from a moment still before it finds that same cron
        * slot again, and the message went out twice.
        */
       const early = due.at - nowMs();
       if (early > 0) await new Promise((r) => setTimeout(r, early));
-      await fireJob(due.job);
+      await fireJob(due);
     }
   } finally {
     firing = false;
@@ -339,6 +376,9 @@ export function startSchedules(): void {
 export function stopSchedules(): void {
   if (timer) clearTimeout(timer);
   timer = undefined;
+  /* An arm still reading the jobs must not set a timer after the stop. */
+  armGeneration++;
+  armed = null;
 }
 
 export async function tickSchedulesForTests(): Promise<void> {
