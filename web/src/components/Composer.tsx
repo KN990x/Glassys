@@ -40,6 +40,8 @@ export type ComposerProps = {
   drafts: MessageAttachment[];
   onRemoveDraft: (id: string) => void;
   onAttach: (files: FileList | File[] | null) => void;
+  /** Dropped files Glassys cannot attach (a PDF, an archive): say so instead of ignoring them. */
+  onUnsupported?: () => void;
   fileRef: RefObject<HTMLInputElement | null>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   onSubmit: (e: FormEvent) => void;
@@ -101,6 +103,7 @@ export function Composer(props: ComposerProps) {
     drafts,
     onRemoveDraft,
     onAttach,
+    onUnsupported,
     fileRef,
     composerRef,
     onSubmit,
@@ -150,10 +153,14 @@ export function Composer(props: ComposerProps) {
       }}
       onDrop={(e) => {
         setDragging(false);
-        const files = [...e.dataTransfer.files].filter((f) => attachableFile(f));
-        if (!files.length) return;
+        const dropped = [...e.dataTransfer.files];
+        if (!dropped.length) return;
+        /* Always, once files were dropped: left to the browser, a PDF opens in this tab and the
+           app is gone. */
         e.preventDefault();
-        onAttach(files);
+        const files = dropped.filter((f) => attachableFile(f));
+        if (files.length < dropped.length) onUnsupported?.();
+        if (files.length) onAttach(files);
       }}
     >
       <div className="composer-inner">

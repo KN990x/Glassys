@@ -559,6 +559,24 @@ describe("Chat composer and layout", () => {
     }
   });
 
+  it("keeps the app when a file it cannot attach is dropped, and says why", async () => {
+    const { api } = await import("./api");
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    const pdf = new File(["%PDF"], "report.pdf", { type: "application/pdf" });
+    Object.defineProperty(drop, "dataTransfer", { value: { files: [pdf], types: ["Files"] } });
+    await act(async () => {
+      host.querySelector("form")!.dispatchEvent(drop);
+    });
+    expect(drop.defaultPrevented).toBe(true);
+    expect(vi.mocked(api.upload)).not.toHaveBeenCalledWith(pdf);
+    expect(host.querySelector(".alert-stack")?.textContent).toMatch(/jpeg, png/);
+  });
+
   it("offers saved operations on the empty transcript and inserts without sending", async () => {
     await renderChat();
     await act(async () => {

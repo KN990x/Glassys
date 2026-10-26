@@ -115,6 +115,9 @@ export function Chat({
   });
   const [threadOpen, setThreadOpen] = useState(false);
   const [drafts, setDrafts] = useState<MessageAttachment[]>([]);
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  const uploadingRef = useRef(0);
   const [attachError, setAttachError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [configError, setConfigError] = useState("");
@@ -706,13 +709,16 @@ export function Chat({
     if (!files || !files.length) return;
     setAttachError("");
     const incoming = Array.from(files);
-    const room = Math.max(0, MAX_ATTACHMENTS - drafts.length);
+    /* From refs, not this render: two quick pastes or drops each saw the same count and
+       together went past the limit. Uploads still in flight take their room too. */
+    const room = Math.max(0, MAX_ATTACHMENTS - draftsRef.current.length - uploadingRef.current);
     const list = incoming.slice(0, room);
     if (incoming.length > room) setAttachError(t("error.tooManyAttachments"));
     if (!list.length) {
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
+    uploadingRef.current += list.length;
     try {
       for (const file of list) {
         const att = await api.upload(file);
@@ -720,6 +726,8 @@ export function Chat({
       }
     } catch (err) {
       setAttachError(operatorError(err instanceof Error ? err.message : t("chat.attachFailed"), t));
+    } finally {
+      uploadingRef.current -= list.length;
     }
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -1159,6 +1167,7 @@ export function Chat({
             drafts={drafts}
             onRemoveDraft={(id) => setDrafts((cur) => cur.filter((d) => d.id !== id))}
             onAttach={(files) => void onAttach(files)}
+            onUnsupported={() => setAttachError(t("error.uploadMime"))}
             fileRef={fileRef}
             composerRef={composer}
             onSubmit={submit}
