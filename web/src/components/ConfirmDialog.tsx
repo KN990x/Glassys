@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import { IconAlert, IconArchive, IconInfo } from "./Icon";
 
@@ -28,6 +28,9 @@ export function ConfirmDialog({
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  /* Per dialog: Chat, Settings and the permission chip can each have one open. */
+  const titleId = useId();
+  const messageId = useId();
   const onResolveRef = useRef(onResolve);
   onResolveRef.current = onResolve;
 
@@ -77,8 +80,8 @@ export function ConfirmDialog({
         className="confirm-panel"
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-message"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
@@ -87,8 +90,8 @@ export function ConfirmDialog({
         >
           {request.destructive ? <IconAlert /> : request.kind === "archive" ? <IconArchive /> : <IconInfo />}
         </span>
-        <h2 id="confirm-title">{request.title || t("confirm.title")}</h2>
-        <p className="muted" id="confirm-message">
+        <h2 id={titleId}>{request.title || t("confirm.title")}</h2>
+        <p className="muted" id={messageId}>
           {request.message}
         </p>
         <div className="row">
