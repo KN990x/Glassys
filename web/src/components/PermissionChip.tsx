@@ -133,6 +133,7 @@ export function PermissionChip({
           {caps.toolConfirmation === "permission-mode" && (
             <SegmentedControl
               size="sm"
+              commit="confirm"
               label={t("wizard.exec.permissionMode")}
               value={mode === "dontAsk" ? "dontAsk" : mode === "acceptEdits" ? "acceptEdits" : "bypassPermissions"}
               onChange={(next) => void patch(setPermissionMode(config.agent.options, next))}

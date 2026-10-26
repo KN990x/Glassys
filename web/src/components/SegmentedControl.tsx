@@ -18,24 +18,33 @@ export function SegmentedControl<T extends string>({
   onChange,
   label,
   size,
+  commit = "move",
 }: {
   value: T;
   options: Segment<T>[];
   onChange: (next: T) => void;
   label: string;
   size?: "sm";
+  /**
+   * `move`: arrows change the choice, as native radios do. `confirm`: arrows only move focus and
+   * Enter or Space picks, for a change that costs something (a save, a confirm dialog): walking
+   * across three options must not save twice or ask to archive the thread.
+   */
+  commit?: "move" | "confirm";
 }) {
   const group = useRef<HTMLDivElement>(null);
-  /* A radio group is one tab stop; arrows move the choice, as native radios do. */
+  /* A radio group is one tab stop; arrows move within it. */
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
     const edge = e.key === "Home" ? 0 : e.key === "End" ? options.length - 1 : -1;
     if (!step && edge < 0) return;
     e.preventDefault();
-    const current = Math.max(0, options.findIndex((o) => o.value === value));
-    const next = edge >= 0 ? edge : (current + step + options.length) % options.length;
-    onChange(options[next]!.value);
-    group.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+    const radios = [...(group.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])];
+    const focused = radios.indexOf(document.activeElement as HTMLButtonElement);
+    const from = commit === "confirm" && focused >= 0 ? focused : Math.max(0, options.findIndex((o) => o.value === value));
+    const next = edge >= 0 ? edge : (from + step + options.length) % options.length;
+    if (commit === "move") onChange(options[next]!.value);
+    radios[next]?.focus();
   }
   const anyChecked = options.some((o) => o.value === value);
   return (

@@ -121,6 +121,7 @@ export function ModelMenu({
             <p className="eyebrow">{t("wizard.model.variant")}</p>
             <SegmentedControl
               size="sm"
+              commit="confirm"
               label={t("wizard.model.variant")}
               value={variant ? String(variants.indexOf(variant)) : ""}
               onChange={(next) => {

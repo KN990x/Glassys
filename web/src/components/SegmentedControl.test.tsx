@@ -49,6 +49,35 @@ describe("SegmentedControl", () => {
     expect(radios().map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "false", "true"]);
     expect(document.activeElement).toBe(radios()[2]);
   });
+
+  it("in confirm mode, walks with the arrows and picks only on a press", () => {
+    const picked: string[] = [];
+    mount(
+      <SegmentedControl
+        label="mode"
+        commit="confirm"
+        value="a"
+        onChange={(v) => picked.push(v)}
+        options={[
+          { value: "a", label: "A" },
+          { value: "b", label: "B" },
+          { value: "c", label: "C" },
+        ]}
+      />,
+    );
+    const radios = () => [...host.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    radios()[0]!.focus();
+    act(() => {
+      radios()[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    act(() => {
+      radios()[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(radios()[2]);
+    expect(picked).toEqual([]);
+    act(() => radios()[2]!.click());
+    expect(picked).toEqual(["c"]);
+  });
 });
 
 describe("Popover", () => {
