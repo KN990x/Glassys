@@ -36,12 +36,29 @@ export function openSocket(handlers: {
     }
   };
 
+  /*
+   * Give up on a socket judged dead and retry now. Waiting for its close event is no good: on a
+   * half-open connection the browser can sit in CLOSING until the closing handshake times out,
+   * a minute or more, with the screen saying "connected". Its late events are ignored.
+   */
+  const abandon = (socket: WebSocket) => {
+    if (ws !== socket) return;
+    ws = null;
+    clearTimers();
+    try {
+      socket.close();
+    } catch {
+      /* already closing */
+    }
+    if (!closed && !fatal) scheduleRetry();
+  };
+
   const startPing = (socket: WebSocket) => {
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(() => {
       /* Two keepalives without a word back: the link is dead even if the browser has not noticed. */
       if (Date.now() - lastHeard > keepaliveMs * 2 + WAKE_PROBE_MS) {
-        socket.close();
+        abandon(socket);
         return;
       }
       ping(socket);
@@ -72,6 +89,7 @@ export function openSocket(handlers: {
     });
 
     socket.addEventListener("message", (ev) => {
+      if (ws !== socket) return;
       lastHeard = Date.now();
       if (probeTimer) {
         clearTimeout(probeTimer);
@@ -141,7 +159,7 @@ export function openSocket(handlers: {
     ping(socket);
     probeTimer = setTimeout(() => {
       probeTimer = undefined;
-      socket.close();
+      abandon(socket);
     }, WAKE_PROBE_MS);
   };
   if (typeof window !== "undefined") window.addEventListener("online", wake);

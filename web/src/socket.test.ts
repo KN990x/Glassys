@@ -165,6 +165,26 @@ describe("socket reconnect", () => {
     sock.close();
   });
 
+  it("reconnects from a dead socket even when its close event never comes", async () => {
+    const { sock, states } = await setup();
+    const socket = FakeSocket.all[0]!;
+    /* Half-open: close() leaves it CLOSING, and no close event arrives for a long time. */
+    socket.close = () => {
+      socket.readyState = 2;
+    };
+    socket.open();
+    socket.message({ type: "auth.ok" });
+    await vi.advanceTimersByTimeAsync(25_000 * 3 + 5_000);
+    expect(states.at(-1)).toBe("reconnecting");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(FakeSocket.all).toHaveLength(2);
+    /* The old socket's late events do not reach the new connection's state. */
+    const before = states.length;
+    socket.drop();
+    expect(states.length).toBe(before);
+    sock.close();
+  });
+
   it("reconnects at once when the page becomes visible again", async () => {
     const { sock } = await setup();
     FakeSocket.all[0]!.open();
