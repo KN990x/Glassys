@@ -234,7 +234,6 @@ export async function applyPatch(
   return withConfigLock(async () => {
     const before = await loadConfigUnlocked();
     const {
-      cursorApiKey,
       operatorPassword,
       adapterApiKey: adapterKey,
       currentPassword: _currentPassword,
@@ -280,9 +279,6 @@ export async function applyPatch(
       }
     }
     await saveConfig(after);
-    if (cursorApiKey !== undefined) {
-      await patchSecrets({ adapterApiKey: { adapter: "cursor", value: typeof cursorApiKey === "string" ? cursorApiKey.trim() : "" } });
-    }
     if (adapterKey) {
       await patchSecrets({
         adapterApiKey: { adapter: adapterKey.adapter, value: adapterKey.value?.trim() ?? "" },
@@ -318,7 +314,6 @@ export async function redacted(cfg?: GlassysConfig, restart?: boolean): Promise<
     secrets: {
       operatorPassword: { configured: flags.operatorPassword },
       adapters,
-      cursorApiKey: { configured: flags.cursorApiKey },
       vapidConfigured: flags.vapidConfigured,
     },
     restartRequired: restart,

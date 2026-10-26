@@ -120,7 +120,6 @@ function cfg(): RedactedConfig {
     secrets: {
       operatorPassword: { configured: true },
       adapters: {},
-      cursorApiKey: { configured: false },
     },
   };
 }

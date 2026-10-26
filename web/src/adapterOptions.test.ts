@@ -84,19 +84,10 @@ describe("archivesLiveThread", () => {
 });
 
 describe("adapterKeyConfigured", () => {
-  it("treats the legacy cursorApiKey flag as configured for Cursor", () => {
-    expect(
-      adapterKeyConfigured({ adapters: {}, cursorApiKey: { configured: true } }, "cursor"),
-    ).toBe(true);
-    expect(
-      adapterKeyConfigured({ adapters: {}, cursorApiKey: { configured: true } }, "claude"),
-    ).toBe(false);
-    expect(
-      adapterKeyConfigured(
-        { adapters: { claude: { apiKey: { configured: true } } }, cursorApiKey: { configured: false } },
-        "claude",
-      ),
-    ).toBe(true);
+  it("reads each adapter's own key flag", () => {
+    expect(adapterKeyConfigured({ adapters: { cursor: { apiKey: { configured: true } } } }, "cursor")).toBe(true);
+    expect(adapterKeyConfigured({ adapters: { cursor: { apiKey: { configured: true } } } }, "claude")).toBe(false);
+    expect(adapterKeyConfigured({ adapters: {} }, "claude")).toBe(false);
   });
 });
 

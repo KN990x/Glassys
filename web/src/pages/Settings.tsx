@@ -13,7 +13,7 @@ import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { paramsForSelection } from "../components/ModelPicker";
-import { defaultOptionsFor, missingRequiredOption, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
+import { adapterKeyConfigured, defaultOptionsFor, missingRequiredOption, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { enableWebPush, disableWebPush } from "../push";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -42,7 +42,7 @@ import { PhoneTab } from "./settings/PhoneTab";
 import { UsageTab } from "./settings/UsageTab";
 import { useDialogFocus } from "../useDialogFocus";
 
-export type SettingsTab =
+type SettingsTab =
   | "appearance"
   | "agent"
   | "session"
@@ -239,13 +239,6 @@ export function Settings({
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef, () => void requestCloseRef.current(), closeRef);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
 
   /** The latest model list asked for; an older reply (the adapter before a quick switch) is dropped. */
   const modelsAsk = useRef(0);
@@ -513,9 +506,7 @@ export function Settings({
   }
 
   const keyFromEnv = Boolean(draft.secrets.adapters?.[draft.agent.adapter]?.apiKey.fromEnv);
-  const keyConfigured =
-    draft.secrets.adapters?.[draft.agent.adapter]?.apiKey.configured ||
-    (draft.agent.adapter === "cursor" && draft.secrets.cursorApiKey.configured);
+  const keyConfigured = adapterKeyConfigured(draft.secrets, draft.agent.adapter);
   /* The panel heading is the tab's own word: a longer title under a short tab
      read as a different place from the one just clicked. */
   const tabs: Array<{ id: SettingsTab; label: string; glyph: ReactNode }> = [

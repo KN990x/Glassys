@@ -30,7 +30,7 @@ function cfg(): RedactedConfig {
   base.agent.options = { sandbox: false, autoRun: true };
   return {
     ...base,
-    secrets: { operatorPassword: { configured: true }, adapters: {}, cursorApiKey: { configured: false } },
+    secrets: { operatorPassword: { configured: true }, adapters: {} },
   };
 }
 

@@ -209,7 +209,6 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 export function secretsFlags(s: SecretsFile): {
   operatorPassword: boolean;
   adapters: Record<string, { apiKey: boolean }>;
-  cursorApiKey: boolean;
   vapidConfigured: boolean;
 } {
   const adapters: Record<string, { apiKey: boolean }> = {};
@@ -219,7 +218,6 @@ export function secretsFlags(s: SecretsFile): {
   return {
     operatorPassword: s.operatorPasswordHash.trim().length > 0,
     adapters,
-    cursorApiKey: Boolean(s.adapters.cursor?.apiKey?.trim()),
     vapidConfigured: Boolean(s.vapid?.publicKey && s.vapid?.privateKey),
   };
 }

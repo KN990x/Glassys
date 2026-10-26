@@ -112,7 +112,6 @@ function cfg(): RedactedConfig {
     secrets: {
       operatorPassword: { configured: true },
       adapters: { cursor: { apiKey: { configured: false, fromEnv: false } } },
-      cursorApiKey: { configured: false },
     },
   };
 }
@@ -124,7 +123,6 @@ describe("Settings notify and schedules", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
-    document.body.style.overflow = "";
     saveConfig.mockReset();
     createSchedule.mockReset();
     pushUnsubscribe.mockReset();
@@ -222,7 +220,6 @@ describe("Settings draft against a live config", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
-    document.body.style.overflow = "";
   });
 
   it("keeps an appearance edit drafted, previews it, and survives a config from elsewhere", async () => {

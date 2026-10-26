@@ -79,11 +79,10 @@ export function archivesLiveThread(
 }
 
 export function adapterKeyConfigured(
-  secrets: { adapters?: Record<string, { apiKey?: { configured?: boolean } }>; cursorApiKey?: { configured?: boolean } },
+  secrets: { adapters?: Record<string, { apiKey?: { configured?: boolean } }> },
   adapterId: string,
 ): boolean {
-  if (secrets.adapters?.[adapterId]?.apiKey?.configured) return true;
-  return adapterId === "cursor" && Boolean(secrets.cursorApiKey?.configured);
+  return Boolean(secrets.adapters?.[adapterId]?.apiKey?.configured);
 }
 
 /**

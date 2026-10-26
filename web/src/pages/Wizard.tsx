@@ -481,8 +481,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
                   ) : (
                     <StatusBadge dot>{t("wizard.cred.signedOut")}</StatusBadge>
                   ))}
-                {(config.secrets.adapters?.[adapterId]?.apiKey.configured ||
-                  (adapterId === "cursor" && config.secrets.cursorApiKey.configured)) && (
+                {adapterKeyConfigured(config.secrets, adapterId) && (
                   <StatusBadge tone="ok" dot>
                     {t("wizard.cred.keyConfigured")}
                   </StatusBadge>

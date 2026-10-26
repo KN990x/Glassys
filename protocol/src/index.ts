@@ -236,8 +236,6 @@ export interface GlassysConfig {
 export interface SecretFlags {
   operatorPassword: { configured: boolean };
   adapters: Record<string, { apiKey: { configured: boolean; fromEnv?: boolean } }>;
-  /** @deprecated Use adapters.cursor. Kept so older clients still type-check. */
-  cursorApiKey: { configured: boolean };
   vapidConfigured?: boolean;
 }
 
@@ -261,8 +259,6 @@ export type ConfigPatch = {
   prompts?: Partial<PromptsConfig>;
   /** Writes secrets.adapters[adapter]. Empty/null clears. */
   adapterApiKey?: { adapter: string; value: string | null };
-  /** @deprecated Writes secrets.adapters.cursor */
-  cursorApiKey?: string | null;
   operatorPassword?: string;
   /** Required with `operatorPassword` once one is set: a session alone cannot replace the password. */
   currentPassword?: string;

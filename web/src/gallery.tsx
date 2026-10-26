@@ -48,7 +48,7 @@ const config = {
   session: { resumeOnStart: true, stallSeconds: 180, notifyOnComplete: false },
   network: { wsKeepaliveSeconds: 25 },
   prompts: { templates: [] },
-  secrets: { adapters: {}, cursorApiKey: { configured: false } },
+  secrets: { adapters: {} },
   onboarding: { completed: true },
   restartRequired: false,
   /* Inside the cwd above, so the agent tab shows the exposed-secrets warning. */
