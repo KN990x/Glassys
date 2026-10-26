@@ -6,7 +6,8 @@ import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentConfig, ModelParam, ThreadSummary, TranscriptEvent } from "@glassys/protocol";
 import { MAX_PINNED_CWDS, PROFILE_ID } from "@glassys/protocol";
-import { paths, isSafeId } from "./paths.js";
+import { paths, isSafeId, log } from "./paths.js";
+import { readJsonFile } from "./json-file.js";
 import { createMutex } from "./lock.js";
 import { loadState, saveState } from "./state.js";
 import { loadConfig } from "./config.js";
@@ -60,10 +61,15 @@ function titleFrom(cwd: string, events: TranscriptEvent[]): string {
   return snippet ? `${base} · ${snippet}` : base;
 }
 
+/**
+ * One thread's meta.json. Unreadable counts as missing, so one bad file does not take the whole
+ * thread list down; but it is logged, unlike before, so the thread that vanished has a reason.
+ */
 async function readJson<T>(path: string): Promise<T | null> {
   try {
-    return JSON.parse(await readFile(path, "utf8")) as T;
-  } catch {
+    return (await readJsonFile<T>(path)) ?? null;
+  } catch (err) {
+    log("warn", "thread metadata unreadable", { path, error: String(err) });
     return null;
   }
 }
@@ -285,9 +291,16 @@ async function lastSeqInFile(path: string): Promise<number> {
     const buf = Buffer.alloc(length);
     await handle.read(buf, 0, length, size - length);
     const lines = buf.toString("utf8").split("\n");
+    /* Parsed, not matched: a "seq" key nested inside an event would have been read as its own. */
     for (let i = lines.length - 1; i >= 0; i--) {
-      const m = /"seq":(\d+)/.exec(lines[i] ?? "");
-      if (m) return Number(m[1]);
+      const line = lines[i]?.trim();
+      if (!line) continue;
+      try {
+        const seq = (JSON.parse(line) as { seq?: unknown }).seq;
+        if (typeof seq === "number" && Number.isInteger(seq)) return seq;
+      } catch {
+        /* the first line of the window may be cut; a torn last line from a crash too */
+      }
     }
     return 0;
   } finally {

@@ -5,7 +5,7 @@ import YAML from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultConfig } from "@glassys/protocol";
 import { paths } from "./paths.js";
-import { resetLiveThreadCache, ensureLiveThread, listThreads } from "./threads.js";
+import { resetLiveThreadCache, ensureLiveThread, listThreads, stageLiveEvent, flushLiveTranscript, startNewThread, activateThread } from "./threads.js";
 
 describe("threads store", () => {
   let dir: string;
@@ -123,5 +123,23 @@ describe("threads store", () => {
     // A meta.json edited behind the gateway's back is not read again: only the gateway writes it.
     await writeFile(paths.threadMeta(id), JSON.stringify({ ...loaded!.meta, title: "outside" }), "utf8");
     expect((await listThreads()).find((t) => t.id === id)?.title).toBe("Disk audit");
+  });
+
+  it("keeps seq growing after a restart and when an older thread is live again", async () => {
+    const stage = async (text: string) => (await stageLiveEvent({ type: "user.message", text })).event.seq;
+    const first = await ensureLiveThread();
+    expect([await stage("a"), await stage("b")]).toEqual([1, 2]);
+    await flushLiveTranscript();
+    /* A tool's output can hold JSON with a "seq" of its own; only the event's counts. */
+    await stageLiveEvent({ type: "tool.end", callId: "c", ok: true, kind: "shell", outputPreview: '{"seq":1}' });
+    await flushLiveTranscript();
+    resetLiveThreadCache();
+    expect(await stage("c")).toBe(4);
+    await flushLiveTranscript();
+    await startNewThread(null, { fresh: true });
+    expect(await stage("other")).toBe(1);
+    await flushLiveTranscript();
+    await activateThread(first, null);
+    expect(await stage("d")).toBe(5);
   });
 });
