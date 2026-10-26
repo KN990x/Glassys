@@ -14,40 +14,50 @@ export function SdkLoginControls({
   onSignedIn: () => Promise<void> | void;
 }) {
   const t = useT();
-  const [busy, setBusy] = useState(false);
+  const tRef = useRef(t);
+  tRef.current = t;
+  /*
+   * "starting" while the login request is out, "waiting" once the gateway started it. Polling only
+   * in "waiting": started earlier, it read the previous attempt's cancelled or failed status and
+   * stopped the new login at once.
+   */
+  const [phase, setPhase] = useState<"idle" | "starting" | "waiting">("idle");
+  const busy = phase !== "idle";
   const [url, setUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const onSignedInRef = useRef(onSignedIn);
   onSignedInRef.current = onSignedIn;
+  /* One per Sign in press: a cancelled attempt's late reply must not move the next one along. */
+  const attempt = useRef(0);
+  const startedAt = useRef(0);
 
   useEffect(() => {
-    if (!busy) return;
+    if (phase !== "waiting") return;
     let stop = false;
-    const started = Date.now();
     async function tick() {
       try {
         const status = await api.adapterStatus(adapterId);
         if (stop) return;
-        if (status.loginUrl && status.loginUrl !== url) setUrl(status.loginUrl);
+        if (status.loginUrl) setUrl(status.loginUrl);
         if (status.loggedIn) {
-          setBusy(false);
+          setPhase("idle");
           setUrl("");
           await onSignedInRef.current();
           return;
         }
         if (status.loginStatus === "error") {
-          setBusy(false);
-          setError(status.loginError || t("wizard.cred.loginFailed"));
+          setPhase("idle");
+          setError(status.loginError || tRef.current("wizard.cred.loginFailed"));
           return;
         }
         if (status.loginStatus === "cancelled") {
-          setBusy(false);
+          setPhase("idle");
           return;
         }
-        if (Date.now() - started > POLL_MAX_MS) {
-          setBusy(false);
-          setError(t("wizard.cred.loginTimeout"));
+        if (Date.now() - startedAt.current > POLL_MAX_MS) {
+          setPhase("idle");
+          setError(tRef.current("wizard.cred.loginTimeout"));
         }
       } catch (err) {
         if (!stop) setError(err instanceof Error ? err.message : String(err));
@@ -59,34 +69,43 @@ export function SdkLoginControls({
       stop = true;
       clearInterval(id);
     };
-  }, [adapterId, busy, t, url]);
+  }, [adapterId, phase]);
 
   async function start() {
+    const mine = ++attempt.current;
     setError("");
     setCopied(false);
-    setBusy(true);
+    setUrl("");
+    setPhase("starting");
+    startedAt.current = Date.now();
     try {
       const result = await api.adapterLogin(adapterId);
+      if (mine !== attempt.current) return;
       if (result.url) setUrl(result.url);
       const status = await api.adapterStatus(adapterId);
+      if (mine !== attempt.current) return;
       if (status.loggedIn) {
-        setBusy(false);
+        setPhase("idle");
         setUrl("");
         await onSignedInRef.current();
+        return;
       }
+      setPhase("waiting");
     } catch (err) {
-      setBusy(false);
+      if (mine !== attempt.current) return;
+      setPhase("idle");
       setError(err instanceof Error ? err.message : String(err));
     }
   }
 
   async function cancel() {
+    attempt.current += 1;
     try {
       await api.adapterLoginCancel();
     } catch {
       /* ignore */
     }
-    setBusy(false);
+    setPhase("idle");
   }
 
   async function copyUrl() {
