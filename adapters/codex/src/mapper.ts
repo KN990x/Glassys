@@ -1,5 +1,5 @@
 import type { ServerMessage, ToolKind } from "@glassys/protocol";
-import { asRecord, num, str, toolDenied, usageFrom } from "@glassys/adapter-contract";
+import { asRecord, num, str, toolDenied, usageFrom, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @openai/codex-sdk's index.d.ts: items are agent_message, reasoning,
@@ -15,7 +15,6 @@ export function codexMapState(): CodexMapState {
   return { snapshots: new Map() };
 }
 
-const PREVIEW_CHARS = 4000;
 
 function suffix(state: CodexMapState, key: string, text: string): string {
   const prev = state.snapshots.get(key) ?? "";

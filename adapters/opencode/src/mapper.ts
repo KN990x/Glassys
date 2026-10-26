@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @opencode-ai/sdk's types.gen: parts carry `sessionID` and `messageID`; a tool part
@@ -25,7 +25,6 @@ export function opencodeMapState(): OpencodeMapState {
   return { tools: new Map(), snapshots: new Map(), output: new Map(), roles: new Map(), billed: new Set() };
 }
 
-const PREVIEW_CHARS = 4000;
 
 function textDelta(
   state: OpencodeMapState,

@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName, PREVIEW_CHARS } from "@glassys/adapter-contract";
 import { HOST_DENIAL_MARK, type HostLedger } from "./host.js";
 
 
@@ -16,10 +16,10 @@ function mapContent(content: unknown): ServerMessage[] {
 }
 
 function previewFromContent(content: unknown, ledger?: HostLedger): string | undefined {
-  if (typeof content === "string" && content) return content.slice(0, 4000);
+  if (typeof content === "string" && content) return content.slice(0, PREVIEW_CHARS);
   if (!Array.isArray(content)) {
     const rec = asRecord(content);
-    if (rec && typeof rec.text === "string") return rec.text.slice(0, 4000);
+    if (rec && typeof rec.text === "string") return rec.text.slice(0, PREVIEW_CHARS);
     return undefined;
   }
   const parts: string[] = [];
@@ -41,7 +41,7 @@ function previewFromContent(content: unknown, ledger?: HostLedger): string | und
     if (nested && typeof nested.text === "string") parts.push(nested.text);
   }
   const joined = parts.join("");
-  return joined ? joined.slice(0, 4000) : undefined;
+  return joined ? joined.slice(0, PREVIEW_CHARS) : undefined;
 }
 
 /**
@@ -60,7 +60,7 @@ function rawOutputText(raw: unknown): string | undefined {
   const rec = asRecord(raw);
   if (!rec) return undefined;
   const joined = [str(rec.output), str(rec.stdout), str(rec.stderr)].filter(Boolean).join("\n");
-  return joined ? joined.slice(0, 4000) : undefined;
+  return joined ? joined.slice(0, PREVIEW_CHARS) : undefined;
 }
 
 function preview(update: Record<string, unknown>, state: AcpMapState): string | undefined {

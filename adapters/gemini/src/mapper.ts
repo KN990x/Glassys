@@ -1,10 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import {
-  asRecord,
-  extractDiff,
-  str,
-  toolKindFromName,
-} from "@glassys/adapter-contract";
+import { asRecord, extractDiff, str, toolKindFromName, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 export function mapGeminiChunk(chunk: unknown, tools = new Map<string, string>()): ServerMessage[] {
   const rec = asRecord(chunk);
@@ -49,7 +44,7 @@ export function mapGeminiChunk(chunk: unknown, tools = new Map<string, string>()
         callId: id,
         ok: status !== "error",
         kind: toolKindFromName(tools.get(id) || name),
-        outputPreview: str(value.output) || str(rec.output),
+        outputPreview: (str(value.output) || str(rec.output))?.slice(0, PREVIEW_CHARS),
         error: status === "error" ? str(rec.error) || "Tool failed" : undefined,
         diff,
         stats: pulled.stats || fromRec.stats,

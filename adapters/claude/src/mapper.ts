@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, diffHeader, extractDiff, str, toolDenied, toolKindFromName, unifiedDiff, usageFrom } from "@glassys/adapter-contract";
+import { asRecord, diffHeader, extractDiff, str, toolDenied, toolKindFromName, unifiedDiff, usageFrom, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @anthropic-ai/claude-agent-sdk's sdk.d.ts: `stream_event` carries raw Messages API
@@ -23,7 +23,6 @@ export function claudeMapState(): ClaudeMapState {
   return { tools: new Map(), sawStreamEvent: false, denied: new Set() };
 }
 
-const PREVIEW_CHARS = 4000;
 
 function toolLoc(input: Record<string, unknown>): { path?: string; command?: string } {
   return {

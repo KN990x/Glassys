@@ -1,10 +1,9 @@
 import type { ServerMessage, ToolKind, ToolEnd } from "@glassys/protocol";
-import { asRecord, diffStats, num, str, toolDenied, toolKindFromName, unifiedDiff } from "@glassys/adapter-contract";
+import { asRecord, diffStats, num, str, toolDenied, toolKindFromName, unifiedDiff, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 export { toolKindFromName, diffStats };
 
 /** Output previews stop here, as in every other adapter. */
-const PREVIEW_CHARS = 4000;
 
 /**
  * Per-run mapping state. Cursor's shell output deltas carry no call id, so they belong to the

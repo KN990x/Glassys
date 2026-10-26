@@ -47,3 +47,6 @@ export function usageFrom(raw: unknown): { inputTokens?: number; outputTokens?: 
   if (!inputTokens && !outputTokens) return null;
   return { inputTokens, outputTokens };
 }
+
+/** How much of a tool's output a card keeps: the full text stays with the agent. */
+export const PREVIEW_CHARS = 4000;
