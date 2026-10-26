@@ -24,6 +24,7 @@ import { Callout, StatusBadge } from "../components/Primitives";
 import { SandboxModeSelect } from "../components/SandboxModeSelect";
 import { Switch } from "../components/Switch";
 import { GlassysMark, IconCheck } from "../components/Icon";
+import { ArgsInput } from "../components/ArgsInput";
 
 type StepId = "adapter" | "workspace" | "phone" | "credential" | "model" | "rules" | "execution" | "acp";
 
@@ -573,9 +574,9 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               </label>
               <label>
                 {t("wizard.acp.args")}
-                <input
-                  value={optionStringArray(options, "args", []).join(" ")}
-                  onChange={(e) => setOptions(setOption(options, "args", e.target.value.split(/\s+/).filter(Boolean)))}
+                <ArgsInput
+                  value={optionStringArray(options, "args", [])}
+                  onChange={(args) => setOptions(setOption(options, "args", args))}
                   placeholder={t("wizard.acp.argsPlaceholder")}
                 />
               </label>

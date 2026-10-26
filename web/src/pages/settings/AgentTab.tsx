@@ -20,6 +20,7 @@ import { SandboxModeSelect } from "../../components/SandboxModeSelect";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { cwdExposesDataDir, effectivePermissionMode, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
+import { ArgsInput } from "../../components/ArgsInput";
 
 export function AgentTab({
   draft,
@@ -296,16 +297,13 @@ export function AgentTab({
             />
           </SettingRow>
           <SettingRow label={t("wizard.acp.args")} htmlFor="set-acp-args">
-            <input
+            <ArgsInput
               id="set-acp-args"
-              value={optionStringArray(draft.agent.options, "args", []).join(" ")}
-              onChange={(e) =>
+              value={optionStringArray(draft.agent.options, "args", [])}
+              onChange={(args) =>
                 setDraft({
                   ...draft,
-                  agent: {
-                    ...draft.agent,
-                    options: setOption(draft.agent.options, "args", e.target.value.split(/\s+/).filter(Boolean)),
-                  },
+                  agent: { ...draft.agent, options: setOption(draft.agent.options, "args", args) },
                 })
               }
             />
