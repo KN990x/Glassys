@@ -48,7 +48,6 @@ async function loadSdk(): Promise<{ GeminiCliAgent: GeminiAgentCtor }> {
 }
 
 class GeminiSession implements AdapterSession {
-  private tools = new Map<string, string>();
   private model: string;
   private handle: GeminiSessionHandle;
   private opts: AdapterCreateOptions;
@@ -81,11 +80,14 @@ class GeminiSession implements AdapterSession {
     const runId = randomUUID();
     const prompt = promptWithAttachments(text, sendOpts?.attachments);
     return pendingRun(runId, async ({ signal, isCancelled }) => {
+      /* Call ids are unique within a run only: a map kept on the session ended a reused id from a
+         later run without ever starting its card. */
+      const tools = new Map<string, string>();
       try {
         for await (const chunk of this.handle.sendStream(prompt, signal)) {
           if (isCancelled()) return "cancelled";
           recordRaw?.(chunk);
-          for (const ev of mapGeminiChunk(chunk, this.tools)) onEvent(ev);
+          for (const ev of mapGeminiChunk(chunk, tools)) onEvent(ev);
         }
         return "finished";
       } catch (err) {
