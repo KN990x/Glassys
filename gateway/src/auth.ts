@@ -53,7 +53,7 @@ export async function signSession(): Promise<string> {
     .sign(new TextEncoder().encode(jwtSecret));
 }
 
-export async function sessionClaims(token: string | undefined): Promise<JWTPayload | null> {
+async function sessionClaims(token: string | undefined): Promise<JWTPayload | null> {
   if (!token) return null;
   try {
     const { jwtSecret, jwtEpoch } = await loadSecrets();

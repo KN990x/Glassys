@@ -62,7 +62,7 @@ async function writeSubs(subscriptions: PushSubscriptionRecord[]): Promise<void>
   await writeFileAtomic(paths.pushSubscriptions(), JSON.stringify({ subscriptions }, null, 2));
 }
 
-export async function listPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+async function listPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
   return withPushLock(readSubs);
 }
 
@@ -162,7 +162,7 @@ export async function removePushSubscription(endpoint: string): Promise<void> {
   });
 }
 
-export function vapidSubject(publicUrl?: string): string {
+function vapidSubject(publicUrl?: string): string {
   const url = publicUrl?.trim() || "";
   if (url.startsWith("https://")) return url;
   return "mailto:operator@localhost";

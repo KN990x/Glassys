@@ -22,7 +22,7 @@ describe("wrapSdkError", () => {
   });
 
   it("rethrows AdapterError unchanged", () => {
-    const inner = new AdapterError("already", "run", true);
+    const inner = new AdapterError("already", "run");
     try {
       wrapSdkError(inner, "startup");
       throw new Error("expected throw");

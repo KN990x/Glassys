@@ -8,7 +8,7 @@ import { Disclosure, ListRow } from "./Primitives";
 import { Hunk, REVEAL_EVENT } from "./ToolCard";
 import { IconAlert, IconCheck, IconClose, IconError, IconFileEdit, IconFile, IconSpinner, IconStop, IconTerminal } from "./Icon";
 
-export type ActivityTab = "commands" | "files";
+type ActivityTab = "commands" | "files";
 
 function scrollToTool(node: HTMLElement): void {
   const reduce = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -18,7 +18,7 @@ function scrollToTool(node: HTMLElement): void {
 }
 
 /** Scroll the transcript to the call a row came from, and flash it, opening its group if folded. */
-export function revealBlock(id: string): void {
+function revealBlock(id: string): void {
   const node = document.getElementById(`tool-${id}`);
   if (node) {
     scrollToTool(node);

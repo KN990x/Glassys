@@ -35,8 +35,6 @@ export function ConfirmDialog({
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     /* A destructive ask starts on Cancel: Enter, pressed out of habit, must not delete. */
     (request.destructive ? cancelRef : confirmRef).current?.focus();
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -61,7 +59,6 @@ export function ConfirmDialog({
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
-      document.body.style.overflow = prev;
       if (opener?.isConnected) opener.focus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the first focus belongs to the request it opened with

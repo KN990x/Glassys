@@ -30,7 +30,6 @@ import { EventPump } from "./pump.js";
 /** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
 const recordRaw = fixtureRecorder("opencode");
 
-export { EventPump } from "./pump.js";
 
 const DEFAULT_OPENCODE_IDLE_MS = 600_000;
 let OPENCODE_IDLE_MS = DEFAULT_OPENCODE_IDLE_MS;
@@ -385,13 +384,9 @@ class OpencodeSession implements AdapterSession {
   }
 
   private async reject(permissionId: string): Promise<void> {
-    const reply = (this.client as unknown as {
-      postSessionIdPermissionsPermissionId?: (args: unknown) => Promise<unknown>;
-    }).postSessionIdPermissionsPermissionId;
-    if (!reply) return;
     try {
       await checked(
-        reply.call(this.client, {
+        this.client.postSessionIdPermissionsPermissionId({
           path: { id: this.agentId, permissionID: permissionId },
           query: { directory: this.directory },
           body: { response: "reject" },

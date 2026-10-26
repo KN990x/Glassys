@@ -31,7 +31,6 @@ describe("ThreadDrawer", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
-    document.body.style.overflow = "";
   });
 
   it("shows cwd, git context, and disables new while busy", async () => {
@@ -68,7 +67,6 @@ describe("ThreadDrawer", () => {
     expect(host.textContent).toContain("dirty");
     expect(host.textContent).toContain("/opt/pinned");
     expect(host.querySelector("button.rail-new")?.hasAttribute("disabled")).toBe(true);
-    expect(document.body.style.overflow).toBe("hidden");
   });
 
   it("filters threads by title", async () => {

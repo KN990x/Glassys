@@ -55,7 +55,7 @@ import { eventsToMarkdown } from "./transcript-export.js";
 import { notifyFromEvent, resetPushRunFlags } from "./push.js";
 import { bindScheduleRuntime, startSchedules, stopSchedules } from "./schedules.js";
 
-export interface Runtime {
+interface Runtime {
   busy: boolean;
   agentId: string | null;
   fingerprint: string | null;
@@ -155,7 +155,6 @@ function abortStartingRun(): void {
 }
 
 export const MAX_QUEUE = 32;
-export { MAX_ATTACHMENTS };
 /** Above the adapters' CANCEL_ESCALATE_MS, so their interrupt-then-close runs before this gives up. */
 export const DEFAULT_RUN_CANCEL_TIMEOUT_MS = 15_000;
 export const DEFAULT_ENQUEUE_ROTATING_RETRIES = 200;
@@ -1054,12 +1053,8 @@ export async function cancelRun(onFailure?: (message: string) => void): Promise<
  */
 const withThreadOps = createMutex();
 
-export async function applyConfigPatch(
-  patch: ConfigPatch,
-  opts?: { identity?: "auto" | "preserve" },
-): Promise<{ restart: boolean }> {
-  if (opts?.identity === "preserve") return applyConfigPatchUnlocked(patch, opts);
-  return withThreadOps(() => applyConfigPatchUnlocked(patch, opts));
+export async function applyConfigPatch(patch: ConfigPatch): Promise<{ restart: boolean }> {
+  return withThreadOps(() => applyConfigPatchUnlocked(patch));
 }
 
 async function applyConfigPatchUnlocked(
@@ -1374,4 +1369,3 @@ export async function shutdownRuntime(): Promise<void> {
 }
 
 export { readTranscript, readTranscriptSnapshot };
-export { isActiveRunError } from "./errors.js";

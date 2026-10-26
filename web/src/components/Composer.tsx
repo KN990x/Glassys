@@ -24,7 +24,7 @@ import {
   IconZap,
 } from "./Icon";
 
-export type ComposerProps = {
+type ComposerProps = {
   config: RedactedConfig;
   onConfig: (c: RedactedConfig) => void;
   caps?: AdapterCapabilities;

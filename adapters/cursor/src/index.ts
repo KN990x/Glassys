@@ -26,8 +26,6 @@ import {
 /** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
 const recordRaw = fixtureRecorder("cursor");
 
-export { AdapterError } from "@glassys/adapter-contract";
-export { wrapSdkError, runResultErrorMessage } from "./errors.js";
 
 function settingSources(opts: AdapterCreateOptions): SettingSource[] {
   const raw = optionStringArray(opts.options, "settingSources", ["project", "user"]);
@@ -221,14 +219,3 @@ export const cursorAdapter: Adapter = {
   },
 };
 
-export { mapCursorDelta } from "./mapper.js";
-export {
-  CURSOR_FLAGSHIP_MODEL_ID,
-  CURSOR_STATIC_CATALOG,
-  CURSOR_DEFAULT_MODEL,
-  cursorParamsForFlagship,
-  cursorCatalogFromListed,
-  parseCursorModelList,
-  normalizeCursorConfig,
-} from "./catalog.js";
-export type { Adapter, AdapterSession, AdapterCreateOptions, AdapterRun } from "@glassys/adapter-contract";

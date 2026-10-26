@@ -3,8 +3,6 @@ import { asRecord } from "./list.js";
 import { diffStats, unifiedDiff } from "./diff.js";
 import { str } from "./util.js";
 
-export { diffStats };
-
 export function toolKindFromName(name: string | undefined): ToolKind {
   const n = (name ?? "").toLowerCase().replace(/[_-]/g, "");
   if (n.includes("semsearch") || n.includes("semanticsearch") || n === "semsearch") return "semsearch";
@@ -24,11 +22,6 @@ export function toolKindFromName(name: string | undefined): ToolKind {
 
 export function looksLikeDiff(text: string): boolean {
   return /^(diff --git |--- |\+\+\+ |@@ )/m.test(text);
-}
-
-/** Whole-file replacement as a unified diff (diffed line by line, not one big hunk). */
-export function unifiedFromReplacement(path: string, oldText: string | null | undefined, newText: string): string {
-  return unifiedDiff(path, oldText, newText);
 }
 
 /** Pull a unified diff out of an SDK payload when the vendor already provided one. */
@@ -66,7 +59,7 @@ export function extractDiff(value: unknown): { diff?: string; stats?: { add: num
     const path = str(rec.path) || "file";
     const oldText = typeof rec.oldText === "string" ? rec.oldText : null;
     const newText = typeof rec.newText === "string" ? rec.newText : "";
-    const unified = unifiedFromReplacement(path, oldText, newText);
+    const unified = unifiedDiff(path, oldText, newText);
     return { diff: unified, stats: diffStats(unified), truncated: truncated || undefined };
   }
   return truncated ? { truncated: true } : {};

@@ -3,7 +3,7 @@
  */
 
 /** macOS and iOS spell modifiers as glyphs; everyone else as words. */
-export function isApplePlatform(): boolean {
+function isApplePlatform(): boolean {
   if (typeof navigator === "undefined") return false;
   const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform || "";
   return /mac|iphone|ipad|ipod/i.test(platform);

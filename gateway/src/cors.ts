@@ -12,7 +12,7 @@ export const VITE_DEV_PORT = 5173;
 // `pnpm run dev` runs the gateway from TypeScript source through tsx; the installed service always runs gateway/dist.
 const RUNNING_FROM_SOURCE = import.meta.url.endsWith(".ts");
 
-export function originMatchesRequestHost(origin: string, hostHeader: string | undefined): boolean {
+function originMatchesRequestHost(origin: string, hostHeader: string | undefined): boolean {
   if (!hostHeader) return false;
   try {
     const url = new URL(origin);
@@ -92,7 +92,7 @@ async function originPolicy(origin: string | undefined, requestHost?: string): P
   };
 }
 
-export async function allowOrigin(origin: string | undefined, requestHost?: string): Promise<string | null> {
+async function allowOrigin(origin: string | undefined, requestHost?: string): Promise<string | null> {
   return resolveAllowedOrigin(await originPolicy(origin, requestHost));
 }
 

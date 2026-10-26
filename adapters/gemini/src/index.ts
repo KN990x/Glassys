@@ -142,12 +142,8 @@ export const geminiAdapter: Adapter = {
     return { ...agent, model: agent.model || "gemini-2.5-pro" };
   },
 
+  /* A static catalog: probe() is what reports a missing SDK, not this. */
   async listModels() {
-    try {
-      await loadSdk();
-    } catch {
-      /* Static catalog; probe() reports a missing SDK. Do not surface that as a live-catalog failure. */
-    }
     return {
       models: GEMINI_STATIC_CATALOG,
       source: "fallback" as const,

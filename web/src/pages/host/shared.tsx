@@ -83,8 +83,7 @@ export function RefreshButton({ onClick, busy }: { onClick: () => void; busy?: b
   );
 }
 
-// ---------------------------------------------------------------- overview
-
+/* Unit state, shared by Overview (failed units) and Services. */
 export function UnitState({ unit }: { unit: ServiceUnit }) {
   return <span className={`unit-state tone-${unitTone(unit)}`}>{unit.sub || unit.active}</span>;
 }

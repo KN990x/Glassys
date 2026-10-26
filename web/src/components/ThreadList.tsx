@@ -39,7 +39,7 @@ type Workspace = {
  * same directory three times — once under Pinned, once as a group heading, once
  * as the group's path — before any thread title appeared.
  */
-export function buildWorkspaces(input: {
+function buildWorkspaces(input: {
   threads: ThreadSummary[];
   pins?: string[];
   recents?: string[];

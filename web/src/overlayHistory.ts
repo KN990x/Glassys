@@ -2,7 +2,7 @@
  * Mobile overlays (thread sheet, Settings) own one history entry so the system
  * back gesture closes them instead of leaving the app.
  */
-export type OverlayKind = "threads" | "settings";
+type OverlayKind = "threads" | "settings";
 
 /* history.back() is async: until popstate lands, history.state still reads as
    the overlay, and a second close would walk out of the app. */

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useT } from "../i18n";
 import { IconClose, IconPlus } from "./Icon";
 import { ThreadList, type ThreadListProps } from "./ThreadList";
@@ -22,13 +22,6 @@ export function ThreadDrawer({
   const panelRef = useRef<HTMLElement>(null);
   useDialogFocus(panelRef, onClose, closeRef);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
 
   return (
     <div className="thread-drawer" role="dialog" aria-modal="true" aria-labelledby="threads-title">

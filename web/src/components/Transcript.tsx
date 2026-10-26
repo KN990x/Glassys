@@ -32,7 +32,7 @@ const CHIP_GLYPH: Record<string, ReactNode> = {
 };
 
 /** Consecutive tool calls travel together, everything else stands alone. */
-export function groupBlocks(blocks: Block[]): Array<Block | { kind: "tools"; id: string; blocks: ToolBlock[] }> {
+function groupBlocks(blocks: Block[]): Array<Block | { kind: "tools"; id: string; blocks: ToolBlock[] }> {
   const out: Array<Block | { kind: "tools"; id: string; blocks: ToolBlock[] }> = [];
   for (const b of blocks) {
     if (b.kind !== "tool") {
@@ -50,7 +50,7 @@ export function groupBlocks(blocks: Block[]): Array<Block | { kind: "tools"; id:
 }
 
 /** Search hits are marked in plain text; a markdown body keeps its own markup. */
-export function Highlight({ text, query }: { text: string; query: string }) {
+function Highlight({ text, query }: { text: string; query: string }) {
   const q = query.trim();
   if (!q) return <>{text}</>;
   const parts: ReactNode[] = [];

@@ -11,7 +11,6 @@ export class AdapterError extends Error {
   constructor(
     message: string,
     readonly phase: "startup" | "run" = "startup",
-    readonly retryable = false,
   ) {
     super(message);
     this.name = "AdapterError";

@@ -82,7 +82,7 @@ function MarkdownBodyInner({ text, live = false }: { text: string; live?: boolea
 export const MarkdownBody = memo(MarkdownBodyInner);
 
 /** `language-bash` on the inner <code> is how remark labels a fenced block. */
-export function codeLanguage(node: ReactNode): string {
+function codeLanguage(node: ReactNode): string {
   const cls =
     node && typeof node === "object" && "props" in node
       ? ((node as { props?: { className?: string } }).props?.className ?? "")

@@ -37,7 +37,7 @@ export function clearSessionCookie(secure = false): string {
   return parts.join("; ");
 }
 
-export function forwardedProto(req: IncomingMessage): string {
+function forwardedProto(req: IncomingMessage): string {
   const raw = req.headers["x-forwarded-proto"];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return String(value || "")

@@ -1,6 +1,6 @@
 import type { Block, ToolBlock } from "./transcript";
 
-export type ActivityCommand = {
+type ActivityCommand = {
   id: string;
   command: string;
   title: string;
@@ -8,7 +8,7 @@ export type ActivityCommand = {
   lines: number;
 };
 
-export type ActivityFile = {
+type ActivityFile = {
   path: string;
   /** A file the agent only looked at is not the same as one it rewrote. */
   changed: boolean;

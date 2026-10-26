@@ -3,10 +3,8 @@ import { AdapterError } from "@glassys/adapter-contract";
 
 export function wrapSdkError(err: unknown, phase: "startup" | "run" = "startup"): never {
   if (err instanceof AdapterError) throw err;
-  /* CursorSdkError is the root of every SDK error (CursorAgentError included); keep its retry hint. */
-  if (err instanceof CursorSdkError) {
-    throw new AdapterError(err.message, phase, Boolean(err.isRetryable));
-  }
+  /* CursorSdkError is the root of every SDK error (CursorAgentError included). */
+  if (err instanceof CursorSdkError) throw new AdapterError(err.message, phase);
   const message = err instanceof Error ? err.message : String(err);
   throw new AdapterError(message, phase);
 }

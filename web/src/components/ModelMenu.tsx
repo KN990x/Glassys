@@ -34,7 +34,7 @@ function applyVariant(model: ModelCatalogItem, variantParams: ModelParam[], curr
 }
 
 /** The chip's own label: model, and the effort it is running at. */
-export function modelChipLabel(model: ModelCatalogItem | undefined, params: ModelParam[], fallback: string): string {
+function modelChipLabel(model: ModelCatalogItem | undefined, params: ModelParam[], fallback: string): string {
   if (!model) return fallback;
   const variant = matchingVariant(model, params);
   const name = model.displayName || model.id;

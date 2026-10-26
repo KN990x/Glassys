@@ -19,8 +19,7 @@ export const paths = {
   threadMeta: (id: string) => join(defaultDataDir(), "threads", id, "meta.json"),
   threadTranscript: (id: string) => join(defaultDataDir(), "threads", id, "transcript.jsonl"),
   uploads: () => join(defaultDataDir(), "uploads"),
-  adapterStore: (id: string) =>
-    id === "cursor" ? join(defaultDataDir(), "cursor-store") : join(defaultDataDir(), `${id}-store`),
+  adapterStore: (id: string) => join(defaultDataDir(), `${id}-store`),
   schedules: () => join(defaultDataDir(), "schedules.json"),
   pushSubscriptions: () => join(defaultDataDir(), "push-subscriptions.json"),
   revokedSessions: () => join(defaultDataDir(), "revoked-sessions.json"),

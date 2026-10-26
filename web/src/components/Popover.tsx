@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-export type PopoverSide = "top" | "bottom";
-export type PopoverAlign = "start" | "end";
+type PopoverSide = "top" | "bottom";
+type PopoverAlign = "start" | "end";
 
 /**
  * One floating surface for every menu in the product. The permission chip, the

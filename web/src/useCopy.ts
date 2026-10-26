@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type CopyState = "idle" | "copied" | "failed";
+type CopyState = "idle" | "copied" | "failed";
 
 /**
  * Copy to the clipboard and say how it went for a moment. One implementation for every copy

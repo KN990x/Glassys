@@ -24,7 +24,7 @@ import {
   IconThreads,
 } from "../components/Icon";
 
-export type PaletteActions = {
+type PaletteActions = {
   newThread: () => void;
   cancel: () => void;
   exportThread: () => void;

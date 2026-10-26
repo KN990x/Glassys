@@ -4,7 +4,7 @@ import type { PromptTemplate } from "@glassys/protocol";
 import { Kbd } from "./Primitives";
 import { IconSearch, IconZap } from "./Icon";
 
-export type PaletteGroup = "product" | "thread" | "workspace" | "template";
+type PaletteGroup = "product" | "thread" | "workspace" | "template";
 
 export type PaletteItem = {
   id: string;
@@ -22,7 +22,7 @@ export function filterPaletteItems(items: PaletteItem[], query: string): Palette
   return items.filter((item) => `${item.label} ${item.hint || ""} ${item.id}`.toLowerCase().includes(q));
 }
 
-export function paletteItemIds(items: PaletteItem[]): string {
+function paletteItemIds(items: PaletteItem[]): string {
   return items.map((item) => item.id).join("\n");
 }
 

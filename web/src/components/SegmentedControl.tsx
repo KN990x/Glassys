@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 
-export type Segment<T extends string> = {
+type Segment<T extends string> = {
   value: T;
   label: string;
   glyph?: ReactNode;

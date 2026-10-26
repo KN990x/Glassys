@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useT } from "../i18n";
-import { IconAlert, IconClose, IconError, IconInfo } from "./Icon";
+import { IconClose } from "./Icon";
+import { ToneGlyph } from "./Primitives";
 
 export type AlertTone = "error" | "warn" | "info";
 
@@ -13,11 +14,8 @@ export type Alert = {
   extra?: ReactNode;
 };
 
-function Glyph({ tone }: { tone: AlertTone }) {
-  if (tone === "error") return <IconError />;
-  if (tone === "warn") return <IconAlert />;
-  return <IconInfo />;
-}
+/* The same glyph a Callout of that tone shows. */
+const GLYPH_TONE = { error: "danger", warn: "warn", info: "neutral" } as const;
 
 /**
  * Eight separate stacked <p class="banner"> elements used to push the transcript
@@ -35,7 +33,7 @@ export function AlertStack({ alerts }: { alerts: Alert[] }) {
           role={alert.tone === "error" ? "alert" : "status"}
         >
           <span className="alert-icon">
-            <Glyph tone={alert.tone} />
+            <ToneGlyph tone={GLYPH_TONE[alert.tone]} />
           </span>
           <span className="alert-text">
             {alert.text}

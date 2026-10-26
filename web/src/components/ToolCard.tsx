@@ -55,7 +55,7 @@ function ToolState({ status, label }: { status: string; label: string }) {
   );
 }
 
-export function toolGroupSummary(blocks: ToolBlock[]): { files: number; add: number; del: number } {
+function toolGroupSummary(blocks: ToolBlock[]): { files: number; add: number; del: number } {
   const files = new Set<string>();
   let add = 0;
   let del = 0;
@@ -68,7 +68,7 @@ export function toolGroupSummary(blocks: ToolBlock[]): { files: number; add: num
 }
 
 /** Anything unfinished or unhappy opens itself; a long clean run stays folded. */
-export function groupOpensByDefault(blocks: ToolBlock[], showDiff: boolean): boolean {
+function groupOpensByDefault(blocks: ToolBlock[], showDiff: boolean): boolean {
   if (blocks.some((b) => b.status === "running" || b.status === "error" || b.status === "denied")) return true;
   if (showDiff && blocks.some((b) => b.diff)) return true;
   return blocks.length <= 3;
@@ -320,7 +320,7 @@ function splitHunks(diff: string): string[] {
 }
 
 /** "@@ -12,6 +12,7 @@" gives the first old and new line of a hunk. */
-export function hunkStart(header: string): { old: number; new: number } | null {
+function hunkStart(header: string): { old: number; new: number } | null {
   const m = header.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
   return m ? { old: Number(m[1]), new: Number(m[2]) } : null;
 }

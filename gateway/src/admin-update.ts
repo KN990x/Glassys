@@ -97,7 +97,7 @@ export function stalledUpgradeReason(
 }
 
 /** The current status, with a run that can no longer finish recorded as an error. */
-export async function currentUpgradeStatus(): Promise<UpgradeStatus> {
+async function currentUpgradeStatus(): Promise<UpgradeStatus> {
   const cur = await readUpgradeStatus();
   const reason = stalledUpgradeReason(cur);
   if (!reason) return cur;
@@ -152,7 +152,7 @@ async function git(args: string[], timeout = GIT_TIMEOUT_MS): Promise<string> {
   return stdout.trim();
 }
 
-export async function readInstallGit(): Promise<{ sha: string; branch: string; dirty: boolean } | undefined> {
+async function readInstallGit(): Promise<{ sha: string; branch: string; dirty: boolean } | undefined> {
   if (gitInfoOverride !== undefined) return gitInfoOverride ?? undefined;
   if (!existsSync(join(repoRoot(), ".git"))) return undefined;
   try {
