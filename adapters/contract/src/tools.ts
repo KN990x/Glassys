@@ -8,7 +8,15 @@ export function toolKindFromName(name: string | undefined): ToolKind {
   if (n.includes("semsearch") || n.includes("semanticsearch") || n === "semsearch") return "semsearch";
   if (n === "read" || n.includes("readfile") || n === "fileread" || n === "readtextfile") return "read";
   if (n === "write" || n.includes("writefile") || n === "filewrite" || n === "writetextfile") return "write";
-  if (n === "edit" || n.includes("applypatch") || n.includes("applydiff") || n.includes("stredit") || n.includes("editfile")) {
+  if (
+    n === "edit" ||
+    n === "multiedit" ||
+    n === "notebookedit" ||
+    n.includes("applypatch") ||
+    n.includes("applydiff") ||
+    n.includes("stredit") ||
+    n.includes("editfile")
+  ) {
     return "edit";
   }
   if (n === "grep" || n.includes("ripgrep") || n === "search") return "grep";

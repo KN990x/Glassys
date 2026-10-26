@@ -10,12 +10,21 @@ const inputs: unknown[] = [];
 vi.mock("@openai/codex-sdk", () => {
   class FakeThread {
     constructor(public id: string | null) {}
-    async runStreamed(input: unknown) {
+    async runStreamed(input: unknown, turnOpts?: { signal?: AbortSignal }) {
       inputs.push(input);
       const events = scripted.shift() ?? [];
       return {
         events: (async function* () {
-          for (const e of events) yield e;
+          for (const e of events) {
+            /* A turn that only ends when its signal aborts it, as the SDK's process does. */
+            if (e === "HANG") {
+              await new Promise<void>((resolve) => turnOpts?.signal?.addEventListener("abort", () => resolve(), { once: true }));
+              const err = new Error("aborted");
+              err.name = "AbortError";
+              throw err;
+            }
+            yield e;
+          }
         })(),
       };
     }
@@ -134,5 +143,17 @@ describe("codex failures", () => {
     const status = await (await session.send("hi", (e) => events.push(e as { type: string }))).wait();
     expect(status).toBe("error");
     expect(events.filter((e) => e.type === "run.error")).toHaveLength(1);
+  });
+});
+
+describe("codex dispose", () => {
+  it("aborts a turn still going when the session is dropped", async () => {
+    scripted.push(["HANG"]);
+    const session = await codexAdapter.create(opts);
+    const run = await session.send("hi", () => undefined);
+    const status = run.wait();
+    await new Promise((r) => setTimeout(r, 10));
+    await session.dispose();
+    expect(await status).toBe("cancelled");
   });
 });

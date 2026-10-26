@@ -16,6 +16,9 @@ import { mapGeminiChunk } from "./mapper.js";
 /** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
 const recordRaw = fixtureRecorder("gemini");
 
+/** Picked when the operator has not chosen one; the catalog below lists it too. */
+const GEMINI_DEFAULT_MODEL = "gemini-2.5-pro";
+
 export const GEMINI_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro" },
   { id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
@@ -60,7 +63,7 @@ class GeminiSession implements AdapterSession {
 
   static async start(opts: AdapterCreateOptions, resumeId?: string): Promise<GeminiSession> {
     const id = resumeId || randomUUID();
-    const model = opts.model || "gemini-2.5-pro";
+    const model = opts.model || GEMINI_DEFAULT_MODEL;
     const handle = await openHandle(opts, resumeId, model, id);
     return new GeminiSession(handle, id, model, opts);
   }
@@ -134,12 +137,12 @@ export const geminiAdapter: Adapter = {
     toolConfirmation: "none",
     attachments: false,
     auth: { kind: "api-key", envNames: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
-    defaultModel: { id: "gemini-2.5-pro", params: [] },
+    defaultModel: { id: GEMINI_DEFAULT_MODEL, params: [] },
     liveCatalog: false,
   },
 
   normalizeConfig(agent: AgentConfig): AgentConfig {
-    return { ...agent, model: agent.model || "gemini-2.5-pro" };
+    return { ...agent, model: agent.model || GEMINI_DEFAULT_MODEL };
   },
 
   /* A static catalog: probe() is what reports a missing SDK, not this. */

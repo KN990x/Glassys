@@ -18,6 +18,9 @@ describe("extractDiff", () => {
     expect(toolKindFromName("list_dir")).toBe("ls");
     expect(toolKindFromName("listdir")).toBe("ls");
     expect(toolKindFromName("execute")).toBe("shell");
+    expect(toolKindFromName("MultiEdit")).toBe("edit");
+    expect(toolKindFromName("NotebookEdit")).toBe("edit");
+    expect(toolKindFromName("todowrite")).toBe("other");
   });
 
   it("turns ACP spec diffs into unified diffs", () => {

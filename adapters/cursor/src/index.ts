@@ -108,9 +108,12 @@ class CursorSession implements AdapterSession {
       wrapSdkError(err, "startup");
     }
 
+    /* Like pendingRun: a cancel that arrives once the run is over must not reach the SDK. */
+    let settled = false;
     return {
       id: run.id,
       cancel: async () => {
+        if (settled) return;
         if (!run.supports("cancel")) {
           throw new AdapterError("This Cursor run cannot be cancelled", "run");
         }
@@ -129,6 +132,8 @@ class CursorSession implements AdapterSession {
           return "finished";
         } catch (err) {
           wrapSdkError(err, "run");
+        } finally {
+          settled = true;
         }
       },
     };

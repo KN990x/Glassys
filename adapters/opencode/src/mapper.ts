@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, extractDiff, num, str, toolDenied, toolKindFromName, PREVIEW_CHARS } from "@glassys/adapter-contract";
+import { asRecord, extractDiff, num, snapshotSuffix, str, toolDenied, toolKindFromName, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @opencode-ai/sdk's types.gen: parts carry `sessionID` and `messageID`; a tool part
@@ -33,10 +33,9 @@ function textDelta(
   delta: string | undefined,
   kind: "text" | "thinking",
 ): ServerMessage[] {
-  const prev = state.snapshots.get(id) ?? "";
-  state.snapshots.set(id, text);
-  /* Prefer the event's own delta; only diff snapshots when it has none. */
-  const next = delta ?? (text.startsWith(prev) ? text.slice(prev.length) : "");
+  /* Prefer the event's own delta; only diff snapshots when it has none (the snapshot is kept either way). */
+  const diffed = snapshotSuffix(state.snapshots, id, text);
+  const next = delta ?? diffed;
   if (!next) return [];
   return [{ type: kind === "thinking" ? "thinking.delta" : "text.delta", text: next }];
 }
@@ -72,11 +71,8 @@ function mapToolPart(part: Record<string, unknown>, state: OpencodeMapState): Se
   }
   const output = str(toolState.output) ?? str(asRecord(toolState.metadata)?.output);
   if (status === "running" && output) {
-    const prev = state.output.get(id) ?? "";
-    state.output.set(id, output);
-    if (output.startsWith(prev) && output.length > prev.length) {
-      out.push({ type: "tool.progress", callId: id, chunk: output.slice(prev.length) });
-    }
+    const chunk = snapshotSuffix(state.output, id, output);
+    if (chunk) out.push({ type: "tool.progress", callId: id, chunk });
   }
   if (status === "completed" || status === "error") {
     state.output.delete(id);

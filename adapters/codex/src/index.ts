@@ -8,6 +8,7 @@ import {
   promptWithAttachments,
   type Adapter,
   type AdapterCreateOptions,
+  type AdapterRun,
   type AdapterSession,
   type PromptAttachment,
 } from "@glassys/adapter-contract";
@@ -31,6 +32,9 @@ const EFFORT_PARAM = {
     { value: "xhigh", displayName: "Extra high" },
   ],
 };
+
+/** Picked when the operator has not chosen one; the catalog below lists it too. */
+const CODEX_DEFAULT_MODEL = "gpt-5.6-sol";
 
 export const CODEX_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "gpt-5.6-sol", displayName: "GPT-5.6 Sol", parameters: [EFFORT_PARAM] },
@@ -124,7 +128,7 @@ class CodexSession implements AdapterSession {
       ? [{ type: "text" as const, text: prompt }, ...images.map((a) => ({ type: "local_image" as const, path: a.path }))]
       : prompt;
     const runId = randomUUID();
-    return pendingRun(runId, async ({ signal, isCancelled }) => {
+    const run = pendingRun(runId, async ({ signal, isCancelled }) => {
       const first = await this.turn(input, onEvent, signal, isCancelled, this.resumeUnconfirmed);
       if (first !== "missing-thread") return first;
       /* The stored thread is gone: start a new one and send again. */
@@ -133,6 +137,8 @@ class CodexSession implements AdapterSession {
       const retry = await this.turn(input, onEvent, signal, isCancelled, false);
       return retry === "missing-thread" ? "error" : retry;
     });
+    this.current = run;
+    return run;
   }
 
   private async turn(
@@ -174,8 +180,14 @@ class CodexSession implements AdapterSession {
     }
   }
 
+  /** The latest turn, so dispose can stop it: its signal kills the Codex process the SDK started. */
+  private current: AdapterRun | null = null;
+
   async dispose(): Promise<void> {
-    /* Thread is persisted under ~/.codex/sessions; nothing to close. */
+    /* The thread itself is persisted under ~/.codex/sessions. A turn still going (one the gateway
+       gave up on after its cancel timeout) is aborted, not left running behind the session. */
+    await this.current?.cancel();
+    this.current = null;
   }
 }
 
@@ -195,7 +207,7 @@ export const codexAdapter: Adapter = {
     toolConfirmation: "none",
     attachments: true,
     auth: { kind: "cli-binary", envNames: ["CODEX_API_KEY", "OPENAI_API_KEY"] },
-    defaultModel: { id: "gpt-5.6-sol", params: [] },
+    defaultModel: { id: CODEX_DEFAULT_MODEL, params: [] },
     liveCatalog: false,
     sandboxModes: [...CODEX_SANDBOX_MODES],
   },
@@ -203,7 +215,7 @@ export const codexAdapter: Adapter = {
   normalizeConfig(agent: AgentConfig): AgentConfig {
     const options = { ...(agent.options ?? {}) };
     if (!codexSandboxMode(options)) delete options.sandboxMode;
-    return { ...agent, model: agent.model || "gpt-5.6-sol", options };
+    return { ...agent, model: agent.model || CODEX_DEFAULT_MODEL, options };
   },
 
   async listModels() {

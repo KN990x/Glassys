@@ -1,5 +1,5 @@
 import type { ServerMessage, ToolKind } from "@glassys/protocol";
-import { asRecord, num, str, toolDenied, usageFrom, PREVIEW_CHARS } from "@glassys/adapter-contract";
+import { asRecord, num, snapshotSuffix, str, toolDenied, usageFrom, PREVIEW_CHARS } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @openai/codex-sdk's index.d.ts: items are agent_message, reasoning,
@@ -17,9 +17,7 @@ export function codexMapState(): CodexMapState {
 
 
 function suffix(state: CodexMapState, key: string, text: string): string {
-  const prev = state.snapshots.get(key) ?? "";
-  state.snapshots.set(key, text);
-  return text.startsWith(prev) ? text.slice(prev.length) : "";
+  return snapshotSuffix(state.snapshots, key, text);
 }
 
 function textDelta(state: CodexMapState, key: string, text: string, kind: "text" | "thinking"): ServerMessage[] {

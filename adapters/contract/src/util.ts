@@ -50,3 +50,13 @@ export function usageFrom(raw: unknown): { inputTokens?: number; outputTokens?: 
 
 /** How much of a tool's output a card keeps: the full text stays with the agent. */
 export const PREVIEW_CHARS = 4000;
+
+/**
+ * What `text` adds to the last snapshot kept under `key`, for SDKs that resend a block whole on
+ * every update. A snapshot that was rewritten instead of extended adds nothing appendable.
+ */
+export function snapshotSuffix(snapshots: Map<string, string>, key: string, text: string): string {
+  const prev = snapshots.get(key) ?? "";
+  snapshots.set(key, text);
+  return text.startsWith(prev) ? text.slice(prev.length) : "";
+}
