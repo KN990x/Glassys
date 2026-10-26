@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { formatThinkingDuration } from "./Thinking";
 
 describe("formatThinkingDuration", () => {
-  it("does not invent 1s for a forced close", () => {
+  it("marks an open block and shows no duration for a forced close, never an invented 1s", () => {
     expect(formatThinkingDuration(undefined)).toBe("…");
-    expect(formatThinkingDuration(0)).toBe("…");
+    expect(formatThinkingDuration(0)).toBe("");
   });
 
   it("rounds real durations up to whole seconds", () => {

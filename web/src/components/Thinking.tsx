@@ -7,7 +7,10 @@ export function formatThinkingDuration(
   durationMs?: number,
   labels: { pending: string; unit: string } = { pending: "…", unit: "s" },
 ): string {
-  if (durationMs === undefined || durationMs <= 0) return labels.pending;
+  /* Still open: the marker. Closed without a duration (a forced close at the end of a run): no
+     duration at all, rather than the open marker forever or an invented 1s. */
+  if (durationMs === undefined) return labels.pending;
+  if (durationMs <= 0) return "";
   return `${Math.max(1, Math.round(durationMs / 1000))}${labels.unit}`;
 }
 
@@ -33,7 +36,13 @@ export function Thinking({ text, durationMs, defaultOpen }: { text: string; dura
         <>
           <IconBrain />
           <span>
-            {t("thinking.label")} · <span className="nums">{seconds}</span>
+            {t("thinking.label")}
+            {seconds ? (
+              <>
+                {" · "}
+                <span className="nums">{seconds}</span>
+              </>
+            ) : null}
           </span>
         </>
       }
