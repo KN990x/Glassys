@@ -91,6 +91,36 @@ describe("mapClaudeMessage", () => {
       state,
     );
     expect(byText).toMatchObject({ denied: true });
+    const [byWording] = mapClaudeMessage(
+      {
+        type: "user",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "t5", is_error: true, content: "Permission to use Bash has been denied." }],
+        },
+      },
+      state,
+    );
+    expect(byWording).toMatchObject({ denied: true });
+  });
+
+  it("does not take a failed command's own 'denied' output for a policy denial", () => {
+    const [end] = mapClaudeMessage(
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "t6",
+              is_error: true,
+              content: "Exit code 1\nERROR 1045 (28000): Access denied for user 'root'@'localhost'",
+            },
+          ],
+        },
+      },
+      claudeMapState(),
+    );
+    expect(end).toMatchObject({ ok: false, denied: undefined });
   });
 
   it("builds an edit diff from Claude Code's structured tool result", () => {
@@ -111,6 +141,24 @@ describe("mapClaudeMessage", () => {
     );
     expect(end).toMatchObject({ type: "tool.end", ok: true, kind: "edit", stats: { add: 1, del: 1 } });
     expect(end && "diff" in end ? end.diff : "").toContain("@@ -3,3 +3,3 @@");
+  });
+
+  it("gives a message's structured diff to no one when it carries several results", () => {
+    const ends = mapClaudeMessage(
+      {
+        type: "user",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "t1", content: "updated" },
+            { type: "tool_result", tool_use_id: "t2", content: "listed" },
+          ],
+        },
+        tool_use_result: { filePath: "/w/a.ts", oldString: "old", newString: "new" },
+      },
+      claudeMapState(),
+    );
+    expect(ends).toHaveLength(2);
+    for (const end of ends) expect(end && "diff" in end ? end.diff : undefined).toBeUndefined();
   });
 
   it("shows a created file as a new-file diff", () => {

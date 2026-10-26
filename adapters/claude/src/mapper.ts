@@ -1,5 +1,5 @@
 import type { ServerMessage } from "@glassys/protocol";
-import { asRecord, diffHeader, extractDiff, str, toolDenied, toolKindFromName, unifiedDiff, usageFrom, PREVIEW_CHARS } from "@glassys/adapter-contract";
+import { asRecord, diffHeader, extractDiff, str, toolKindFromName, unifiedDiff, usageFrom, PREVIEW_CHARS, PROTECTED_PATH_DENIAL } from "@glassys/adapter-contract";
 
 /*
  * Shapes, from @anthropic-ai/claude-agent-sdk's sdk.d.ts: `stream_event` carries raw Messages API
@@ -104,18 +104,31 @@ function toolResultDiff(result: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * A tool_result that says a policy refused the call. Only the refusals' own wording: the text is
+ * also the tool's output, and a command printing "Access denied for user 'root'" just failed.
+ * Claude Code names most refusals in a `permission_denied` system message instead (state.denied).
+ */
+const CLAUDE_DENIAL = /permission to use \S+ (?:has been|was) denied|haven't granted it yet|denied by (?:a )?(?:permission|policy|hook)/i;
+
+function claudeDenialText(err: string): boolean {
+  return err.includes(PROTECTED_PATH_DENIAL) || CLAUDE_DENIAL.test(err);
+}
+
 function mapToolResults(message: Record<string, unknown>, state: ClaudeMapState): ServerMessage[] {
   const inner = asRecord(message.message) ?? message;
   if (!Array.isArray(inner.content)) return [];
   const out: ServerMessage[] = [];
-  for (const block of inner.content) {
+  const results = inner.content.filter((block) => asRecord(block)?.type === "tool_result");
+  /* tool_use_result belongs to the message, not to one block: with several results it is no one's. */
+  const structured = results.length === 1 ? toolResultDiff(message.tool_use_result) : undefined;
+  for (const block of results) {
     const rec = asRecord(block);
-    if (!rec || rec.type !== "tool_result") continue;
+    if (!rec) continue;
     const id = str(rec.tool_use_id) ?? "tool";
     const text = contentText(rec.content);
     const err = rec.is_error === true ? text || "Tool failed" : undefined;
-    const denied = state.denied.has(id) || (err !== undefined && toolDenied(undefined, err));
-    const structured = toolResultDiff(message.tool_use_result);
+    const denied = state.denied.has(id) || (err !== undefined && claudeDenialText(err));
     const pulled = structured ? { diff: structured, stats: undefined, truncated: undefined } : extractDiff(rec);
     out.push({
       type: "tool.end",
