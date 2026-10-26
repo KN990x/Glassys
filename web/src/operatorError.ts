@@ -43,5 +43,7 @@ export function operatorError(message: string, t: (key: string) => string): stri
   const key = MESSAGE_KEYS[message];
   if (key) return t(key);
   if (/git fetch failed/i.test(message)) return t("error.gitFetch");
+  /* The gateway's own prefix; what follows is the adapter's error, passed on as it came. */
+  if (message.startsWith("Cancel failed: ")) return `${t("error.cancelFailed")} ${message.slice("Cancel failed: ".length)}`;
   return message;
 }

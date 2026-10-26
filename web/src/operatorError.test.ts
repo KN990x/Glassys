@@ -16,6 +16,7 @@ describe("operatorError", () => {
     expect(operatorError("invalid subscription", t)).toBe("i18n:error.invalidSubscription");
     expect(operatorError("Too many schedules", t)).toBe("i18n:error.tooManySchedules");
     expect(operatorError("Invalid cron expression", t)).toBe("i18n:error.invalidCron");
+    expect(operatorError("Cancel failed: socket closed", t)).toBe("i18n:error.cancelFailed socket closed");
     expect(operatorError("model said something", t)).toBe("model said something");
   });
 });

@@ -329,7 +329,7 @@ async function handleClient(
       );
       break;
     case "run.cancel":
-      await cancelRun();
+      await cancelRun((message) => hub.send(ws, { type: "notice", level: "warn", message, about: "cancel" }));
       break;
     case "queue.cancel":
       await cancelQueued(msg.id);

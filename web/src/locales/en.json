@@ -169,6 +169,7 @@
   "error.tooManyPush": "Too many push subscriptions.",
   "error.tooManyPins": "Too many pinned workspaces.",
   "error.gitFetch": "git fetch failed.",
+  "error.cancelFailed": "The agent did not take the cancel:",
   "chat.usage": "Tokens",
   "chat.usageTotal": "Thread tokens",
   "chat.stalled": "No output from the agent for a while. You can wait or cancel.",

@@ -169,6 +169,7 @@
   "error.tooManyPush": "Hay demasiadas suscripciones push.",
   "error.tooManyPins": "Hay demasiados workspaces fijados.",
   "error.gitFetch": "git fetch falló.",
+  "error.cancelFailed": "El agente no aceptó la cancelación:",
   "chat.usage": "Tokens",
   "chat.usageTotal": "Tokens del hilo",
   "chat.stalled": "El agente no emite salida desde hace un rato. Puedes esperar o cancelar.",
