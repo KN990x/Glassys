@@ -305,8 +305,9 @@ class ClaudeSession implements AdapterSession {
     const iterator = this.iterator;
     const mapState = claudeMapState();
     let expireTimer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
     const expired = new Promise<"expired">((resolve) => {
-      const onAbort = () => {
+      onAbort = () => {
         void query.interrupt?.().catch(() => undefined);
         expireTimer = setTimeout(() => resolve("expired"), CLAUDE_CANCEL_TIMEOUT_MS);
       };
@@ -349,6 +350,7 @@ class ClaudeSession implements AdapterSession {
       if (probeResume && MISSING_SESSION.test(errorMessage(err))) return "missing-session";
       throw err;
     } finally {
+      if (onAbort) signal.removeEventListener("abort", onAbort);
       if (expireTimer) clearTimeout(expireTimer);
     }
   }

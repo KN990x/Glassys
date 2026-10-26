@@ -380,10 +380,11 @@ class AcpSession implements AdapterSession {
         prompt: promptBlocks,
       });
       let giveUp: ReturnType<typeof setTimeout> | undefined;
+      let onAbort: (() => void) | undefined;
       /* After session/cancel the agent still answers the prompt with stopReason "cancelled". If it
          never does, the prompt is still open in the child and a new one would interleave. */
       const stuck = new Promise<never>((_, reject) => {
-        const onAbort = () => {
+        onAbort = () => {
           try {
             this.rpc.notify("session/cancel", { sessionId: this.sessionId });
           } catch {
@@ -414,6 +415,7 @@ class AcpSession implements AdapterSession {
         if (isCancelled()) return "cancelled";
         throw err instanceof AdapterError ? err : new AdapterError(errorMessage(err), "run");
       } finally {
+        if (onAbort) signal.removeEventListener("abort", onAbort);
         if (giveUp) clearTimeout(giveUp);
         off();
       }
