@@ -113,3 +113,13 @@ describe("push on streamed events", () => {
     await expect(access(join(dir, "config.yaml"))).rejects.toThrow();
   });
 });
+
+describe("VAPID keys", () => {
+  it("generates one key pair when two screens ask at once", async () => {
+    process.env.GLASSYS_DATA_DIR = await mkdtemp(join(tmpdir(), "glassys-vapid-"));
+    const { ensureVapidKeys } = await import("./push.js");
+    const [a, b] = await Promise.all([ensureVapidKeys(), ensureVapidKeys()]);
+    expect(a.publicKey).toBe(b.publicKey);
+    expect((await ensureVapidKeys()).publicKey).toBe(a.publicKey);
+  });
+});

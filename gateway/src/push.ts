@@ -151,17 +151,25 @@ export function vapidSubject(publicUrl?: string): string {
   return "mailto:operator@localhost";
 }
 
+const withVapid = createMutex();
+
+/**
+ * One key pair per instance. Two screens asking at once used to both see none and both generate
+ * one; the second overwrote the first, and the subscription made with it stopped receiving.
+ */
 export async function ensureVapidKeys(): Promise<{ publicKey: string; subject: string }> {
-  const secrets = await loadSecrets();
-  if (secrets.vapid?.publicKey && secrets.vapid.privateKey) {
-    return { publicKey: secrets.vapid.publicKey, subject: secrets.vapid.subject };
-  }
-  const generated = webpush.generateVAPIDKeys();
-  const cfg = await loadConfig();
-  const subject = vapidSubject(cfg.network.publicUrl);
-  const vapid: VapidKeys = { publicKey: generated.publicKey, privateKey: generated.privateKey, subject };
-  await patchSecrets({ vapid });
-  return { publicKey: vapid.publicKey, subject: vapid.subject };
+  return withVapid(async () => {
+    const secrets = await loadSecrets();
+    if (secrets.vapid?.publicKey && secrets.vapid.privateKey) {
+      return { publicKey: secrets.vapid.publicKey, subject: secrets.vapid.subject };
+    }
+    const generated = webpush.generateVAPIDKeys();
+    const cfg = await loadConfig();
+    const subject = vapidSubject(cfg.network.publicUrl);
+    const vapid: VapidKeys = { publicKey: generated.publicKey, privateKey: generated.privateKey, subject };
+    await patchSecrets({ vapid });
+    return { publicKey: vapid.publicKey, subject: vapid.subject };
+  });
 }
 
 function payloadFor(event: ServerMessage, locale: string): { title: string; body: string } | null {
