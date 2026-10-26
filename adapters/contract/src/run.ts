@@ -1,5 +1,12 @@
 import type { AdapterRun } from "./types.js";
 
+/**
+ * How long an adapter waits after interrupting a cancelled run before it closes the session. The
+ * gateway gives up on a cancelled run later than this (its own timeout must stay above it), so the
+ * adapter's harder stop gets its turn instead of the gateway dropping the session first.
+ */
+export const CANCEL_ESCALATE_MS = 10_000;
+
 export function pendingRun(
   id: string,
   work: (ctl: { signal: AbortSignal; isCancelled: () => boolean }) => Promise<"finished" | "error" | "cancelled">,

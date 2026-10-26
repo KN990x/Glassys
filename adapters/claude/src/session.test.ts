@@ -5,6 +5,7 @@ const turns: unknown[][] = [];
 let interrupted = 0;
 const started: Array<Record<string, unknown>> = [];
 const modelsSet: string[] = [];
+let modelsHang = false;
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: ({ prompt, options }: { prompt: AsyncIterable<unknown>; options: Record<string, unknown> }) => {
@@ -25,6 +26,8 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
         interrupted += 1;
       },
       close: () => undefined,
+      supportedModels: () =>
+        modelsHang ? new Promise(() => undefined) : Promise.resolve([{ value: "sonnet", displayName: "Sonnet" }]),
       setModel: async (model?: string) => {
         if (model) modelsSet.push(model);
       },
@@ -33,7 +36,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   },
 }));
 
-const { claudeAdapter } = await import("./index.js");
+const { claudeAdapter, setClaudeListTimeoutForTests } = await import("./index.js");
 const opts = { cwd: "/tmp", model: "sonnet", modelParams: [], storeDir: "/tmp/s", options: {} };
 const text = (t: string) => ({
   type: "assistant",
@@ -111,5 +114,19 @@ describe("claude session", () => {
       autoRun: false,
       permissionMode: "dontAsk",
     });
+  });
+});
+
+describe("claude model list", () => {
+  it("falls back instead of hanging when Claude Code never lists its models", async () => {
+    modelsHang = true;
+    setClaudeListTimeoutForTests(30);
+    try {
+      const listed = await claudeAdapter.listModels(undefined, "/tmp/never-cached");
+      expect(listed).toMatchObject({ source: "fallback", error: expect.stringMatching(/in time/) });
+    } finally {
+      modelsHang = false;
+      setClaudeListTimeoutForTests();
+    }
   });
 });

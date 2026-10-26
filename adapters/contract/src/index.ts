@@ -12,7 +12,7 @@ export type {
 export { extractListedModels, asRecord, errorMessage } from "./list.js";
 export { requireHostCommand, requireRunnableCommand } from "./probe.js";
 export { toolKindFromName, diffStats, extractDiff, looksLikeDiff, toolDenied, promptWithAttachments, imagePartsFromAttachments } from "./tools.js";
-export { pendingRun } from "./run.js";
+export { CANCEL_ESCALATE_MS, pendingRun } from "./run.js";
 export { PREVIEW_CHARS, str, num, usageFrom } from "./util.js";
 export { diffHeader, unifiedDiff } from "./diff.js";
 export { fixtureRecorder } from "./record.js";

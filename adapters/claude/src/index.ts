@@ -6,6 +6,7 @@ import {
   fixtureRecorder,
   imagePartsFromAttachments,
   isProtectedPath,
+  CANCEL_ESCALATE_MS,
   pendingRun,
   promptWithAttachments,
   PROTECTED_PATH_DENIAL,
@@ -49,7 +50,6 @@ async function loadSdk(): Promise<{
   }
 }
 
-export const CLAUDE_CANCEL_TIMEOUT_MS = 20_000;
 
 export function claudeUserContent(
   text: string,
@@ -311,7 +311,7 @@ class ClaudeSession implements AdapterSession {
     const expired = new Promise<"expired">((resolve) => {
       onAbort = () => {
         void query.interrupt?.().catch(() => undefined);
-        expireTimer = setTimeout(() => resolve("expired"), CLAUDE_CANCEL_TIMEOUT_MS);
+        expireTimer = setTimeout(() => resolve("expired"), CANCEL_ESCALATE_MS);
       };
       if (signal.aborted) onAbort();
       else signal.addEventListener("abort", onAbort, { once: true });
@@ -459,6 +459,12 @@ export const claudeAdapter: Adapter = {
 };
 
 export const CLAUDE_CATALOG_TTL_MS = 10 * 60_000;
+export const CLAUDE_LIST_TIMEOUT_MS = 20_000;
+let claudeListTimeoutMs = CLAUDE_LIST_TIMEOUT_MS;
+
+export function setClaudeListTimeoutForTests(ms?: number): void {
+  claudeListTimeoutMs = ms ?? CLAUDE_LIST_TIMEOUT_MS;
+}
 const catalogCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof listClaudeModels>> }>();
 
 async function listClaudeModels(apiKey?: string, cwd?: string) {
@@ -472,9 +478,15 @@ async function listClaudeModels(apiKey?: string, cwd?: string) {
         ...(apiKey ? { env: { ...process.env, ANTHROPIC_API_KEY: apiKey } } : {}),
       },
     });
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      return claudeCatalogFromListed(q.supportedModels ? await q.supportedModels() : []);
+      /* It starts a Claude Code process: one that hangs must not hold GET /api/models open with it. */
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Claude Code did not list its models in time")), claudeListTimeoutMs);
+      });
+      return claudeCatalogFromListed(q.supportedModels ? await Promise.race([q.supportedModels(), deadline]) : []);
     } finally {
+      if (timer) clearTimeout(timer);
       q.close?.();
     }
   } catch (err) {

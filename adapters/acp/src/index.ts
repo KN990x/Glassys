@@ -9,6 +9,7 @@ import {
   errorMessage,
   fixtureRecorder,
   imagePartsFromAttachments,
+  CANCEL_ESCALATE_MS,
   pendingRun,
   promptWithAttachments,
   requireHostCommand,
@@ -37,7 +38,6 @@ const recordRaw = fixtureRecorder("acp");
 const GLASSYS_VERSION = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Agent default" }];
-export const ACP_CANCEL_TIMEOUT_MS = 20_000;
 /** `npx -y` may download the agent on first start, so setup gets minutes, not seconds. */
 export const ACP_SETUP_TIMEOUT_MS = 180_000;
 
@@ -417,7 +417,7 @@ class AcpSession implements AdapterSession {
             this.cleanupHost();
             void this.rpc.close();
             reject(new AdapterError("ACP did not stop after session/cancel", "run"));
-          }, ACP_CANCEL_TIMEOUT_MS);
+          }, CANCEL_ESCALATE_MS);
         };
         if (signal.aborted) onAbort();
         else signal.addEventListener("abort", onAbort, { once: true });
