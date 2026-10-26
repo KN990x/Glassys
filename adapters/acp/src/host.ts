@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readlink, realpath, stat, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -18,11 +18,48 @@ export const TERMINAL_KILL_GRACE_MS = 3_000;
 
 const READISH_KINDS = new Set(["read", "grep", "glob", "ls"]);
 
+/**
+ * With auto-run off, only reads are allowed, judged by the call's `kind`. A call without one is
+ * denied: its title is free text ("Edit readfile.ts"), and guessing from it fails open.
+ */
 export function acpPermissionAllow(toolCall: unknown): boolean {
   const rec = asRecord(toolCall) ?? {};
-  const raw = String(rec.kind ?? rec.title ?? rec.name ?? "").trim();
+  const raw = typeof rec.kind === "string" ? rec.kind.trim() : "";
   if (!raw) return false;
   return READISH_KINDS.has(toolKindFromName(raw));
+}
+
+const PATH_KEYS = ["path", "file_path", "filePath", "abs_path", "absolutePath", "notebook_path"] as const;
+
+/** Paths and commands a permission request says the call will touch. */
+function permissionTargets(toolCall: unknown): { paths: string[]; commands: string[] } {
+  const rec = asRecord(toolCall) ?? {};
+  const paths: string[] = [];
+  const commands: string[] = [];
+  if (Array.isArray(rec.locations)) {
+    for (const loc of rec.locations) {
+      const path = asRecord(loc)?.path;
+      if (typeof path === "string") paths.push(path);
+    }
+  }
+  const input = asRecord(rec.rawInput);
+  if (input) {
+    for (const key of PATH_KEYS) if (typeof input[key] === "string") paths.push(input[key] as string);
+    const cmd = input.command;
+    if (typeof cmd === "string") commands.push(cmd);
+    else if (Array.isArray(cmd)) commands.push(cmd.map(String).join(" "));
+  }
+  return { paths, commands };
+}
+
+/** Does the call name Glassys's own data (or another protected path)? Then no mode allows it. */
+export function acpPermissionTouchesProtected(toolCall: unknown, cwd: string, protectedPaths: readonly string[]): boolean {
+  if (!protectedPaths.length) return false;
+  const { paths, commands } = permissionTargets(toolCall);
+  return (
+    paths.some((p) => isProtectedPath(p, cwd, protectedPaths)) ||
+    commands.some((c) => commandTouchesProtectedPath(c, cwd, protectedPaths))
+  );
 }
 
 function insideRoot(root: string, abs: string): boolean {
@@ -40,7 +77,9 @@ export function resolveInsideCwd(cwd: string, path: string): string {
   return abs;
 }
 
-async function nearestRealPath(abs: string): Promise<string> {
+const MAX_LINK_HOPS = 40;
+
+async function nearestRealPath(abs: string, hops = 0): Promise<string> {
   let cur = abs;
   const tail: string[] = [];
   for (;;) {
@@ -50,6 +89,12 @@ async function nearestRealPath(abs: string): Promise<string> {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ENOENT" && code !== "ENOTDIR") throw err;
+      /* A dangling link: realpath fails on it, yet a write through it lands where it points. */
+      if (await lstat(cur).then((st) => st.isSymbolicLink(), () => false)) {
+        if (hops >= MAX_LINK_HOPS) throw new Error("Too many symbolic links");
+        const real = await nearestRealPath(resolve(dirname(cur), await readlink(cur)), hops + 1);
+        return tail.length ? resolve(real, ...tail.reverse()) : real;
+      }
       const parent = dirname(cur);
       if (parent === cur) return abs;
       tail.push(cur.slice(parent.length).replace(/^[\\/]+/, ""));
@@ -227,7 +272,9 @@ export function registerHostHandlers(
     if (!autoRun) throw new Error(`Auto-run is off; ${HOST_DENIAL_MARK} this write`);
     const rec = asRecord(params) ?? {};
     const path = typeof rec.path === "string" ? rec.path : "";
-    const content = typeof rec.content === "string" ? rec.content : "";
+    /* A request without content would empty the file. */
+    if (typeof rec.content !== "string") throw new Error("fs/write_text_file needs content");
+    const content = rec.content;
     const abs = await resolveAllowedPath(cwd, path, protectedPaths);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf8");
@@ -235,9 +282,10 @@ export function registerHostHandlers(
   });
 
   rpc.handle("session/request_permission", async (params) => {
-    if (autoRun) return acpPermissionChoice(params, true);
     const rec = asRecord(params) ?? {};
-    const allow = acpPermissionAllow(rec.toolCall);
+    const touchesProtected = acpPermissionTouchesProtected(rec.toolCall, cwd, protectedPaths);
+    if (autoRun && !touchesProtected) return acpPermissionChoice(params, true);
+    const allow = !touchesProtected && acpPermissionAllow(rec.toolCall);
     const callId = asRecord(rec.toolCall)?.toolCallId;
     if (!allow && typeof callId === "string") ledger.denied.add(callId);
     return acpPermissionChoice(params, allow);
@@ -261,7 +309,8 @@ export function registerHostHandlers(
   rpc.handle("terminal/create", async (params) => {
     if (!autoRun) throw new Error(`Auto-run is off; ${HOST_DENIAL_MARK} this terminal`);
     const rec = asRecord(params) ?? {};
-    const command = typeof rec.command === "string" ? rec.command : "bash";
+    if (typeof rec.command !== "string" || !rec.command.trim()) throw new Error("terminal/create needs a command");
+    const command = rec.command;
     const args = Array.isArray(rec.args) ? rec.args.map(String) : [];
     if (commandTouchesProtectedPath([command, ...args].join(" "), cwd, protectedPaths)) {
       throw new Error(PROTECTED_PATH_DENIAL);
@@ -288,6 +337,9 @@ export function registerHostHandlers(
       ledger.output.set(id, term.output);
       if (ledger.output.size > KEPT_TERMINAL_OUTPUTS) ledger.output.delete(ledger.output.keys().next().value!);
     };
+    /* Decode per stream, so a multi-byte character split across chunks is not mangled. */
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
     child.stdout?.on("data", append);
     child.stderr?.on("data", append);
     child.stdin?.on("error", () => undefined);

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -12,6 +12,15 @@ describe("resolveRealInsideCwd", () => {
     await symlink(outside, join(ws, "link"));
     await expect(resolveRealInsideCwd(ws, "link/secret.txt")).rejects.toThrow(/outside/);
     await expect(resolveRealInsideCwd(ws, "link/new/file.txt")).rejects.toThrow(/outside/);
+  });
+
+  it("rejects a dangling symlink that points out of the workspace", async () => {
+    const outside = await mkdtemp(join(tmpdir(), "glassys-acp-out-"));
+    const ws = await mkdtemp(join(tmpdir(), "glassys-acp-ws-"));
+    await symlink(join(outside, "new.txt"), join(ws, "link"));
+    await symlink(join(outside, "nested", "deeper.txt"), join(ws, "link2"));
+    await expect(resolveRealInsideCwd(ws, "link")).rejects.toThrow(/outside/);
+    await expect(resolveRealInsideCwd(ws, "link2")).rejects.toThrow(/outside/);
   });
 
   it("allows real paths and files that do not exist yet", async () => {
@@ -61,10 +70,69 @@ describe("registerHostHandlers autoRun", () => {
     }
   });
 
+  it("rejects malformed writes and terminals instead of guessing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-bad-"));
+    await writeFile(join(dir, "keep.txt"), "content");
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    try {
+      await expect(map.get("fs/write_text_file")?.({ path: "keep.txt" })).rejects.toThrow(/needs content/);
+      expect(await readFile(join(dir, "keep.txt"), "utf8")).toBe("content");
+      await expect(map.get("terminal/create")?.({ args: ["-c", "true"] })).rejects.toThrow(/needs a command/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("denies a call on protected paths even with auto-run on", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-prot-"));
+    const data = join(dir, "data");
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const ledger = hostLedger();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true }, [data], ledger);
+    try {
+      const read = { toolCallId: "p1", kind: "read", locations: [{ path: join(data, "secrets.json") }] };
+      await expect(map.get("session/request_permission")?.({ toolCall: read })).resolves.toMatchObject({
+        outcome: { outcome: "cancelled" },
+      });
+      const shell = { toolCallId: "p2", kind: "execute", rawInput: { command: "cat data/secrets.json" } };
+      await expect(map.get("session/request_permission")?.({ toolCall: shell })).resolves.toMatchObject({
+        outcome: { outcome: "cancelled" },
+      });
+      const fine = { toolCallId: "p3", kind: "edit", locations: [{ path: join(dir, "src/a.ts") }] };
+      await expect(map.get("session/request_permission")?.({ toolCall: fine })).resolves.toMatchObject({
+        outcome: { outcome: "selected" },
+      });
+      expect([...ledger.denied].sort()).toEqual(["p1", "p2"]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("keeps multi-byte terminal output intact across chunks", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-utf8-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: true });
+    try {
+      /* "€" is three bytes; write them in two separate chunks. */
+      const script = "const b=Buffer.from('€');process.stdout.write(b.subarray(0,1));setTimeout(()=>process.stdout.write(b.subarray(1)),50)";
+      const { terminalId } = (await map.get("terminal/create")?.({ command: process.execPath, args: ["-e", script] })) as {
+        terminalId: string;
+      };
+      await map.get("terminal/wait_for_exit")?.({ terminalId });
+      await expect(map.get("terminal/output")?.({ terminalId })).resolves.toMatchObject({ output: "€" });
+    } finally {
+      cleanup();
+    }
+  });
+
   it("does not auto-allow write-ish names that substring-match read tools", async () => {
     const { map, cleanup } = handlers(false);
     try {
       await expect(map.get("session/request_permission")?.({ toolCall: { kind: "research" } })).resolves.toMatchObject({
+        outcome: { outcome: "cancelled" },
+      });
+      await expect(map.get("session/request_permission")?.({ toolCall: { title: "Read config.ts" } })).resolves.toMatchObject({
         outcome: { outcome: "cancelled" },
       });
       await expect(map.get("session/request_permission")?.({ toolCall: { title: "already" } })).resolves.toMatchObject({
