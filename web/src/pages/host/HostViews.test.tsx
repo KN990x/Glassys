@@ -133,6 +133,42 @@ describe("LogsView scrolling", () => {
   });
 });
 
+describe("LogsView keyboard", () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("is one tab stop and walks the lines with the arrows", async () => {
+    const source = {
+      hostLogs: async () => ({
+        entries: ["one", "two", "three"].map((message, i) => ({ ts: Date.now() + i, priority: 6, message })),
+      }),
+    } as unknown as HostSource;
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(
+        <I18nProvider locale="en">
+          <LogsView source={source} caps={caps} locale="en" unit="" onUnit={() => undefined} onDraft={() => undefined} />
+        </I18nProvider>,
+      );
+    });
+    const lines = () => [...host.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(lines().map((l) => l.tabIndex)).toEqual([-1, -1, 0]);
+    lines()[2]!.focus();
+    await act(async () => {
+      lines()[2]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+    expect(document.activeElement?.textContent).toContain("two");
+    expect(lines().map((l) => l.tabIndex)).toEqual([-1, 0, -1]);
+  });
+});
+
 describe("FilesView", () => {
   let root: Root;
   let host: HTMLDivElement;

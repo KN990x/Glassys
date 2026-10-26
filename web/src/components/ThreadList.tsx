@@ -136,7 +136,7 @@ export const ThreadList = memo(function ThreadList({
                     type="button"
                     className={`ws-twisty${open ? " open" : ""}`}
                     aria-expanded={open}
-                    aria-label={label}
+                    aria-label={`${t("threads.threadsIn")} ${label}`}
                     onClick={() =>
                       setCollapsed((cur) =>
                         cur.includes(ws.cwd) ? cur.filter((c) => c !== ws.cwd) : [...cur, ws.cwd],
@@ -224,7 +224,7 @@ export const ThreadList = memo(function ThreadList({
                                 <span className="thread-adapter">{adapterNames?.[th.adapter] ?? th.adapter}</span>
                               ) : null}
                               {th.id === currentId && busy ? (
-                                <span className="pulse thread-live" aria-label={t("status.running")} />
+                                <span className="pulse thread-live" role="img" aria-label={t("status.running")} />
                               ) : (
                                 <span className="nums">{formatRelativeShort(th.updatedAt, Date.now(), locale)}</span>
                               )}
@@ -235,7 +235,7 @@ export const ThreadList = memo(function ThreadList({
                               <button
                                 type="button"
                                 className="icon-btn sm"
-                                aria-label={t("threads.rename")}
+                                aria-label={`${t("threads.rename")}: ${th.title}`}
                                 title={t("threads.rename")}
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -248,7 +248,7 @@ export const ThreadList = memo(function ThreadList({
                               <button
                                 type="button"
                                 className="icon-btn sm danger-hover"
-                                aria-label={t("threads.delete")}
+                                aria-label={`${t("threads.delete")}: ${th.title}`}
                                 title={t("threads.delete")}
                                 onClick={(e) => void onDelete(th.id, e)}
                               >

@@ -208,7 +208,7 @@ export function Composer(props: ComposerProps) {
                     <button
                       type="button"
                       className="icon-btn sm"
-                      aria-label={t("chat.queueRemove")}
+                      aria-label={`${t("chat.queueRemove")}: ${(item.text || t("chat.pending")).slice(0, 60)}`}
                       title={t("chat.queueRemove")}
                       onClick={() => onQueueCancel(item.id)}
                     >

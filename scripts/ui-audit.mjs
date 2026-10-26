@@ -6,10 +6,12 @@
  * it made the model name the largest text in the composer and no amount of
  * reading the file or looking at screenshots caught it. A machine catches it.
  *
- * Three rules:
+ * Four rules:
  *   1. No length literal in a component rule. Sizes come from the token scale.
  *   2. Every ink token clears WCAG AA on the surfaces it is used on.
  *   3. No class declared in CSS that no component renders.
+ *   4. No inline <svg> outside Icon.tsx and QrCode.tsx, and no pixel sizes in a style prop:
+ *      icons come from Icon.tsx and sizes from the stylesheet.
  *
  * Genuine one-offs live in ALLOWED below, each with the reason, so stepping
  * outside the scale is a written decision instead of a slip.
@@ -106,11 +108,14 @@ const light = { ...dark, ...tokens(lightBlock) };
 const INK = [
   ["--text", ["--bg", "--surface-1", "--surface-2"], 4.5],
   ["--muted", ["--bg", "--surface-1", "--surface-2"], 4.5],
-  ["--faint", ["--bg", "--surface-1"], 4.5],
+  ["--faint", ["--bg", "--surface-1", "--surface-2"], 4.5],
   ["--accent", ["--bg", "--surface-1"], 4.5],
   ["--danger", ["--bg", "--surface-1"], 4.5],
   ["--ok", ["--bg", "--surface-1"], 4.5],
   ["--warn", ["--bg", "--surface-1"], 4.5],
+  /* Text on a filled control: the fill is the surface. */
+  ["--on-solid", ["--danger-fill"], 4.5],
+  ["--btn-fg", ["--btn"], 4.5],
 ];
 for (const [name, palette] of [["dark", dark], ["light", light]]) {
   for (const [ink, surfaces, min] of INK) {
@@ -133,7 +138,20 @@ function walk(dir, acc = []) {
   }
   return acc;
 }
-const markup = walk(join(root, "web/src")).map((f) => readFileSync(f, "utf8")).join("\n");
+const sources = walk(join(root, "web/src")).map((f) => ({ file: f, text: readFileSync(f, "utf8") }));
+/* The gallery mounts every component, and a comment can name a class it no longer renders:
+   neither counts as rendering one. */
+/* Only comments where they can stand: a JSX comment, or one opening its line. A pattern such
+   as accept="image/*" is not the start of one. */
+const stripComments = (text) =>
+  text
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/^\s*\/\*[\s\S]*?\*\//gm, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+const markup = sources
+  .filter((s) => !s.file.endsWith("gallery.tsx"))
+  .map((s) => stripComments(s.text))
+  .join("\n");
 /* A file extension inside url() or format() is not a class name. */
 const selectable = css.replace(/url\([^)]*\)/g, "").replace(/format\([^)]*\)/g, "");
 const declared = new Set([...selectable.matchAll(/\.([a-z][a-z0-9-]{2,})/g)].map((m) => m[1]));
@@ -151,10 +169,23 @@ for (const cls of [...declared].sort()) {
   failures.push(`dead selector: .${cls} is declared in styles.css but nothing renders it`);
 }
 
+// ---------------------------------------------------------------- rule 4
+const SVG_OK = new Set(["Icon.tsx", "QrCode.tsx"]);
+for (const { file, text } of sources) {
+  const name = file.split(/[\\/]/).pop();
+  if (!SVG_OK.has(name) && /<svg[\s>]/.test(text)) {
+    failures.push(`inline svg in ${name}: take the glyph from components/Icon.tsx`);
+  }
+  if (name === "gallery.tsx") continue;
+  for (const m of text.matchAll(/style=\{\{([^}]*)\}\}/g)) {
+    if (/\d(px|rem)\b/.test(m[1])) failures.push(`pixel size in a style prop in ${name}: ${m[0].slice(0, 80)}`);
+  }
+}
+
 // ----------------------------------------------------------------- report
 if (failures.length) {
   console.error(`ui-audit found ${failures.length} problem(s):`);
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
-console.log("ui-audit ok (scale, contrast, dead selectors)");
+console.log("ui-audit ok (scale, contrast, dead selectors, icons)");

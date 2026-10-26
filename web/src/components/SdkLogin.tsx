@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useT } from "../i18n";
+import { Callout } from "./Primitives";
 
 const POLL_MS = 1_500;
 const POLL_MAX_MS = 5 * 60_000;
@@ -125,7 +126,7 @@ export function SdkLoginControls({
           </div>
         </div>
       )}
-      {error && <p className="error-text">{error}</p>}
+      {error && <Callout tone="danger">{error}</Callout>}
     </div>
   );
 }

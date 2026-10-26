@@ -493,5 +493,6 @@
   "crash.title": "Something went wrong",
   "crash.body": "Glassys hit an error drawing this screen. Reload to continue; the conversation is kept by the gateway.",
   "crash.reload": "Reload",
-  "crash.row": "This part of the conversation could not be shown."
+  "crash.row": "This part of the conversation could not be shown.",
+  "threads.threadsIn": "Threads in"
 }

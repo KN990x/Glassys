@@ -278,7 +278,7 @@ export function OverviewView({
             </button>
           </div>
           <div className="host-card list">
-            {failed.error ? <p className="muted host-empty">{failed.error}</p> : null}
+            {failed.error ? <Callout tone="danger">{failed.error}</Callout> : null}
             {failed.data && failed.data.length === 0 ? (
               <p className="host-empty ok-line">
                 <IconCheck />
@@ -469,17 +469,24 @@ const LogLine = memo(function LogLine({
   selected,
   locale,
   onToggle,
+  tabbable,
+  onFocusLine,
 }: {
   entry: KeyedEntry;
   selected: boolean;
   locale: string;
   onToggle: (key: number) => void;
+  /** The list is one tab stop: only the line last focused takes Tab; arrows move between lines. */
+  tabbable: boolean;
+  onFocusLine: (key: number) => void;
 }) {
   return (
     <button
       type="button"
       role="option"
       aria-selected={selected}
+      tabIndex={tabbable ? 0 : -1}
+      onFocus={() => onFocusLine(entry.key)}
       className={`log-line ${priorityClass(entry.priority)}${selected ? " selected" : ""}`}
       onClick={() => onToggle(entry.key)}
     >
@@ -516,6 +523,8 @@ export function LogsView({
   /* Selection by key, not position: once Follow trims the head, positions point at other lines
      and "Explain" sent lines the operator never picked. */
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  /** The line that holds the list's single tab stop; the newest until the operator moves. */
+  const [focusKey, setFocusKey] = useState<number | null>(null);
   const nextKey = useRef(0);
   const keyed = (list: LogEntry[]): KeyedEntry[] => list.map((e) => ({ ...e, key: nextKey.current++ }));
   const toggleLine = useCallback((key: number) => {
@@ -622,6 +631,9 @@ export function LogsView({
     });
   }, [entries]);
 
+  /* Follow may have trimmed the focused line away: the newest takes the tab stop then. */
+  const tabKey = entries?.some((e) => e.key === focusKey) ? focusKey : entries?.at(-1)?.key;
+
   if (caps && !caps.logs) {
     return (
       <div className="host-page">
@@ -688,10 +700,29 @@ export function LogsView({
             const el = e.currentTarget;
             stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
           }}
+          onKeyDown={(e) => {
+            const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+            const edge = e.key === "Home" ? "first" : e.key === "End" ? "last" : null;
+            if (!step && !edge) return;
+            const lines = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+            const at = lines.indexOf(document.activeElement as HTMLButtonElement);
+            const next = edge === "first" ? 0 : edge === "last" ? lines.length - 1 : at + step;
+            if (next < 0 || next >= lines.length) return;
+            e.preventDefault();
+            lines[next]?.focus();
+          }}
         >
           {entries.length === 0 ? <p className="muted host-empty">{t("logs.empty")}</p> : null}
           {entries.map((e) => (
-            <LogLine key={e.key} entry={e} selected={selected.has(e.key)} locale={locale} onToggle={toggleLine} />
+            <LogLine
+              key={e.key}
+              entry={e}
+              selected={selected.has(e.key)}
+              locale={locale}
+              onToggle={toggleLine}
+              tabbable={e.key === tabKey}
+              onFocusLine={setFocusKey}
+            />
           ))}
         </div>
       ) : null}

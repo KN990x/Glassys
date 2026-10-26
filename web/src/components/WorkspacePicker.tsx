@@ -3,7 +3,7 @@ import { cwdBasename } from "../format";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { operatorError } from "../operatorError";
-import { Disclosure } from "./Primitives";
+import { Callout, Disclosure } from "./Primitives";
 import { IconFolder, IconSearch } from "./Icon";
 
 export function WorkspacePicker({
@@ -76,7 +76,7 @@ export function WorkspacePicker({
               {t("wizard.workspace.browse")}
             </button>
           </div>
-          {error && <p className="error-text">{error}</p>}
+          {error && <Callout tone="danger">{error}</Callout>}
           {hits.length > 0 && (
             <div className="picker-list">
               {hits.map((h) => (

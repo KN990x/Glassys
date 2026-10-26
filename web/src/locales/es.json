@@ -493,5 +493,6 @@
   "crash.title": "Algo ha fallado",
   "crash.body": "Glassys ha tenido un error al dibujar esta pantalla. Recarga para seguir; la conversación la guarda el gateway.",
   "crash.reload": "Recargar",
-  "crash.row": "Esta parte de la conversación no se ha podido mostrar."
+  "crash.row": "Esta parte de la conversación no se ha podido mostrar.",
+  "threads.threadsIn": "Hilos de"
 }

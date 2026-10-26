@@ -19,7 +19,8 @@ type ResolvedTheme = "dark" | "light";
 
 const THEME_KEY = "glassys_theme";
 const LOCALE_KEY = "glassys_locale";
-const THEME_COLOR: Record<ResolvedTheme, string> = { dark: "#0a0a0a", light: "#fafafa" };
+/* The browser chrome takes the page colour: these are --bg of each theme in styles.css. */
+const THEME_COLOR: Record<ResolvedTheme, string> = { dark: "#0b0b0c", light: "#fafafa" };
 
 function readStoredTheme(): Theme | null {
   try {

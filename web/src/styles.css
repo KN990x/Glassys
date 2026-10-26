@@ -87,6 +87,10 @@
   --accent: #4c82f7;
   --accent-bg: color-mix(in srgb, var(--accent) 16%, transparent);
   --danger: #e5484d;
+  /* Fills that carry text or a glyph: --danger itself is tuned as ink on the page, and white on
+     it was 3.91:1. */
+  --danger-fill: #d13438;
+  --on-solid: #ffffff;
   --danger-bg: color-mix(in srgb, var(--danger) 10%, transparent);
   --ok: #46a758;
   --ok-bg: color-mix(in srgb, var(--ok) 10%, transparent);
@@ -274,10 +278,12 @@ html[data-theme="light"] {
   /* Re-laddered: --muted sat at 4.40:1 and --faint at 2.33:1, so nudging one
      of them would have collapsed the two steps into the same grey. */
   --muted: #52525b;
-  --faint: #71717a;
+  /* #71717a was 4.40:1 on --surface-2, where the composer hint and code labels sit. */
+  --faint: #6b6b74;
 
   --accent: #2563eb;
   --danger: #c62828;
+  --danger-fill: #c62828;
   --ok: #2f7d32;
   --warn: #9a5800;
 
@@ -431,7 +437,6 @@ h2[tabindex="-1"]:focus { outline: none; }
    stack: the wizard's sign-in step had a 32px hole under its first line. */
 .stack > .row:empty { display: none; }
 .muted { color: var(--muted); }
-.error-text { color: var(--danger); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .ok { color: var(--ok); overflow-wrap: break-word; font-size: var(--fs-sm); }
 .warn { color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-body); overflow-wrap: break-word; }
 /* One uppercase label style. The rail's group headings, the palette's group
@@ -491,8 +496,8 @@ h2[tabindex="-1"]:focus { outline: none; }
 .danger:hover:not(:disabled) { background: var(--danger-bg); }
 /* The confirming button of a destructive dialog: filled, because it is the
    one action on the panel and the panel exists to make it deliberate. */
-.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
-.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 86%, #000); }
+.danger.solid { background: var(--danger-fill); border-color: var(--danger-fill); color: var(--on-solid); }
+.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-fill) 86%, #000); }
 
 .tiny {
   min-height: var(--control-h-sm);
@@ -524,6 +529,11 @@ h2[tabindex="-1"]:focus { outline: none; }
   .list-row-main, .rail-new, .primary, .ghost, .danger { min-height: var(--tap); }
   .settings-tab { min-height: var(--tap); }
   .icon-btn.sm { width: var(--tap); height: var(--tap); min-height: var(--tap); }
+  /* Controls that were 18 to 36px tall: a fingertip needs the shared 40px target. */
+  .segment, .segmented.sm .segment, .disclosure-toggle, .hunk-head, .tool-head { min-height: var(--tap); }
+  .crumbs button { display: inline-flex; align-items: center; min-height: var(--tap); }
+  /* The switch keeps its look; an invisible margin around it takes the tap. */
+  .switch::before { content: ""; position: absolute; inset: calc((var(--switch-h) - var(--tap)) / 2); }
   /* iOS zooms the page when a text field under 16px takes focus, because the
      keyboard needs a legible caret. A <select> opens a picker wheel instead, so
      it keeps its design size and stays the same height as the chip beside it. */
@@ -595,7 +605,7 @@ h2[tabindex="-1"]:focus { outline: none; }
   transition: transform var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .switch[aria-checked="true"] .switch-knob {
-  background: #fff;
+  background: var(--on-solid);
   transform: translateX(var(--switch-travel));
 }
 
@@ -1740,7 +1750,19 @@ button.host-copy:hover { color: var(--text); }
 }
 .bubble.assistant:hover .turn-foot,
 .turn-foot:focus-within { opacity: 1; pointer-events: auto; }
-@media (hover: none) { .turn-foot { display: none; } }
+/* No hover on a touch screen, so nothing would ever reveal it: there the copy action sits in the
+   flow under the answer, always visible, like the list rows' actions. */
+@media (hover: none) {
+  .turn-foot {
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    opacity: 1;
+    pointer-events: auto;
+    background: none;
+    box-shadow: none;
+  }
+}
 mark {
   background: color-mix(in srgb, var(--warn) 34%, transparent);
   color: inherit;
@@ -2257,7 +2279,7 @@ mark {
   border: 1px solid var(--stroke);
   color: var(--text);
 }
-.thumb-remove:hover .thumb-badge { background: var(--danger); border-color: var(--danger); color: #fff; }
+.thumb-remove:hover .thumb-badge { background: var(--danger-fill); border-color: var(--danger-fill); color: var(--on-solid); }
 .file-chip {
   display: inline-flex;
   align-items: center;

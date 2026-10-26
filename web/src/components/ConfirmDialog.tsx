@@ -26,13 +26,15 @@ export function ConfirmDialog({
 }) {
   const t = useT();
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const onResolveRef = useRef(onResolve);
   onResolveRef.current = onResolve;
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    confirmRef.current?.focus();
+    /* A destructive ask starts on Cancel: Enter, pressed out of habit, must not delete. */
+    (request.destructive ? cancelRef : confirmRef).current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKey(e: KeyboardEvent) {
@@ -62,6 +64,7 @@ export function ConfirmDialog({
       document.body.style.overflow = prev;
       if (opener?.isConnected) opener.focus();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the first focus belongs to the request it opened with
   }, []);
 
   return (
@@ -78,6 +81,7 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
+        aria-describedby="confirm-message"
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
@@ -87,9 +91,11 @@ export function ConfirmDialog({
           {request.destructive ? <IconAlert /> : request.kind === "archive" ? <IconArchive /> : <IconInfo />}
         </span>
         <h2 id="confirm-title">{request.title || t("confirm.title")}</h2>
-        <p className="muted">{request.message}</p>
+        <p className="muted" id="confirm-message">
+          {request.message}
+        </p>
         <div className="row">
-          <button type="button" className="ghost" onClick={() => onResolve(false)}>
+          <button ref={cancelRef} type="button" className="ghost" onClick={() => onResolve(false)}>
             {t("confirm.cancel")}
           </button>
           <button
