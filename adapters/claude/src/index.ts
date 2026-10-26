@@ -257,17 +257,19 @@ class ClaudeSession implements AdapterSession {
   /** Switch model in place when the SDK can; otherwise restart the process on the new model. */
   private async retarget(model: string): Promise<void> {
     if (model === this.model) return;
-    this.model = model;
+    /* Recorded only once it took: a failed switch must be tried again on the next send. */
     if (this.query.setModel && !this.ended) {
       try {
         await this.query.setModel(model);
         this.opts = { ...this.opts, model };
+        this.model = model;
         return;
       } catch {
         /* fall back to a restart */
       }
     }
     await this.restart({ ...this.opts, model });
+    this.model = model;
   }
 
   async send(
@@ -328,7 +330,10 @@ class ClaudeSession implements AdapterSession {
         }
         if (next.done) {
           this.ended = true;
-          return isCancelled() ? "cancelled" : "finished";
+          if (isCancelled()) return "cancelled";
+          /* No result: the process died mid-turn (crash, OOM, killed). That is not a finished turn. */
+          onEvent({ type: "run.error", message: "Claude Code exited before finishing the turn", phase: "run" });
+          return "error";
         }
         const message = next.value;
         if (probeResume && isClaudeResult(message)) {

@@ -64,11 +64,13 @@ describe("claude session", () => {
     await session.dispose();
   });
 
-  it("reports the session closed when the Claude process ends", async () => {
+  it("fails the turn and reports the session closed when the Claude process ends without a result", async () => {
     turns.push(["END"]);
     const session = await claudeAdapter.create(opts);
-    const run = await session.send("one", () => undefined);
-    expect(await run.wait()).toBe("finished");
+    const events: Array<{ type: string }> = [];
+    const run = await session.send("one", (e) => events.push(e as { type: string }));
+    expect(await run.wait()).toBe("error");
+    expect(events).toContainEqual(expect.objectContaining({ type: "run.error" }));
     expect(session.closed).toBe(true);
   });
 
