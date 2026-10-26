@@ -383,6 +383,14 @@ export function isSensitiveFile(real: string, home = os.homedir()): boolean {
   return false;
 }
 
+let realHome: Promise<string> | null = null;
+
+/** The home as a real path, like the ones it is compared with: a symlinked $HOME never matched. */
+function realHomeDir(): Promise<string> {
+  realHome ??= realpath(os.homedir()).catch(() => os.homedir());
+  return realHome;
+}
+
 /**
  * Resolve a requested path and refuse Glassys's own data directory: it holds
  * the operator password hash, the session secret and adapter keys, which the
@@ -404,7 +412,7 @@ async function guardedPath(raw: string): Promise<string> {
     data = resolve(defaultDataDir());
   }
   if (real === data || real.startsWith(data + sep)) throw new HttpError(403, "the Glassys data directory is not browsable");
-  if (isSensitiveFile(real)) throw new HttpError(403, "credential files are not shown");
+  if (isSensitiveFile(real, await realHomeDir()) || isSensitiveFile(real)) throw new HttpError(403, "credential files are not shown");
   return real;
 }
 

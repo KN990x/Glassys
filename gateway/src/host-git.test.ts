@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,5 +25,21 @@ describe("readGitContext", () => {
     expect(clean?.branch).toBeTruthy();
     await writeFile(join(dir, "a.txt"), "dirty\n", "utf8");
     expect(await readGitContext(dir)).toEqual({ branch: clean!.branch, dirty: true });
+  });
+
+  it("does not run the repo's core.fsmonitor program", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-gitfsm-"));
+    execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" });
+    const marker = join(dir, "ran");
+    const hook = join(dir, "fsmonitor.sh");
+    await writeFile(hook, `#!/bin/sh\ntouch ${JSON.stringify(marker)}\n`, { mode: 0o755 });
+    await writeFile(join(dir, "a.txt"), "x\n", "utf8");
+    execFileSync("git", ["add", "a.txt"], { cwd: dir, stdio: "ignore" });
+    const id = ["-c", "user.email=ops@example.test", "-c", "user.name=Ops", "-c", "commit.gpgsign=false"];
+    execFileSync("git", [...id, "commit", "-m", "init"], { cwd: dir, stdio: "ignore" });
+    /* Set after the commit: git runs the program on any status once the index exists. */
+    execFileSync("git", ["config", "core.fsmonitor", hook], { cwd: dir, stdio: "ignore" });
+    await readGitContext(dir);
+    expect(existsSync(marker)).toBe(false);
   });
 });
