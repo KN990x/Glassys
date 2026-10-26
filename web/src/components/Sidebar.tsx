@@ -4,6 +4,7 @@ import { shortcutLabel } from "../keyboard";
 import { useT } from "../i18n";
 import {
   GlassysMark,
+  IconHistory,
   IconMonitor,
   IconMoon,
   IconPlus,
@@ -12,7 +13,6 @@ import {
   IconSearch,
   IconSettings,
   IconSun,
-  IconThreads,
 } from "./Icon";
 import { Kbd } from "./Primitives";
 import { ThreadList, type ThreadListProps } from "./ThreadList";
@@ -104,7 +104,8 @@ export const Sidebar = memo(function Sidebar({
             aria-label={t("threads.title")}
             title={t("threads.title")}
           >
-            <IconThreads />
+            {/* The thread list wears History everywhere; the speech bubble is the chat itself. */}
+            <IconHistory />
           </button>
         </div>
         <div className="sidebar-foot mini-foot">

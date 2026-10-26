@@ -173,6 +173,10 @@ export function Settings({
   }
 
   const dirty = Boolean(password || apiKey || clearKey) || draftDiffers(draft, baseline);
+  /* "Saved" is about the last save; a new edit makes it stale. */
+  useEffect(() => {
+    if (dirty) setSaved("");
+  }, [dirty]);
 
   async function confirmLeave(): Promise<boolean> {
     if (dirty && !(await confirm({ title: t("confirm.titleDiscard"), message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
@@ -570,10 +574,20 @@ export function Settings({
                     type="button"
                     className="ghost tiny"
                     onClick={() => {
-                      setRestartNote(t("settings.restarting"));
-                      void api.restart().catch((err) => {
-                        setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-                      });
+                      void (async () => {
+                        /* The same ask as the chat's restart: it ends the run in flight. */
+                        const ok = await confirm({
+                          title: t("confirm.titleRestart"),
+                          message: t("settings.restartConfirm"),
+                          confirmLabel: t("confirm.restart"),
+                          destructive: true,
+                        });
+                        if (!ok) return;
+                        setRestartNote(t("settings.restarting"));
+                        await api.restart().catch((err) => {
+                          setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
+                        });
+                      })();
                     }}
                   >
                     {t("settings.restart")}
@@ -645,6 +659,7 @@ export function Settings({
                 <SchedulesTab
                   draft={draft}
                   savedCwd={baseline.agent.cwd}
+                  confirm={confirm}
                   schedules={schedules}
                   scheduleTz={scheduleTz}
                   scheduleText={scheduleText}

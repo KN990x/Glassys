@@ -30,6 +30,7 @@ export type ComposerProps = {
   caps?: AdapterCapabilities;
   adapterName: string;
   models: ModelCatalogItem[];
+  modelsLoading?: boolean;
   modelId: string;
   modelParams: ModelParam[];
   onModel: (id: string, params: ModelParam[]) => void;
@@ -298,6 +299,7 @@ export function Composer(props: ComposerProps) {
             {caps?.models !== false && (
               <ModelMenu
                 models={models}
+                loading={props.modelsLoading}
                 modelId={modelId}
                 params={modelParams}
                 preferred={caps?.defaultModel}

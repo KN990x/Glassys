@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { useCopy } from "../useCopy";
 import type { MessageAttachment, PromptTemplate } from "@glassys/protocol";
 import type { Block, ToolBlock } from "../transcript";
-import { useT } from "../i18n";
+import { templateTitle, useT } from "../i18n";
 import { formatTokens, isImageMime } from "../format";
 import { operatorError } from "../operatorError";
 import { MarkdownBody } from "./MarkdownBody";
@@ -92,6 +92,8 @@ export type TranscriptProps = {
   allBlocks: Block[];
   snapshotReady: boolean;
   connecting: boolean;
+  /** The connection gave up (an incompatible gateway, a refused session): not "connecting". */
+  failed?: boolean;
   search: string;
   queuedIds: Set<string>;
   locale: string;
@@ -112,6 +114,7 @@ export function Transcript({
   allBlocks,
   snapshotReady,
   connecting,
+  failed,
   search,
   queuedIds,
   locale,
@@ -135,7 +138,7 @@ export function Transcript({
     <>
       {!snapshotReady && (
         <div className="empty" aria-live="polite">
-          <Skeleton label={t(connecting ? "status.connecting" : "status.reconnecting")} />
+          <Skeleton label={t(failed ? "status.error" : connecting ? "status.connecting" : "status.reconnecting")} />
         </div>
       )}
       {allBlocks.length === 0 && snapshotReady && !search.trim() && (
@@ -153,7 +156,7 @@ export function Transcript({
                     {CHIP_GLYPH[tpl.id] ?? CHIP_GLYPH[tpl.slash.replace(/^\//, "")] ?? <IconZap />}
                   </span>
                   <strong className="truncate">
-                    {t(`prompt.${tpl.id}`) === `prompt.${tpl.id}` ? tpl.title : t(`prompt.${tpl.id}`)}
+                    {templateTitle(t, tpl)}
                   </strong>
                   <span className="empty-action-slash">{tpl.slash.startsWith("/") ? tpl.slash : `/${tpl.slash}`}</span>
                 </button>

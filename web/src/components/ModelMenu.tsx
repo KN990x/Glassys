@@ -48,6 +48,7 @@ export function modelChipLabel(model: ModelCatalogItem | undefined, params: Mode
  */
 export function ModelMenu({
   models,
+  loading,
   modelId,
   params,
   onChange,
@@ -55,6 +56,7 @@ export function ModelMenu({
   adapterName,
 }: {
   models: ModelCatalogItem[];
+  loading?: boolean;
   modelId: string;
   params: ModelParam[];
   onChange: (id: string, params: ModelParam[]) => void;
@@ -72,7 +74,7 @@ export function ModelMenu({
   const variant = matchingVariant(selected, params);
   const extras = selected ? extraDefs(selected).filter(boolParam) : [];
 
-  if (!models.length) return <p className="muted composer-hint">{t("wizard.model.empty")}</p>;
+  if (!models.length) return <p className="muted composer-hint">{t(loading ? "wizard.model.loading" : "wizard.model.empty")}</p>;
 
   return (
     <PopAnchor className="model-chip">

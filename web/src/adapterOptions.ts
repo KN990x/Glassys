@@ -34,6 +34,17 @@ export function setOption(
   return { ...(options ?? {}), [key]: value };
 }
 
+/**
+ * The permission mode Claude will actually run with, decided the way the adapter's
+ * claudePermissionMode decides it. Every control shows this, so the chip, the wizard and Settings
+ * agree on an unset or contradictory option.
+ */
+export function effectivePermissionMode(options: Record<string, unknown> | undefined): string {
+  const stored = optionString(options, "permissionMode", "");
+  if (!optionAutoRun(options)) return stored && stored !== "bypassPermissions" ? stored : "dontAsk";
+  return stored || "bypassPermissions";
+}
+
 /** Keep Claude permissionMode in lockstep with the auto-run checkbox. */
 export function setAutoRun(
   options: Record<string, unknown> | undefined,

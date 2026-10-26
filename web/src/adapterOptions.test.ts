@@ -129,3 +129,14 @@ describe("sandboxState", () => {
     expect(sandboxState({ sandbox: false }, { sandbox: true })).toEqual({ supported: false, on: false });
   });
 });
+
+describe("effectivePermissionMode", () => {
+  it("shows what Claude will run with, whatever is stored", async () => {
+    const { effectivePermissionMode } = await import("./adapterOptions");
+    expect(effectivePermissionMode({})).toBe("bypassPermissions");
+    expect(effectivePermissionMode({ autoRun: false })).toBe("dontAsk");
+    expect(effectivePermissionMode({ autoRun: false, permissionMode: "bypassPermissions" })).toBe("dontAsk");
+    expect(effectivePermissionMode({ autoRun: false, permissionMode: "acceptEdits" })).toBe("acceptEdits");
+    expect(effectivePermissionMode({ autoRun: true, permissionMode: "acceptEdits" })).toBe("acceptEdits");
+  });
+});

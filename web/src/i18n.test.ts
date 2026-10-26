@@ -25,3 +25,13 @@ describe("i18n catalogs", () => {
     expect(es["wizard.cred.required"].toLowerCase()).toContain("cli");
   });
 });
+
+describe("templateTitle", () => {
+  it("translates a stock title and keeps one the operator renamed", async () => {
+    const { templateTitle } = await import("./i18n");
+    const t = (key: string) => (key === "prompt.status" ? "Estado del host" : key);
+    expect(templateTitle(t, { id: "status", title: "Host status" })).toBe("Estado del host");
+    expect(templateTitle(t, { id: "status", title: "Check web-01" })).toBe("Check web-01");
+    expect(templateTitle(t, { id: "tpl-1a2b3c4d", title: "Rotate logs" })).toBe("Rotate logs");
+  });
+});

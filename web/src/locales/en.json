@@ -494,5 +494,11 @@
   "crash.body": "Glassys hit an error drawing this screen. Reload to continue; the conversation is kept by the gateway.",
   "crash.reload": "Reload",
   "crash.row": "This part of the conversation could not be shown.",
-  "threads.threadsIn": "Threads in"
+  "error.saveFailed": "Could not save the change.",
+  "error.exportFailed": "Could not export the thread.",
+  "threads.threadsIn": "Threads in",
+  "wizard.model.loading": "Loading models…",
+  "settings.scheduleRemove": "Delete schedule",
+  "confirm.titleDeleteSchedule": "Delete this schedule?",
+  "settings.scheduleDeleteConfirm": "It will not run again."
 }

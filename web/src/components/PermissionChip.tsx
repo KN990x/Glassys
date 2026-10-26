@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { AdapterCapabilities, RedactedConfig } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
-import { optionAutoRun, optionBool, optionString, sandboxState, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
+import { effectivePermissionMode, optionAutoRun, optionBool, optionString, sandboxState, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
 import { SandboxModeSelect } from "./SandboxModeSelect";
 import { operatorError } from "../operatorError";
 import { useConfirm } from "./ConfirmDialog";
@@ -44,7 +44,7 @@ export function PermissionChip({
 
   const autoRun = optionAutoRun(config.agent.options);
   const sandbox = optionBool(config.agent.options, "sandbox", false);
-  const mode = optionString(config.agent.options, "permissionMode", autoRun ? "bypassPermissions" : "dontAsk");
+  const mode = effectivePermissionMode(config.agent.options);
   const label =
     caps.toolConfirmation === "auto-review-deny"
       ? autoRun
@@ -77,7 +77,7 @@ export function PermissionChip({
       /* The change opened a new thread; the composer is where the operator goes next. */
       setOpen(false);
     } catch (err) {
-      setError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+      setError(operatorError(err instanceof Error ? err.message : t("error.saveFailed"), t));
     }
   }
 

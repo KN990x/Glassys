@@ -128,6 +128,8 @@ export function Chat({
   const [draftModel, setDraftModel] = useState<{ id: string; params: ModelParam[] } | null>(null);
   const [settings, setSettings] = useState(false);
   const [models, setModels] = useState<ModelCatalogItem[]>([]);
+  /** Until the first catalogue answer, an empty list means "not yet", not "none". */
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [modelSource, setModelSource] = useState<ModelListSource>("live");
   const [catalogError, setCatalogError] = useState("");
   const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
@@ -217,6 +219,8 @@ export function Chat({
       setModels([]);
       setModelSource("fallback");
       setCatalogError(err instanceof Error ? err.message : "");
+    } finally {
+      setModelsLoaded(true);
     }
   }, []);
 
@@ -535,7 +539,7 @@ export function Chat({
     try {
       applyThreadList(await api.renameThread(id, title));
     } catch (err) {
-      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+      setSendError(operatorError(err instanceof Error ? err.message : t("error.saveFailed"), t));
     }
   }
 
@@ -564,7 +568,7 @@ export function Chat({
       /* Revoked at once, Firefox and Safari can cancel the download before it starts. */
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (err) {
-      setSendError(operatorError(err instanceof Error ? err.message : t("chat.sendFailed"), t));
+      setSendError(operatorError(err instanceof Error ? err.message : t("error.exportFailed"), t));
     }
   }
 
@@ -629,7 +633,7 @@ export function Chat({
       const next = Array.from(new Set([...pins, cwd]));
       setPins((await api.pinWorkspaces(next)).pins);
     } catch (err) {
-      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+      setSendError(operatorError(err instanceof Error ? err.message : t("error.saveFailed"), t));
     }
   }
 
@@ -637,7 +641,7 @@ export function Chat({
     try {
       setPins((await api.pinWorkspaces(pins.filter((p) => p !== cwd))).pins);
     } catch (err) {
-      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+      setSendError(operatorError(err instanceof Error ? err.message : t("error.saveFailed"), t));
     }
   }
 
@@ -780,7 +784,7 @@ export function Chat({
     try {
       onConfig(await api.saveConfig({ space: { theme: next } }));
     } catch (err) {
-      setSendError(operatorError(err instanceof Error ? err.message : t("chat.modelFailed"), t));
+      setSendError(operatorError(err instanceof Error ? err.message : t("error.saveFailed"), t));
     }
   }
 
@@ -1136,6 +1140,7 @@ export function Chat({
               allBlocks: blocks,
               snapshotReady,
               connecting: conn !== "reconnecting",
+              failed: conn === "error",
               search,
               queuedIds,
               locale: config.space.locale,
@@ -1156,6 +1161,7 @@ export function Chat({
             caps={caps}
             adapterName={currentAdapter?.displayName || config.agent.adapter}
             models={models}
+            modelsLoading={!modelsLoaded}
             modelId={pickerModel}
             modelParams={pickerParams}
             onModel={(id, params) => void changeModel(id, params)}

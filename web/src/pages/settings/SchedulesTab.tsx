@@ -8,6 +8,7 @@ import { Callout, EmptyRow, SettingGroup, SettingRow, StatusBadge } from "../../
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { Switch } from "../../components/Switch";
 import { IconClock, IconTrash } from "../../components/Icon";
+import type { ConfirmRequest } from "../../components/ConfirmDialog";
 
 export type ScheduleJob = {
   id: string;
@@ -36,10 +37,13 @@ export function SchedulesTab({
   currentThreadId,
   refreshSchedules,
   setError,
+  confirm,
 }: {
   draft: RedactedConfig;
   /** The workspace the live thread runs in: a schedule belongs to it, not to an unsaved edit. */
   savedCwd: string;
+  /** Settings' confirm, so the dialog stacks over Settings like its other asks. */
+  confirm: (req: ConfirmRequest) => Promise<boolean>;
   schedules: ScheduleJob[];
   scheduleTz: string;
   scheduleText: string;
@@ -170,13 +174,22 @@ export function SchedulesTab({
             <button
               type="button"
               className="icon-btn sm danger-hover"
-              aria-label={t("settings.promptRemove")}
-              title={t("settings.promptRemove")}
+              aria-label={`${t("settings.scheduleRemove")}: ${job.text.slice(0, 60)}`}
+              title={t("settings.scheduleRemove")}
               onClick={() => {
-                void api
-                  .deleteSchedule(job.id)
-                  .then(() => refreshSchedules())
-                  .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
+                void (async () => {
+                  const ok = await confirm({
+                    title: t("confirm.titleDeleteSchedule"),
+                    message: t("settings.scheduleDeleteConfirm"),
+                    confirmLabel: t("confirm.delete"),
+                    destructive: true,
+                  });
+                  if (!ok) return;
+                  await api
+                    .deleteSchedule(job.id)
+                    .then(() => refreshSchedules())
+                    .catch((err) => setError(operatorError(err instanceof Error ? err.message : String(err), t)));
+                })();
               }}
             >
               <IconTrash />

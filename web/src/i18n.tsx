@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { defaultPromptTemplates, type PromptTemplate } from "@glassys/protocol";
 import en from "./locales/en.json";
 import es from "./locales/es.json";
 
@@ -36,6 +37,19 @@ export function I18nProvider({ locale, children }: { locale: Locale; children: R
 
 export function useT(): (key: string) => string {
   return useContext(I18nContext).t;
+}
+
+const STOCK_TITLES = new Map(defaultPromptTemplates().map((tpl) => [tpl.id, tpl.title]));
+
+/**
+ * A template's title: a built-in one still carrying its stock English title is translated; one the
+ * operator renamed in Settings shows their name, in any language.
+ */
+export function templateTitle(t: (key: string) => string, tpl: Pick<PromptTemplate, "id" | "title">): string {
+  if (tpl.title && tpl.title !== STOCK_TITLES.get(tpl.id)) return tpl.title;
+  const key = `prompt.${tpl.id}`;
+  const line = t(key);
+  return line === key ? tpl.title : line;
 }
 
 /** The operator-facing line for an adapter, in the PWA's language; unknown adapters keep their own. */

@@ -18,7 +18,7 @@ import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } 
 import { Switch } from "../../components/Switch";
 import { SandboxModeSelect } from "../../components/SandboxModeSelect";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { cwdExposesDataDir, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
+import { cwdExposesDataDir, effectivePermissionMode, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
 
 export function AgentTab({
@@ -212,7 +212,7 @@ export function AgentTab({
             <SegmentedControl
               size="sm"
               label={t("wizard.exec.permissionMode")}
-              value={optionString(draft.agent.options, "permissionMode", "bypassPermissions")}
+              value={effectivePermissionMode(draft.agent.options)}
               onChange={(next) =>
                 setDraft({ ...draft, agent: { ...draft.agent, options: setPermissionMode(draft.agent.options, next) } })
               }

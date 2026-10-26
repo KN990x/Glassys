@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { useT } from "../i18n";
+import { templateTitle, useT } from "../i18n";
 import type { PromptTemplate } from "@glassys/protocol";
 import { Kbd } from "./Primitives";
 import { IconSearch, IconZap } from "./Icon";
@@ -227,7 +227,7 @@ export function templatePaletteItems(
   return templates.map((tpl) => ({
     id: `tpl:${tpl.id}`,
     group: "template" as const,
-    label: t(`prompt.${tpl.id}`) === `prompt.${tpl.id}` ? tpl.title : t(`prompt.${tpl.id}`),
+    label: templateTitle(t, tpl),
     hint: `/${tpl.slash}`,
     run: () => insert(tpl.text),
   }));
