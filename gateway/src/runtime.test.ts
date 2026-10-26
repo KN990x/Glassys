@@ -757,6 +757,62 @@ describe("runtime queue", () => {
     }
   });
 
+  it("resumes an adapter without resume support when its shouldResume says this agent can", async () => {
+    const { PROFILE_ID } = await import("@glassys/protocol");
+    const { saveState } = await import("./state.js");
+    await saveState({ profileId: PROFILE_ID, agentId: "agent-loadable" });
+    fakeAdapter.capabilities.resume = false;
+    const asked: string[] = [];
+    fakeAdapter.shouldResume = async (id) => {
+      asked.push(id);
+      return id === "agent-loadable";
+    };
+    try {
+      const { enqueueMessage, readTranscript } = await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+      expect(asked).toEqual(["agent-loadable"]);
+      expect(control.resumes).toEqual(["agent-loadable"]);
+    } finally {
+      fakeAdapter.capabilities.resume = true;
+      delete fakeAdapter.shouldResume;
+    }
+  });
+
+  it("creates instead when shouldResume says the agent cannot be loaded", async () => {
+    const { PROFILE_ID } = await import("@glassys/protocol");
+    const { saveState } = await import("./state.js");
+    await saveState({ profileId: PROFILE_ID, agentId: "agent-gone" });
+    fakeAdapter.capabilities.resume = false;
+    fakeAdapter.shouldResume = async () => false;
+    try {
+      const { enqueueMessage, readTranscript } = await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+      expect(control.resumes).toEqual([]);
+      expect(control.creates).toBe(1);
+    } finally {
+      fakeAdapter.capabilities.resume = true;
+      delete fakeAdapter.shouldResume;
+    }
+  });
+
+  it("shuts down with a run in flight: it is cancelled, ended in the transcript, and the gateway goes idle", async () => {
+    control.hold();
+    const { enqueueMessage, readTranscript, shutdownRuntime, runtimeBusy, setRunCancelTimeoutForTests } = await import(
+      "./runtime.js"
+    );
+    /* The fake run ignores its cancel, as a hung agent would: shutdown gives up on it. */
+    setRunCancelTimeoutForTests(50);
+    void enqueueMessage("long");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
+    await shutdownRuntime();
+    expect(runtimeBusy()).toBe(false);
+    const events = await readTranscript();
+    expect(events.some((e) => e.type === "run.cancelled")).toBe(true);
+    expect(events.filter((e) => e.type === "run.cancelled" || e.type === "run.error" || e.type === "run.done")).toHaveLength(1);
+  });
+
   it("keeps the transcript when resume fails and create also fails", async () => {
     const { PROFILE_ID } = await import("@glassys/protocol");
     const { saveState } = await import("./state.js");
