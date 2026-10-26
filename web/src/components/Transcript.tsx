@@ -9,6 +9,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { Thinking } from "./Thinking";
 import { ToolGroup } from "./ToolCard";
 import { Skeleton } from "./Primitives";
+import { CrashedRow, ErrorBoundary } from "./ErrorBoundary";
 import {
   GlassysMark,
   IconActivity,
@@ -168,18 +169,19 @@ export function Transcript({
       {grouped.map((item) => {
         const b = item as Block;
         return (
-          <TranscriptRow
-            key={item.id}
-            item={item}
-            search={search}
-            pending={b.kind === "user" && Boolean(b.messageId && queuedIds.has(b.messageId))}
-            live={item.id === liveId}
-            locale={locale}
-            thinkingDefault={thinkingDefault}
-            shellLines={shellLines}
-            showDiff={showDiff}
-            cwd={cwd}
-          />
+          <ErrorBoundary key={item.id} label="transcript row" fallback={() => <CrashedRow />}>
+            <TranscriptRow
+              item={item}
+              search={search}
+              pending={b.kind === "user" && Boolean(b.messageId && queuedIds.has(b.messageId))}
+              live={item.id === liveId}
+              locale={locale}
+              thinkingDefault={thinkingDefault}
+              shellLines={shellLines}
+              showDiff={showDiff}
+              cwd={cwd}
+            />
+          </ErrorBoundary>
         );
       })}
       <p className="visually-hidden" role="status">

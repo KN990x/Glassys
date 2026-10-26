@@ -489,5 +489,9 @@
   "adapter.desc.gemini": "Gemini CLI mediante su propio SDK, cuando Google lo publique.",
   "adapter.desc.codex": "OpenAI Codex mediante su SDK, que trae su propio binario.",
   "adapter.desc.acp": "Cualquier agente que hable Agent Client Protocol. Elige uno del registro o indica un comando.",
-  "tool.file": "archivo"
+  "tool.file": "archivo",
+  "crash.title": "Algo ha fallado",
+  "crash.body": "Glassys ha tenido un error al dibujar esta pantalla. Recarga para seguir; la conversación la guarda el gateway.",
+  "crash.reload": "Recargar",
+  "crash.row": "Esta parte de la conversación no se ha podido mostrar."
 }

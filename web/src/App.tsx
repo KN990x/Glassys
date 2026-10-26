@@ -6,6 +6,7 @@ import { ApiError, api, setUnauthorizedHandler } from "./api";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
 import { GlassysMark } from "./components/Icon";
+import { CrashScreen, ErrorBoundary } from "./components/ErrorBoundary";
 
 const Wizard = lazy(() => import("./pages/Wizard").then((m) => ({ default: m.Wizard })));
 /* Chat carries the markdown renderer and most of the app. Split out, Login and Setup no longer
@@ -143,24 +144,26 @@ export function App() {
 
   return (
     <I18nProvider locale={locale}>
-      <div className="app">
-        {gate === "boot" && <BootScreen />}
-        {gate === "unreachable" && (
-          <Unreachable onRetry={() => { setGate("boot"); void refresh(); }} />
-        )}
-        {gate === "setup" && <Setup locale={bootLocale} onLocale={setBootLocale} needsCode={setupNeedsCode} onDone={() => void refresh()} />}
-        {gate === "login" && <Login locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
-        {gate === "wizard" && config && (
-          <Suspense fallback={<BootScreen />}>
-            <Wizard config={config} onConfig={setConfig} onDone={() => void refresh()} />
-          </Suspense>
-        )}
-        {gate === "chat" && config && (
-          <Suspense fallback={<BootScreen />}>
-            <Chat config={config} onConfig={setConfig} onLogout={() => void refresh()} />
-          </Suspense>
-        )}
-      </div>
+      <ErrorBoundary label="app" fallback={() => <CrashScreen />}>
+        <div className="app">
+          {gate === "boot" && <BootScreen />}
+          {gate === "unreachable" && (
+            <Unreachable onRetry={() => { setGate("boot"); void refresh(); }} />
+          )}
+          {gate === "setup" && <Setup locale={bootLocale} onLocale={setBootLocale} needsCode={setupNeedsCode} onDone={() => void refresh()} />}
+          {gate === "login" && <Login locale={bootLocale} onLocale={setBootLocale} onDone={() => void refresh()} />}
+          {gate === "wizard" && config && (
+            <Suspense fallback={<BootScreen />}>
+              <Wizard config={config} onConfig={setConfig} onDone={() => void refresh()} />
+            </Suspense>
+          )}
+          {gate === "chat" && config && (
+            <Suspense fallback={<BootScreen />}>
+              <Chat config={config} onConfig={setConfig} onLogout={() => void refresh()} />
+            </Suspense>
+          )}
+        </div>
+      </ErrorBoundary>
     </I18nProvider>
   );
 }
