@@ -10,12 +10,13 @@ import { trimServiceLogs } from "./service-logs.js";
 import { log, secureDataDir, webDir } from "./paths.js";
 import { initRuntime, shutdownRuntime } from "./runtime.js";
 import { setRestartHandler } from "./restart.js";
-import { loadSecrets, clearBlankCredentialEnv, secretsFlags } from "./secrets.js";
+import { loadSecrets, clearBlankCredentialEnv, sealSecretEnv, secretsFlags } from "./secrets.js";
 import { serveStatic } from "./static.js";
 import { attachWs, closeWs } from "./ws.js";
 
 async function main(): Promise<void> {
   clearBlankCredentialEnv();
+  sealSecretEnv();
   await secureDataDir();
   await initBuildInfo();
   await reconcileUpgradeStatus().catch((err) => log("warn", "could not reconcile the upgrade status", { error: String(err) }));

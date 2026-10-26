@@ -50,12 +50,36 @@ async function readDisk(): Promise<SecretsFile> {
   return { ...empty(), ...parsed, jwtEpoch, adapters, vapid: parsed.vapid };
 }
 
+/** Env vars that would let whoever reads them forge an operator session. */
+const SEALED_ENV = ["GLASSYS_JWT_SECRET", "GLASSYS_OPERATOR_PASSWORD_HASH"] as const;
+type SealedName = (typeof SEALED_ENV)[number];
+const sealed = new Map<SealedName, string>();
+
+/**
+ * Move the session secrets out of process.env, once, at startup. Every agent the gateway starts
+ * (an ACP child, a terminal, the Claude or OpenCode process, a Codex binary) inherits
+ * process.env, and several SDKs take no env option, so this is the one place they can be kept
+ * from an agent that runs `env`. Provider keys stay: the agents need them.
+ */
+export function sealSecretEnv(): void {
+  for (const name of SEALED_ENV) {
+    const value = process.env[name];
+    if (value === undefined) continue;
+    sealed.set(name, value);
+    delete process.env[name];
+  }
+}
+
+export function secretEnv(name: SealedName): string | undefined {
+  return process.env[name] ?? sealed.get(name);
+}
+
 export const MIN_JWT_SECRET_BYTES = 32;
 let warnedShortJwtSecret = false;
 
 /** GLASSYS_JWT_SECRET when it is long enough to sign sessions with; a short one is ignored, loudly. */
 export function envJwtSecret(): string {
-  const value = process.env.GLASSYS_JWT_SECRET || "";
+  const value = secretEnv("GLASSYS_JWT_SECRET") || "";
   if (!value) return "";
   if (Buffer.byteLength(value, "utf8") >= MIN_JWT_SECRET_BYTES) return value;
   if (!warnedShortJwtSecret) {
@@ -78,7 +102,7 @@ function applyEnv(file: SecretsFile): SecretsFile {
   }
   return {
     jwtSecret: envJwtSecret() || file.jwtSecret,
-    operatorPasswordHash: process.env.GLASSYS_OPERATOR_PASSWORD_HASH || file.operatorPasswordHash,
+    operatorPasswordHash: secretEnv("GLASSYS_OPERATOR_PASSWORD_HASH") || file.operatorPasswordHash,
     jwtEpoch: file.jwtEpoch ?? 0,
     adapters,
     vapid: file.vapid,
