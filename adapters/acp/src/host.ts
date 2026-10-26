@@ -1,5 +1,5 @@
-import { createReadStream } from "node:fs";
-import { lstat, mkdir, readFile, readlink, realpath, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, readlink, realpath, writeFile, type FileHandle } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -205,13 +205,62 @@ function envFrom(raw: unknown): NodeJS.ProcessEnv | undefined {
   return env;
 }
 
+/**
+ * Open a path for reading only if it is a regular file. Non-blocking, so a FIFO cannot hang the
+ * open; and checked on the handle, so /dev/zero (size 0, endless) or a swapped-in link is refused.
+ */
+async function openRegularFile(abs: string): Promise<{ fh: FileHandle; size: number }> {
+  const fh = await open(abs, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
+  try {
+    const info = await fh.stat();
+    if (!info.isFile()) throw new Error("Not a regular file");
+    return { fh, size: info.size };
+  } catch (err) {
+    await fh.close();
+    throw err;
+  }
+}
+
+/** At most `MAX_ACP_READ_BYTES`, whatever the size said: the file may grow while it is read. */
+async function readWholeFile(abs: string): Promise<string> {
+  const { fh, size } = await openRegularFile(abs);
+  try {
+    if (size > MAX_ACP_READ_BYTES) {
+      throw new Error(`File is larger than ${MAX_ACP_READ_BYTES} bytes; read it by line range`);
+    }
+    const buf = Buffer.alloc(MAX_ACP_READ_BYTES + 1);
+    let filled = 0;
+    while (filled < buf.length) {
+      const { bytesRead } = await fh.read(buf, filled, buf.length - filled, filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    if (filled > MAX_ACP_READ_BYTES) {
+      throw new Error(`File is larger than ${MAX_ACP_READ_BYTES} bytes; read it by line range`);
+    }
+    return buf.subarray(0, filled).toString("utf8");
+  } finally {
+    await fh.close();
+  }
+}
+
 /** `line` is 1-based; `limit` is a line count. */
 async function readLines(abs: string, line: number | undefined, limit: number | undefined): Promise<string> {
   const first = Math.max(1, line ?? 1);
   const out: string[] = [];
   let bytes = 0;
   let n = 0;
-  const lines = createInterface({ input: createReadStream(abs, { encoding: "utf8" }), crlfDelay: Infinity });
+  const { fh } = await openRegularFile(abs);
+  const input = fh.createReadStream({ encoding: "utf8" });
+  /* readline holds a line until its newline: a file that is one endless line must not fill memory. */
+  let sinceNewline = 0;
+  input.on("data", (chunk: string | Buffer) => {
+    const text = String(chunk);
+    const nl = text.lastIndexOf("\n");
+    sinceNewline = nl < 0 ? sinceNewline + Buffer.byteLength(text) : Buffer.byteLength(text.slice(nl + 1));
+    if (sinceNewline > MAX_ACP_READ_BYTES) input.destroy(new Error(`A line is longer than ${MAX_ACP_READ_BYTES} bytes`));
+  });
+  const lines = createInterface({ input, crlfDelay: Infinity });
   try {
     for await (const text of lines) {
       n += 1;
@@ -223,6 +272,8 @@ async function readLines(abs: string, line: number | undefined, limit: number | 
     }
   } finally {
     lines.close();
+    input.destroy();
+    await fh.close().catch(() => undefined);
   }
   return out.join("\n");
 }
@@ -247,12 +298,7 @@ export function registerHostHandlers(
     const line = positiveInt(rec.line);
     const limit = positiveInt(rec.limit);
     if (line !== undefined || limit !== undefined) return { content: await readLines(abs, line, limit) };
-    const info = await stat(abs);
-    if (info.size > MAX_ACP_READ_BYTES) {
-      throw new Error(`File is larger than ${MAX_ACP_READ_BYTES} bytes; read it by line range`);
-    }
-    const content = await readFile(abs, "utf8");
-    return { content };
+    return { content: await readWholeFile(abs) };
   });
 
   rpc.handle("fs/write_text_file", async (params) => {

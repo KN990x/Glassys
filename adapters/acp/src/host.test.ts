@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -183,6 +184,32 @@ describe("registerHostHandlers autoRun", () => {
       await expect(map.get("fs/read_text_file")?.({ path: "big.log" })).rejects.toThrow(/larger than/);
     } finally {
       cleanup();
+    }
+  });
+
+  it("refuses a FIFO, an endless device and a file that is one endless line", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "glassys-acp-"));
+    const map = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanup = registerHostHandlers({ handle: (m, fn) => void map.set(m, fn) }, dir, { autoRun: false });
+    const devs = new Map<string, (params: unknown) => Promise<unknown> | unknown>();
+    const cleanupDev = registerHostHandlers({ handle: (m, fn) => void devs.set(m, fn) }, "/dev", { autoRun: false });
+    try {
+      const read = map.get("fs/read_text_file")!;
+      if (process.platform !== "win32") {
+        execFileSync("mkfifo", [join(dir, "pipe")]);
+        await expect(read({ path: "pipe" })).rejects.toThrow(/regular file/);
+        await expect(read({ path: "pipe", line: 1, limit: 1 })).rejects.toThrow(/regular file/);
+        await expect(devs.get("fs/read_text_file")!({ path: "zero" })).rejects.toThrow(/regular file/);
+        await expect(devs.get("fs/read_text_file")!({ path: "zero", line: 1 })).rejects.toThrow(/regular file/);
+      }
+      await writeFile(join(dir, "one-line.log"), Buffer.alloc(MAX_ACP_READ_BYTES * 2, 0x61));
+      await expect(read({ path: "one-line.log", line: 1, limit: 1 })).rejects.toThrow(/longer than/);
+      await writeFile(join(dir, "ok.log"), "a\nb\nc\n");
+      await expect(read({ path: "ok.log", line: 2, limit: 1 })).resolves.toEqual({ content: "b" });
+      await expect(read({ path: "ok.log" })).resolves.toEqual({ content: "a\nb\nc\n" });
+    } finally {
+      cleanup();
+      cleanupDev();
     }
   });
 
