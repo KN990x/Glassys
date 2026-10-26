@@ -38,6 +38,14 @@ let idleWaitMaxMs = 180_000;
  * after it and arm the same slot again; this keeps a slot to one fire.
  */
 const firedSlots = new Map<string, number>();
+/**
+ * Where each cron job looks for its next slot: when the scheduler first saw it, or when it last
+ * fired. Looking from `now` instead loses the slot of a job that came due while another one fired or
+ * waited for the gateway to go idle.
+ */
+const scanFrom = new Map<string, number>();
+/** A cron job late by many slots still fires once: catching up is for missed slots, not each of them. */
+const MAX_SLOT_SKIP = 10_000;
 
 export function setScheduleIdlePollMsForTests(ms: number): void {
   idlePollMs = ms;
@@ -187,6 +195,8 @@ export async function patchSchedule(id: string, raw: unknown): Promise<ScheduleJ
   });
   /* An edit (re-enabling a one-shot, say) may mean the same slot again, on purpose. */
   firedSlots.delete(id);
+  /* An edited or re-enabled cron starts from now; it does not owe the slots it was off for. */
+  scanFrom.delete(id);
   armTimer();
   return updated;
 }
@@ -198,17 +208,36 @@ export async function deleteSchedule(id: string): Promise<void> {
     if (next.length === jobs.length) throw new HttpError(404, "Schedule not found");
     await writeJobs(next);
   });
+  firedSlots.delete(id);
+  scanFrom.delete(id);
   armTimer();
+}
+
+/** A one-shot's own time; a cron's latest slot due since `scanFrom`, else its next one. */
+function dueSlot(job: ScheduleJob, now: number): number | null {
+  if (job.at || !job.cron) return nextFireMs(job, new Date(now));
+  let from = scanFrom.get(job.id);
+  if (from === undefined) {
+    from = now;
+    scanFrom.set(job.id, from);
+  }
+  let at = nextFireMs(job, new Date(from));
+  for (let i = 0; at !== null && at <= now && i < MAX_SLOT_SKIP; i++) {
+    const later = nextFireMs(job, new Date(at));
+    if (later === null || later > now) break;
+    at = later;
+  }
+  return at;
 }
 
 async function soonestDue(): Promise<{ job: ScheduleJob; at: number } | null> {
   const jobs = await readJobs();
-  const from = new Date(nowMs());
+  const now = nowMs();
   let best: { job: ScheduleJob; at: number } | null = null;
   for (const job of jobs) {
     let at: number | null = null;
     try {
-      at = nextFireMs(job, from);
+      at = dueSlot(job, now);
     } catch {
       continue;
     }
@@ -238,7 +267,7 @@ function armTimer(): void {
     if (!due) return;
     const wait = Math.max(0, due.at - nowMs());
     timer = setTimeout(() => {
-      void tickSchedules();
+      tickSchedules().catch((err) => log("warn", "schedule tick failed", { error: String(err) }));
     }, Math.min(wait, 60_000));
   })().catch((err) => log("warn", "schedule arm failed", { error: String(err) }));
 }
@@ -355,7 +384,12 @@ async function tickSchedules(): Promise<void> {
        */
       const early = due.at - nowMs();
       if (early > 0) await new Promise((r) => setTimeout(r, early));
-      await fireJob(due);
+      try {
+        await fireJob(due);
+      } finally {
+        /* Slots that passed while this job waited for idle are covered by this fire. */
+        scanFrom.set(due.job.id, Math.max(due.at, nowMs()));
+      }
     }
   } finally {
     firing = false;
@@ -374,6 +408,7 @@ export function stopSchedules(): void {
   armGeneration++;
   armed = null;
   firedSlots.clear();
+  scanFrom.clear();
 }
 
 export async function tickSchedulesForTests(): Promise<void> {

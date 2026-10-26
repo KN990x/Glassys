@@ -246,6 +246,66 @@ describe("schedules", () => {
     expect((await listSchedules())[0]?.lastRun).toBe(new Date(slot + late).toISOString());
   });
 
+  it("fires every cron job due in the same slot", async () => {
+    const enqueued: string[] = [];
+    const slot = Math.ceil((Date.now() + 1000) / 60_000) * 60_000;
+    let now = slot - 30_000;
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+      now: () => now,
+    });
+    await createSchedule({ text: "first", cwd: dir, cron: "* * * * *" });
+    await createSchedule({ text: "second", cwd: dir, cron: "* * * * *" });
+    await new Promise((r) => setTimeout(r, 30));
+    now = slot + 5;
+    await tickSchedulesForTests();
+    now = slot + 50;
+    await tickSchedulesForTests();
+    await tickSchedulesForTests();
+    expect(enqueued.sort()).toEqual(["first", "second"]);
+  });
+
+  it("fires a cron slot that came due while another job waited for idle, and its own slots once", async () => {
+    const enqueued: string[] = [];
+    const slot = Math.ceil((Date.now() + 1000) / 60_000) * 60_000;
+    let now = slot - 30_000;
+    let idle = true;
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => idle,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+      now: () => now,
+    });
+    await createSchedule({ text: "minutely", cwd: dir, cron: "* * * * *" });
+    await createSchedule({ text: "later", cwd: dir, cron: `${new Date(slot + 60_000).getMinutes()} * * * *` });
+    await new Promise((r) => setTimeout(r, 30));
+    now = slot;
+    idle = false;
+    const busy = tickSchedulesForTests();
+    await new Promise((r) => setTimeout(r, 30));
+    /* Three minutes busy: "later" came due at slot + 60s meanwhile, "minutely" skipped two slots. */
+    now = slot + 180_000;
+    idle = true;
+    await busy;
+    await tickSchedulesForTests();
+    await tickSchedulesForTests();
+    expect(enqueued).toEqual(["minutely", "later"]);
+  });
+
   it("skips a job deleted while it waited for the gateway to go idle", async () => {
     let idle = false;
     const enqueued: string[] = [];
