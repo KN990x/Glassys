@@ -464,6 +464,29 @@ describe("Chat composer and layout", () => {
     }
   });
 
+  it("hands back every message that went unconfirmed, not only the last", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    vi.useFakeTimers();
+    try {
+      for (const text of ["check nginx", "and php-fpm"]) {
+        await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, text);
+        await act(async () => {
+          host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      }
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("check nginx\n\nand php-fpm");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the composer clear once the gateway echoes the message", async () => {
     await renderChat();
     await act(async () => {

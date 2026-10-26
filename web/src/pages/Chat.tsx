@@ -99,15 +99,14 @@ export function Chat({
     onConfig,
     onLogout,
     onEcho: (id) => {
-      const pending = unconfirmed.current;
-      if (pending && id === pending.id) {
-        clearTimeout(pending.timer);
-        unconfirmed.current = null;
-      }
+      const pending = unconfirmed.current.get(id);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      unconfirmed.current.delete(id);
     },
     onRefusal: (message) => {
       const text = operatorError(message, tRef.current);
-      if (unconfirmed.current) restoreRef.current(text);
+      if (unconfirmed.current.size) restoreRef.current(text);
       else setSendError(text);
     },
     onNotice: (message, level) => setNotice({ text: operatorError(message, tRef.current), level }),
@@ -176,10 +175,13 @@ export function Chat({
   const searchRef = useRef<HTMLInputElement>(null);
   const [restartNote, setRestartNote] = useState("");
   /**
-   * The message just sent, until the gateway echoes it back. A socket can look open while the
-   * link is dead; without this, the composer was cleared and the message silently lost.
+   * Messages sent and not yet echoed back, oldest first. A socket can look open while the link is
+   * dead; without this, the composer was cleared and the message silently lost. Every one is kept:
+   * a second send used to replace the first, which was then lost if neither got through.
    */
-  const unconfirmed = useRef<{ id: string; text: string; drafts: MessageAttachment[]; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const unconfirmed = useRef(
+    new Map<string, { text: string; drafts: MessageAttachment[]; timer: ReturnType<typeof setTimeout> }>(),
+  );
   const scroller = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const threadBtn = useRef<HTMLButtonElement>(null);
@@ -748,27 +750,30 @@ export function Chat({
       setSendError(t("chat.sendFailed"));
       return;
     }
-    if (unconfirmed.current) clearTimeout(unconfirmed.current.timer);
-    unconfirmed.current = {
-      id,
+    unconfirmed.current.set(id, {
       text: value,
       drafts,
       timer: setTimeout(() => restoreUnconfirmed(t("chat.notDelivered")), SEND_CONFIRM_MS),
-    };
+    });
     setSendError("");
     setText("");
     setDrafts([]);
     if (composer.current) resizeComposer(composer.current);
   }
 
-  /** Put an unconfirmed message back into an empty composer and say why. */
+  /** Put every unconfirmed message back into an empty composer, in the order sent, and say why. */
   function restoreUnconfirmed(reason: string) {
-    const pending = unconfirmed.current;
-    if (!pending) return;
-    clearTimeout(pending.timer);
-    unconfirmed.current = null;
-    setText((cur) => (cur.trim() ? cur : pending.text));
-    setDrafts((cur) => (cur.length ? cur : pending.drafts));
+    const pending = [...unconfirmed.current.values()];
+    if (!pending.length) return;
+    for (const p of pending) clearTimeout(p.timer);
+    unconfirmed.current.clear();
+    const text = pending
+      .map((p) => p.text)
+      .filter(Boolean)
+      .join("\n\n");
+    const drafts = pending.flatMap((p) => p.drafts).slice(0, MAX_ATTACHMENTS);
+    setText((cur) => (cur.trim() ? cur : text));
+    setDrafts((cur) => (cur.length ? cur : drafts));
     setSendError(reason);
   }
   const restoreRef = useRef(restoreUnconfirmed);
