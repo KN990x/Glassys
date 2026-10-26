@@ -17,7 +17,7 @@ import { log } from "./paths.js";
 import { revalidateSockets } from "./sessions.js";
 import { hashPassword, loadSecrets, operatorPasswordError, patchSecrets, secretsFlags } from "./secrets.js";
 import { isLoopbackAddress, originAllowed, setCors } from "./cors.js";
-import { trustProxy } from "./listen.js";
+import { listenBind, listenPort, trustProxy } from "./listen.js";
 import { clearSetupCode, isDirectLocalRequest, setupCodeMatches } from "./setup-token.js";
 import { UnknownAdapterError } from "./adapters.js";
 import { requestRestart } from "./restart.js";
@@ -87,14 +87,27 @@ async function readBuffer(req: IncomingMessage, limit: number): Promise<Buffer> 
   return Buffer.concat(chunks);
 }
 
-async function readJson(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
+/** Every body the API takes is a JSON object; `null`, a number or an array is a 400, not a TypeError. */
+async function readJson(req: IncomingMessage, limit = 1_000_000): Promise<Record<string, unknown>> {
   const buf = await readBuffer(req, limit);
   if (!buf.length) return {};
+  let parsed: unknown;
   try {
-    return JSON.parse(buf.toString("utf8"));
+    parsed = JSON.parse(buf.toString("utf8"));
   } catch {
     throw new HttpError(400, "invalid json");
   }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new HttpError(400, "body must be a JSON object");
+  return parsed as Record<string, unknown>;
+}
+
+/**
+ * The session token goes in the HttpOnly cookie. A client that cannot use cookies (a script, a
+ * non-browser client) asks for it in the body with `bearer: true`; the PWA never does, so a
+ * script injected into the page cannot lift a token from a login response.
+ */
+function sessionBody(token: string, body: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  return body.bearer === true ? { ...extra, token } : extra;
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
@@ -207,7 +220,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/auth/setup") {
     if (!(await requireEdge(req, res))) return true;
-    const body = (await readJson(req, 4096)) as { password?: string; setupCode?: unknown };
+    const body = await readJson(req, 4096);
     /* Wrong codes go through the login limiter's lane, so the code cannot be guessed at speed. */
     const allowed = isDirectLocalRequest(req)
       ? true
@@ -244,14 +257,14 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       await clearSetupCode();
       const token = await signSession();
       res.setHeader("Set-Cookie", await buildSessionCookie(token, req));
-      send(res, 200, { token, setupComplete: true });
+      send(res, 200, sessionBody(token, body, { setupComplete: true }));
       return true;
     });
   }
 
   if (method === "POST" && path === "/api/auth/login") {
     if (!(await requireEdge(req, res))) return true;
-    const body = (await readJson(req, 4096)) as { password?: unknown };
+    const body = await readJson(req, 4096);
     const password = typeof body.password === "string" ? body.password : "";
     const token = await attemptLogin(await requestClientIp(req), async () => {
       const signed = await loginWithPassword(password);
@@ -267,7 +280,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       return true;
     }
     res.setHeader("Set-Cookie", await buildSessionCookie(token, req));
-    send(res, 200, { token });
+    send(res, 200, sessionBody(token, body, { ok: true }));
     return true;
   }
 
@@ -651,11 +664,12 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
   if (method === "GET" && path === "/api/reachability") {
     if (!(await requireAuth(req, res))) return true;
     const cfg = await loadConfig();
-    const bind = cfg.network.bind;
+    /* What the gateway listens on: GLASSYS_BIND / GLASSYS_PORT win over config.yaml. */
+    const bind = listenBind(cfg);
     const git = await readGitContext(cfg.agent.cwd);
     send(res, 200, {
       bind,
-      port: cfg.network.port,
+      port: listenPort(cfg),
       publicUrl: cfg.network.publicUrl,
       loopback: bind === "127.0.0.1" || bind === "::1" || bind === "localhost",
       hostname: hostname(),

@@ -80,12 +80,12 @@ export const api = {
   status: () => req<{ setupComplete: boolean; onboarded: boolean; setupNeedsCode?: boolean }>("/api/auth/status"),
   me: () => req<{ onboarded: boolean; setupComplete: boolean }>("/api/auth/me"),
   setup: (password: string, setupCode?: string) =>
-    req<{ token: string }>("/api/auth/setup", {
+    req<{ setupComplete: boolean }>("/api/auth/setup", {
       method: "POST",
       body: JSON.stringify({ password, ...(setupCode ? { setupCode } : {}) }),
     }),
   login: (password: string) =>
-    req<{ token: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
+    req<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => req<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   config: () => req<RedactedConfig>("/api/config"),
   saveConfig: (patch: ConfigPatch) =>

@@ -101,13 +101,13 @@ describe("http api", () => {
     const without = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
       headers: proxied,
-      body: JSON.stringify({ password: "correct horse battery" }),
+      body: JSON.stringify({ bearer: true, password: "correct horse battery" }),
     });
     expect(without.status).toBe(403);
     const withCode = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
       headers: proxied,
-      body: JSON.stringify({ password: "correct horse battery", setupCode: code.toLowerCase().replace("-", " ") }),
+      body: JSON.stringify({ bearer: true, password: "correct horse battery", setupCode: code.toLowerCase().replace("-", " ") }),
     });
     expect(withCode.status).toBe(200);
     const { existsSync } = await import("node:fs");
@@ -118,7 +118,7 @@ describe("http api", () => {
     const res = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
-      body: JSON.stringify({ password: "correct horse battery" }),
+      body: JSON.stringify({ bearer: true, password: "correct horse battery" }),
     });
     expect(res.status).toBe(403);
   });
@@ -127,7 +127,7 @@ describe("http api", () => {
     const res = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "short" }),
+      body: JSON.stringify({ bearer: true, password: "short" }),
     });
     expect(res.status).toBe(400);
   });
@@ -136,7 +136,7 @@ describe("http api", () => {
     const res = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "x".repeat(257) }),
+      body: JSON.stringify({ bearer: true, password: "x".repeat(257) }),
     });
     expect(res.status).toBe(400);
   });
@@ -145,14 +145,14 @@ describe("http api", () => {
     const setup = await fetch(`${base}/api/auth/setup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     expect(setup.status).toBe(200);
     const { token } = (await setup.json()) as { token: string };
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     expect(login.status).toBe(200);
 
@@ -171,12 +171,54 @@ describe("http api", () => {
     expect(ok.status).toBe(200);
   });
 
-  it("revokes the session on logout so the same token stops working", async () => {
+  it("keeps the token in the cookie unless the client asks for a bearer", async () => {
     await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: "password1" }),
+    });
+    expect(login.status).toBe(200);
+    expect(await login.json()).toEqual({ ok: true });
+    expect(login.headers.get("set-cookie")).toMatch(/glassys_session=/);
+  });
+
+  it("answers a body that is not a JSON object with 400", async () => {
+    for (const body of ["null", "42", "[]"]) {
+      const res = await fetch(`${base}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it("reports the address it listens on, not the one in config.yaml", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bearer: true, password: "password1" }),
+    });
+    const { token } = (await login.json()) as { token: string };
+    const prev = process.env.GLASSYS_BIND;
+    process.env.GLASSYS_BIND = "0.0.0.0";
+    try {
+      const res = await fetch(`${base}/api/reachability`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(await res.json()).toMatchObject({ bind: "0.0.0.0", loopback: false });
+    } finally {
+      if (prev === undefined) delete process.env.GLASSYS_BIND;
+      else process.env.GLASSYS_BIND = prev;
+    }
+  });
+
+  it("revokes the session on logout so the same token stops working", async () => {
+    await patchSecrets({ operatorPasswordHash: await hashPassword("password1") });
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const auth = { Authorization: `Bearer ${token}` };
@@ -191,7 +233,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const put = (body: unknown) =>
@@ -206,7 +248,7 @@ describe("http api", () => {
     const relog = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password2" }),
+      body: JSON.stringify({ bearer: true, password: "password2" }),
     });
     expect(relog.status).toBe(200);
   });
@@ -216,7 +258,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const res = await fetch(`${base}/api/threads/%E0/export`, { headers: { Authorization: `Bearer ${token}` } });
@@ -233,7 +275,7 @@ describe("http api", () => {
         fetch(`${base}/api/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password: "wrong-password" }),
+          body: JSON.stringify({ bearer: true, password: "wrong-password" }),
         }).then((r) => r.status);
       const statuses = await Promise.all(Array.from({ length: LOGIN_MAX_WAITING + 2 }, attempt));
       expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(1);
@@ -251,7 +293,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const auth = { Authorization: `Bearer ${token}` };
@@ -271,7 +313,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const claude = await fetch(`${base}/api/models?adapter=claude`, {
@@ -288,7 +330,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const auth = { Authorization: `Bearer ${token}` };
@@ -345,7 +387,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const auth = { Authorization: `Bearer ${token}` };
@@ -393,7 +435,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const res = await fetch(`${base}/api/admin/restart`, {
@@ -410,7 +452,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const cookie = (login.headers.get("set-cookie") || "").split(";")[0] || "";
     expect(cookie).toMatch(/^glassys_session=/);
@@ -442,7 +484,7 @@ describe("http api", () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     const { token } = (await login.json()) as { token: string };
     const auth = { Authorization: `Bearer ${token}` };

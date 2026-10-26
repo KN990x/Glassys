@@ -99,7 +99,7 @@ describe("websocket handshake", () => {
     const login = await fetch(`${url}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "password1" }),
+      body: JSON.stringify({ bearer: true, password: "password1" }),
     });
     expect(login.status).toBe(200);
     token = ((await login.json()) as { token: string }).token;
