@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { cursorMapState, mapCursorDelta, toolKindFromName } from "./mapper.js";
-import fixture from "./fixtures/deltas.json";
+import { readFileSync } from "node:fs";
+
+/* Read, not imported: a JSON import needs an import attribute under NodeNext, which tsc and the
+   test runner do not agree on yet. */
+const fixture = JSON.parse(readFileSync(new URL("./fixtures/deltas.json", import.meta.url), "utf8")) as unknown[];
 
 describe("mapCursorDelta", () => {
   it("maps text and thinking tokens without waiting for result", () => {

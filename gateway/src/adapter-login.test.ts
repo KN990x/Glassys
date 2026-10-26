@@ -50,7 +50,7 @@ describe("startLoginJob", () => {
   it("cancels the SDK poll", async () => {
     const started = startLoginJob("cursor", async (opts) => {
       opts?.onLoginUrl?.("https://cursor.com/login?c=3");
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((_resolve, reject) => {
         opts?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
       });
     });

@@ -632,7 +632,7 @@ describe("runtime queue", () => {
   it("keeps the transcript when resume fails and create also fails", async () => {
     const { PROFILE_ID } = await import("@glassys/protocol");
     const { saveState } = await import("./state.js");
-    const { appendTranscript, readTranscript } = await import("./transcript.js");
+    const { appendTranscript } = await import("./transcript.js");
     await saveState({ profileId: PROFILE_ID, agentId: "stale-agent" });
     await appendTranscript({ type: "user.message", text: "stale" });
     const origResume = fakeAdapter.resume;

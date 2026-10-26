@@ -12,7 +12,7 @@ describe("pendingRun", () => {
 
   it("returns cancelled when abort wins", async () => {
     const run = pendingRun("r2", async ({ signal }) => {
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(Object.assign(new Error("Aborted"), { name: "AbortError" })));
       });
       return "finished";

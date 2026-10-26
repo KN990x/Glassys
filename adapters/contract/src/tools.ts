@@ -103,7 +103,7 @@ export function promptWithAttachments(
 }
 
 export function imagePartsFromAttachments(
-  attachments?: { mime: string; name: string; body?: Buffer }[],
+  attachments?: { mime: string; name: string; path?: string; body?: Buffer }[],
 ): Array<{ mime: string; name: string; data: string }> {
   if (!attachments?.length) return [];
   return attachments

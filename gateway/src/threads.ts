@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { writeFileAtomic } from "./atomic.js";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentConfig, ModelParam, ThreadSummary, TranscriptEvent } from "@glassys/protocol";
 import { MAX_PINNED_CWDS, PROFILE_ID } from "@glassys/protocol";
