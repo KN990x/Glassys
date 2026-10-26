@@ -1652,6 +1652,14 @@ button.host-copy:hover { color: var(--text); }
 .transcript-inner > .bubble.user:first-child { margin-top: 0; }
 .transcript-inner > .tool-group + .tool-group,
 .transcript-inner > .tool + .tool { margin-top: calc(var(--s-2) - var(--s-3)); }
+/* Rows off screen skip layout and paint: a long thread paid for every one of them on each
+   streamed frame. `auto` keeps each row's last measured height, so the scrollbar holds still. */
+.transcript-inner > .bubble,
+.transcript-inner > .tool,
+.transcript-inner > .tool-group {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--s-8);
+}
 /* One search field: the rail filter, the transcript search and the palette all
    put the glyph inside the control instead of above it. */
 .search-field { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }

@@ -58,17 +58,31 @@ export function slashQuery(text: string): string | null {
   return text.slice(1);
 }
 
-export function blockMatchesQuery(
-  block: { kind: string; text?: string; title?: string; path?: string; command?: string; chunk?: string },
-  query: string,
-): boolean {
+type Searchable = { kind: string; text?: string; title?: string; path?: string; command?: string; chunk?: string };
+
+/*
+ * A block's searchable text, lowercased once. Blocks are replaced, never changed, when an event
+ * touches them, so a block seen before still holds the same text: with search open, the whole
+ * transcript (64 KB tool chunks included) was lowercased again on every streamed frame.
+ */
+const haystacks = new WeakMap<object, string>();
+
+function haystack(block: Searchable): string {
+  let hay = haystacks.get(block);
+  if (hay === undefined) {
+    hay = [block.text, block.title, block.path, block.command, block.chunk]
+      .filter((v): v is string => typeof v === "string")
+      .join("\n")
+      .toLowerCase();
+    haystacks.set(block, hay);
+  }
+  return hay;
+}
+
+export function blockMatchesQuery(block: Searchable, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const hay = [block.text, block.title, block.path, block.command, block.chunk]
-    .filter((v): v is string => typeof v === "string")
-    .join("\n")
-    .toLowerCase();
-  return hay.includes(q);
+  return haystack(block).includes(q);
 }
 
 /** Token counts appear in four places; they all render through here. */
