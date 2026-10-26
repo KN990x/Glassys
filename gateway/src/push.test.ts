@@ -26,6 +26,13 @@ describe("push endpoint guard", () => {
     expect(isPrivateAddress("2a00:1450:4003:80e::200a")).toBe(false);
   });
 
+  it("judges a NAT64 address by the IPv4 address it stands for", () => {
+    expect(isPrivateAddress("64:ff9b::7f00:1")).toBe(true);
+    expect(isPrivateAddress("64:ff9b::a9fe:a9fe")).toBe(true);
+    expect(isPrivateAddress("64:ff9b::192.168.1.1")).toBe(true);
+    expect(isPrivateAddress("64:ff9b::8efa:b80a")).toBe(false);
+  });
+
   it("rejects http, private literals and hosts that resolve to the LAN", async () => {
     setPushLookupForTests(async (host) => [{ address: host === "evil.example" ? "192.168.1.10" : "142.250.184.10" }]);
     await expect(assertPublicPushEndpoint("http://fcm.googleapis.com/x")).rejects.toThrow(/https/);

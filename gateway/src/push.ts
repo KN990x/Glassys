@@ -92,9 +92,26 @@ for (const [net, prefix] of [
   blocked.addSubnet(net, prefix, "ipv6");
 }
 
+const nat64 = new BlockList();
+nat64.addSubnet("64:ff9b::", 96, "ipv6");
+
+/** The IPv4 address a NAT64 address (64:ff9b::/96) stands for: DNS64 hands those out for v4-only hosts. */
+function nat64Target(address: string): string | null {
+  if (isIP(address) !== 6 || !nat64.check(address, "ipv6")) return null;
+  const dotted = /:(\d+\.\d+\.\d+\.\d+)$/.exec(address);
+  if (dotted) return dotted[1]!;
+  const groups = address.split(":");
+  const lo = parseInt(groups.at(-1) || "0", 16);
+  const hi = parseInt(groups.at(-2) || "0", 16);
+  return [hi >> 8, hi & 255, lo >> 8, lo & 255].join(".");
+}
+
 export function isPrivateAddress(address: string): boolean {
   const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
   if (mapped) return blocked.check(mapped[1]!, "ipv4");
+  /* Not blocked outright: on an IPv6-only network with NAT64 a public push service has one too. */
+  const viaNat64 = nat64Target(address);
+  if (viaNat64) return blocked.check(viaNat64, "ipv4");
   const family = isIP(address);
   if (family === 4) return blocked.check(address, "ipv4");
   if (family === 6) return blocked.check(address, "ipv6");
