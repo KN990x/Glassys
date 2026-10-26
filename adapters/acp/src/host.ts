@@ -4,6 +4,7 @@ import { createInterface } from "node:readline";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { OWN_GROUP, signalTree } from "./proc.js";
 import {
   PROTECTED_PATH_DENIAL,
   asRecord,
@@ -124,20 +125,6 @@ export async function resolveAllowedPath(cwd: string, path: string, protectedPat
   return abs;
 }
 
-/** A child spawned in its own process group, so killing the group reaches what it started too. */
-const OWN_GROUP = process.platform !== "win32";
-
-function signalTree(child: ChildProcess, signal: NodeJS.Signals): void {
-  if (OWN_GROUP && child.pid) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {
-      /* group already gone; fall through to the child itself */
-    }
-  }
-  child.kill(signal);
-}
 
 function killWithGrace(child: ChildProcess): void {
   if (child.exitCode != null || child.signalCode) return;

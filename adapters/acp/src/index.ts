@@ -51,20 +51,32 @@ function commandOf(opts: AdapterCreateOptions): { command: string; args: string[
 /** How long a setup-side request (model switch, authenticate) may take before the run gives up on it. */
 export const ACP_CONTROL_TIMEOUT_MS = 30_000;
 
-/** Ask the agent to use `model`. Agents without model selection keep their own default. */
-async function applySessionModel(rpc: JsonRpcStdio, sessionId: string, model: string): Promise<void> {
-  if (!model || model === "default") return;
+/** Ask the agent to use `model`; false when it took neither request. Agents without model selection keep their own default. */
+async function applySessionModel(rpc: JsonRpcStdio, sessionId: string, model: string): Promise<boolean> {
+  if (!model || model === "default") return true;
   try {
     await rpc.request("session/set_model", { sessionId, modelId: model }, ACP_CONTROL_TIMEOUT_MS);
-    return;
+    return true;
   } catch {
     /* ACP v1 uses config options for some agents */
   }
   try {
     await rpc.request("session/set_config_option", { sessionId, configId: "model", value: model }, ACP_CONTROL_TIMEOUT_MS);
+    return true;
   } catch {
     /* agent may not support model selection */
+    return false;
   }
+}
+
+/** The model the agent says it is using when the session opens: what "Agent default" goes back to. */
+export function acpCurrentModelFrom(result: unknown): string | undefined {
+  const rec = asRecord(result);
+  const current = str(asRecord(rec?.models)?.currentModelId);
+  if (current) return current;
+  const options = Array.isArray(rec?.configOptions) ? rec.configOptions.map((o) => asRecord(o)) : [];
+  const select = options.find((o) => o?.category === "model" || o?.id === "model");
+  return str(select?.currentValue) || undefined;
 }
 
 /** ACP's `auth_required` error: the agent wants `authenticate` before it opens a session. */
@@ -212,7 +224,7 @@ async function openAcpSession(
   opts: AdapterCreateOptions,
   resumeId: string | undefined,
   caps: Record<string, unknown> | undefined,
-): Promise<{ sessionId: string; models?: ModelCatalogItem[] }> {
+): Promise<{ sessionId: string; models?: ModelCatalogItem[]; currentModel?: string }> {
   const sessionCaps = asRecord(caps?.session) ?? caps;
   const loadSession = acpShouldLoadSession(caps);
   const canResume = sessionCaps?.resume === true || sessionCaps?.sessionResume === true;
@@ -220,14 +232,14 @@ async function openAcpSession(
     if (canResume) {
       try {
         const resumed = await rpc.request("session/resume", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
-        return { sessionId: resumeId, models: acpModelsFrom(resumed) };
+        return { sessionId: resumeId, models: acpModelsFrom(resumed), currentModel: acpCurrentModelFrom(resumed) };
       } catch {
         /* fall through to load */
       }
     }
     if (loadSession) {
       const loaded = await rpc.request("session/load", { sessionId: resumeId, cwd: opts.cwd, mcpServers: [] }, ACP_SETUP_TIMEOUT_MS);
-      return { sessionId: resumeId, models: acpModelsFrom(loaded) };
+      return { sessionId: resumeId, models: acpModelsFrom(loaded), currentModel: acpCurrentModelFrom(loaded) };
     }
     throw new AdapterError("ACP agent cannot resume the stored session", "startup");
   }
@@ -237,7 +249,7 @@ async function openAcpSession(
   if (typeof created?.sessionId !== "string" || !created.sessionId) {
     throw new AdapterError("ACP session/new returned no sessionId", "startup");
   }
-  return { sessionId: created.sessionId, models: acpModelsFrom(created) ?? [] };
+  return { sessionId: created.sessionId, models: acpModelsFrom(created) ?? [], currentModel: acpCurrentModelFrom(created) };
 }
 
 /** Opening a session only to read the catalog must not hold the model picker for minutes. */
@@ -295,6 +307,8 @@ class AcpSession implements AdapterSession {
     /** The agent said it takes image content blocks (promptCapabilities.image). */
     private takesImages: boolean,
     private ledger: HostLedger,
+    /** What the agent picked itself when the session opened; undefined when it did not say. */
+    private agentDefault?: string,
   ) {
     this.sessionId = sessionId;
     this.model = model;
@@ -333,9 +347,11 @@ class AcpSession implements AdapterSession {
     const caps = asRecord(init?.agentCapabilities) ?? asRecord(init?.capabilities) ?? undefined;
     await persistResumeCapability(opts.storeDir, command, args, acpChildSupportsResume(caps));
     let sessionId: string;
+    let agentDefault: string | undefined;
     try {
       const opened = await withAuthRetry(rpc, init, () => openAcpSession(rpc, opts, resumeId, caps));
       sessionId = opened.sessionId;
+      agentDefault = opened.currentModel;
       if (opened.models) await persistModelCatalog(opts.storeDir, command, args, opened.models);
     } catch (err) {
       cleanupHost();
@@ -346,7 +362,7 @@ class AcpSession implements AdapterSession {
     }
     await applySessionModel(rpc, sessionId, opts.model);
     const promptCaps = asRecord(caps?.promptCapabilities);
-    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model, promptCaps?.image === true, ledger);
+    return new AcpSession(rpc, sessionId, sessionId, cleanupHost, opts.model, promptCaps?.image === true, ledger, agentDefault);
   }
 
   async send(
@@ -354,10 +370,14 @@ class AcpSession implements AdapterSession {
     onEvent: Parameters<AdapterSession["send"]>[1],
     sendOpts?: { model?: string; attachments?: PromptAttachment[] },
   ) {
-    /* The gateway passes the model on every send; only a change costs a round trip. */
-    if (sendOpts?.model && sendOpts.model !== "default" && sendOpts.model !== this.model) {
-      await applySessionModel(this.rpc, this.sessionId, sendOpts.model);
-      this.model = sendOpts.model;
+    /* The gateway passes the model on every send; only a change costs a round trip. "Agent
+       default" after another pick means the model the agent chose when the session opened. */
+    let switchFailed: string | undefined;
+    const wanted = sendOpts?.model;
+    if (wanted && wanted !== this.model) {
+      const target = wanted === "default" ? this.agentDefault : wanted;
+      if (!target || (await applySessionModel(this.rpc, this.sessionId, target))) this.model = wanted;
+      else switchFailed = target;
     }
     const runId = randomUUID();
     const promptText = promptWithAttachments(text, sendOpts?.attachments);
@@ -368,6 +388,9 @@ class AcpSession implements AdapterSession {
       promptBlocks.push({ type: "image", mimeType: img.mime, data: img.data });
     }
     return pendingRun(runId, async ({ signal, isCancelled }) => {
+      if (switchFailed) {
+        onEvent({ type: "notice", level: "warn", message: `The agent did not switch to ${switchFailed}`, about: "agent" });
+      }
       /* Tool ids are per turn; a long session must not keep every call it ever made. */
       const state = acpMapState(this.ledger);
       const onUpdate = (params: unknown) => {
@@ -496,6 +519,8 @@ export const acpAdapter: Adapter = {
       const res = await fetch("https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json", {
         signal: AbortSignal.timeout(8_000),
       });
+      /* A 5xx page is not JSON; say what the registry answered instead of a parse error. */
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = (await res.json()) as { agents?: Array<Record<string, unknown>> };
       const agents = Array.isArray(body.agents) ? body.agents : [];
       return agents.flatMap((a) => {

@@ -49,6 +49,22 @@ describe("ACP adapter against scripts/fake-acp-agent.mjs", () => {
     }
   }, 20_000);
 
+  it("goes back to the agent's own model when Agent default is picked again", async () => {
+    const { session } = await start(true);
+    try {
+      const thinkingOf = (events: ServerMessage[]) =>
+        events.flatMap((e) => (e.type === "thinking.delta" ? [e.text] : [])).join("");
+      const first: ServerMessage[] = [];
+      await (await session.send("demo", (e) => first.push(e), { model: "fake-deep" })).wait();
+      expect(thinkingOf(first)).toContain("fake-deep");
+      const back: ServerMessage[] = [];
+      await (await session.send("demo", (e) => back.push(e), { model: "default" })).wait();
+      expect(thinkingOf(back)).toContain("fake-fast");
+    } finally {
+      await session.dispose();
+    }
+  }, 20_000);
+
   it("ends every write and the shell denied with auto-run off, and writes nothing", async () => {
     const { cwd, session } = await start(false);
     try {

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { OWN_GROUP, signalTree } from "./proc.js";
 import { asRecord } from "@glassys/adapter-contract";
 
 /** A JSON-RPC error answer, keeping the code so callers can tell `auth_required` from a failure. */
@@ -59,7 +60,13 @@ export class JsonRpcStdio {
   readonly child: ChildProcess;
 
   constructor(command: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv) {
-    this.child = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, ...env } });
+    /* Its own group: registry agents run as `npx -y pkg`, and killing npx alone orphans the agent. */
+    this.child = spawn(command, args, {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ...env },
+      detached: OWN_GROUP,
+    });
     /* EPIPE on a child that already died arrives here; the close handler reports it. */
     this.child.stdin?.on("error", () => undefined);
     this.child.stdout?.on("data", (chunk: Buffer) => this.onData(chunk));
@@ -136,13 +143,13 @@ export class JsonRpcStdio {
     this.failAll(new Error("closed"));
     if (this.exited) return;
     try {
-      this.child.kill("SIGTERM");
+      signalTree(this.child, "SIGTERM");
     } catch {
       /* already gone */
     }
     if (await this.waitExit(RPC_KILL_GRACE_MS)) return;
     try {
-      this.child.kill("SIGKILL");
+      signalTree(this.child, "SIGKILL");
     } catch {
       /* already gone */
     }
@@ -214,11 +221,7 @@ export class JsonRpcStdio {
         this.lspNeed = 0;
         const body = this.buf.subarray(bodyStart, bodyStart + len).toString("utf8");
         this.buf = this.buf.subarray(bodyStart + len);
-        try {
-          this.onMessage(JSON.parse(body) as unknown);
-        } catch {
-          /* ignore */
-        }
+        this.dispatch(body);
         continue;
       }
       const nl = this.buf.indexOf(0x0a);
@@ -231,11 +234,25 @@ export class JsonRpcStdio {
         this.buf = Buffer.concat([Buffer.from(`${line}\n`, "utf8"), this.buf]);
         continue;
       }
-      try {
-        this.onMessage(JSON.parse(line) as unknown);
-      } catch {
-        /* ignore */
-      }
+      this.dispatch(line);
+    }
+  }
+
+  /**
+   * Garbage from the agent is skipped; a throw from our own handling (a mapper bug) is logged
+   * instead of vanishing with it, and the next message still gets read.
+   */
+  private dispatch(text: string) {
+    let msg: unknown;
+    try {
+      msg = JSON.parse(text);
+    } catch {
+      return;
+    }
+    try {
+      this.onMessage(msg);
+    } catch (err) {
+      console.error(JSON.stringify({ ts: new Date().toISOString(), level: "error", msg: "acp message handler failed", error: String(err) }));
     }
   }
 
