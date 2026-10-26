@@ -1,16 +1,11 @@
 import { mkdir } from "node:fs/promises";
 import { readJsonFile } from "./json-file.js";
 import { writeFileAtomic } from "./atomic.js";
-import { PROFILE_ID } from "@glassys/protocol";
+import { PROFILE_ID, type UsageTotals } from "@glassys/protocol";
 import { paths } from "./paths.js";
 import { createMutex } from "./lock.js";
 
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-  byAdapter: Record<string, { inputTokens: number; outputTokens: number }>;
-  updatedAt: string;
-}
+export type { UsageTotals };
 
 export interface PersistedState {
   profileId: string;

@@ -246,14 +246,14 @@ export interface RedactedConfig extends GlassysConfig {
   dataDir?: string;
 }
 
+/**
+ * What a client may change. No `network` or `security`: bind, port, origins and edge auth live in
+ * config.yaml and the environment only, and the gateway drops them from any patch.
+ */
 export type ConfigPatch = {
   space?: Partial<SpaceConfig>;
   onboarding?: { completed?: boolean };
   agent?: Partial<AgentConfig>;
-  network?: Partial<NetworkConfig>;
-  security?: Partial<SecurityConfig> & {
-    cloudflare?: Partial<SecurityConfig["cloudflare"]>;
-  };
   display?: Partial<DisplayConfig>;
   session?: Partial<SessionConfig>;
   prompts?: Partial<PromptsConfig>;
@@ -589,6 +589,91 @@ export function isMessageAttachment(value: unknown): value is MessageAttachment 
 
 function optionalAttachments(value: unknown): boolean {
   return value === undefined || (Array.isArray(value) && value.every(isMessageAttachment));
+}
+
+/*
+ * HTTP API replies the PWA reads, typed once here so the gateway that sends them and the screen
+ * that reads them cannot drift apart.
+ */
+
+/** GET /api/reachability: where this gateway listens and what it runs as. */
+export interface ReachabilityInfo {
+  bind: string;
+  port: number;
+  publicUrl: string;
+  loopback: boolean;
+  hostname?: string;
+  user?: string;
+  git?: { branch: string; dirty: boolean };
+}
+
+/** GET /api/usage: token totals since install, overall and per adapter. */
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  byAdapter: Record<string, { inputTokens: number; outputTokens: number }>;
+  updatedAt: string;
+}
+
+/** A scheduled prompt as stored. */
+export interface ScheduleJob {
+  id: string;
+  text: string;
+  cwd: string;
+  threadId?: string;
+  cron?: string;
+  at?: string;
+  enabled: boolean;
+  createdAt: string;
+  lastRun?: string;
+  lastError?: string;
+  /** Failed attempts of a one-shot since it was created or last edited. */
+  attempts?: number;
+  /** Earliest time a failed one-shot fires again. */
+  retryAt?: string;
+}
+
+/** GET /api/schedules. */
+export interface ScheduleList {
+  timezone?: string;
+  schedules: Array<ScheduleJob & { nextRun: string | null }>;
+}
+
+export type ServiceKind = "launchd" | "systemd" | "none";
+export type UpgradePhase = "idle" | "starting" | "pulling" | "install" | "build" | "restart" | "error";
+
+export interface UpgradeStatus {
+  phase: UpgradePhase;
+  error?: string;
+  /** Set once per upgrade run; every later phase keeps it. */
+  startedAt?: string;
+  updatedAt?: string;
+  fromSha?: string;
+  /** The commit the restarted gateway must report. */
+  targetSha?: string;
+  /** The upgrade script's pid while it runs (written by scripts/host-service.mjs). */
+  pid?: number;
+}
+
+/** GET /api/admin/update. */
+export interface AdminUpdateInfo {
+  version: string;
+  protocolVersion: number;
+  git?: { sha: string; branch: string; dirty: boolean };
+  /** The commit this gateway process started on; `git` is the clone on disk. */
+  running: { commit?: string; startedAt: string };
+  service: ServiceKind;
+  upgrading?: UpgradeStatus;
+}
+
+/** GET /api/auth/adapter-status. */
+export interface AdapterAuthStatus {
+  loggedIn: boolean;
+  email?: string;
+  apiKeyConfigured: boolean;
+  loginUrl?: string;
+  loginStatus?: string;
+  loginError?: string;
 }
 
 /*

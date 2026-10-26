@@ -5,7 +5,13 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { spawn } from "node:child_process";
 import { createMutex } from "./lock.js";
-import { PROTOCOL_VERSION } from "@glassys/protocol";
+import {
+  PROTOCOL_VERSION,
+  type AdminUpdateInfo,
+  type ServiceKind,
+  type UpgradePhase,
+  type UpgradeStatus,
+} from "@glassys/protocol";
 import { writeFileAtomic } from "./atomic.js";
 import { GATEWAY_VERSION, repoRoot, runningBuild } from "./build-info.js";
 import { paths, log } from "./paths.js";
@@ -18,8 +24,7 @@ const SYSTEMD_UNIT = "glassys.service";
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
 
-export type ServiceKind = "launchd" | "systemd" | "none";
-export type UpgradePhase = "idle" | "starting" | "pulling" | "install" | "build" | "restart" | "error";
+export type { ServiceKind, UpgradePhase, UpgradeStatus };
 
 let detectOverride: ServiceKind | null = null;
 let gitInfoOverride: { sha: string; branch: string; dirty: boolean } | null | undefined;
@@ -32,18 +37,6 @@ export function setInstallGitForTests(info: { sha: string; branch: string; dirty
   gitInfoOverride = info;
 }
 
-export interface UpgradeStatus {
-  phase: UpgradePhase;
-  error?: string;
-  /** Set once per upgrade run; every later phase keeps it. */
-  startedAt?: string;
-  updatedAt?: string;
-  fromSha?: string;
-  /** The commit the restarted gateway must report. */
-  targetSha?: string;
-  /** The upgrade script's pid while it runs (written by scripts/host-service.mjs). */
-  pid?: number;
-}
 
 const ACTIVE_PHASES: ReadonlySet<UpgradePhase> = new Set(["starting", "pulling", "install", "build"]);
 /** The gateway wrote "starting" but the script never reported in. */
@@ -224,14 +217,7 @@ export async function reconcileUpgradeStatus(): Promise<void> {
   await writeUpgradeStatus(done);
 }
 
-export async function adminUpdateSnapshot(): Promise<{
-  version: string;
-  protocolVersion: number;
-  git?: { sha: string; branch: string; dirty: boolean };
-  running: { commit?: string; startedAt: string };
-  service: ServiceKind;
-  upgrading?: UpgradeStatus;
-}> {
+export async function adminUpdateSnapshot(): Promise<AdminUpdateInfo> {
   const gitInfo = await readInstallGit();
   const upgrading = await currentUpgradeStatus();
   return {

@@ -7,6 +7,7 @@ import { Cron } from "croner";
 import { paths, log } from "./paths.js";
 import { createMutex } from "./lock.js";
 import { HttpError } from "./errors.js";
+import type { ScheduleJob } from "@glassys/protocol";
 
 export const MAX_SCHEDULES = 20;
 /** A one-shot that keeps failing to queue is retried with backoff and then disabled. */
@@ -14,22 +15,7 @@ export const MAX_ONE_SHOT_ATTEMPTS = 5;
 const RETRY_BASE_MS = 60_000;
 const RETRY_MAX_MS = 30 * 60_000;
 
-export interface ScheduleJob {
-  id: string;
-  text: string;
-  cwd: string;
-  threadId?: string;
-  cron?: string;
-  at?: string;
-  enabled: boolean;
-  createdAt: string;
-  lastRun?: string;
-  lastError?: string;
-  /** Failed attempts of a one-shot since it was created or last edited. */
-  attempts?: number;
-  /** Earliest time a failed one-shot fires again. */
-  retryAt?: string;
-}
+export type { ScheduleJob };
 
 export interface ScheduleHooks {
   enqueue: (text: string, source: "schedule", onReject: (message: string) => void) => Promise<boolean>;

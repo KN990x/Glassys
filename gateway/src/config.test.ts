@@ -18,11 +18,12 @@ vi.mock("./adapters.js", async (importOriginal) => {
 
 describe("config patch", () => {
   it("drops network and security from API patches", () => {
+    /* What a client could still send, typed or not. */
     const next = stripOperatorRestricted({
       space: { locale: "es" },
       network: { bind: "0.0.0.0", port: 9999 },
       security: { edgeAuth: "header" },
-    });
+    } as never) as Record<string, unknown>;
     expect(next.space).toEqual({ locale: "es" });
     expect(next.network).toBeUndefined();
     expect(next.security).toBeUndefined();

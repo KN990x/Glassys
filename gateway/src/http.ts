@@ -1,6 +1,6 @@
 import { hostname, userInfo } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { PROTOCOL_VERSION, type ConfigPatch } from "@glassys/protocol";
+import { PROTOCOL_VERSION, type ConfigPatch, type ReachabilityInfo, type ScheduleList } from "@glassys/protocol";
 import { loadConfig, redacted } from "./config.js";
 import {
   buildClearSessionCookie,
@@ -505,7 +505,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     send(res, 200, {
       timezone: scheduleTimezone(),
       schedules: jobs.map((j) => ({ ...j, nextRun: previewNextRun(j) })),
-    });
+    } satisfies ScheduleList);
     return true;
   }
 
@@ -678,7 +678,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       hostname: hostname(),
       user: userInfo().username,
       ...(git ? { git } : {}),
-    });
+    } satisfies ReachabilityInfo);
     return true;
   }
 

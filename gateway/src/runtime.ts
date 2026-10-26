@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { AdapterError } from "@glassys/adapter-contract";
 import type { AdapterRun, AdapterSession } from "@glassys/adapter-contract";
 import type {
+  AdapterAuthStatus,
   AdapterDiscoverItem,
   AdapterPublicInfo,
   ConfigPatch,
@@ -1411,14 +1412,7 @@ export async function adapterLoginCancel(): Promise<void> {
   await cancelLoginJob();
 }
 
-export async function adapterAuthStatus(adapterId: string): Promise<{
-  loggedIn: boolean;
-  email?: string;
-  apiKeyConfigured: boolean;
-  loginUrl?: string;
-  loginStatus?: string;
-  loginError?: string;
-}> {
+export async function adapterAuthStatus(adapterId: string): Promise<AdapterAuthStatus> {
   const adapter = getAdapter(adapterId);
   const secrets = await loadSecrets();
   let status: { loggedIn: boolean; email?: string } = { loggedIn: false };

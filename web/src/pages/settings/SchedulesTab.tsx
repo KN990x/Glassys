@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { RedactedConfig } from "@glassys/protocol";
+import type { RedactedConfig, ScheduleList } from "@glassys/protocol";
 import { api } from "../../api";
 import { useT } from "../../i18n";
 import { operatorError } from "../../operatorError";
@@ -10,18 +10,8 @@ import { Switch } from "../../components/Switch";
 import { IconClock, IconTrash } from "../../components/Icon";
 import type { ConfirmRequest } from "../../components/ConfirmDialog";
 
-export type ScheduleJob = {
-  id: string;
-  text: string;
-  cwd: string;
-  threadId?: string;
-  cron?: string;
-  at?: string;
-  enabled: boolean;
-  nextRun: string | null;
-  lastRun?: string;
-  lastError?: string;
-};
+/** A schedule as GET /api/schedules lists it. */
+export type ScheduleJob = ScheduleList["schedules"][number];
 
 export function SchedulesTab({
   draft,

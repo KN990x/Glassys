@@ -1,18 +1,11 @@
+import type { AdminUpdateInfo } from "@glassys/protocol";
 import { api } from "../../api";
 import { useT } from "../../i18n";
 import { operatorError } from "../../operatorError";
 import type { ConfirmRequest } from "../../components/ConfirmDialog";
 import { Callout, SettingGroup, SettingRow, StatusBadge } from "../../components/Primitives";
 
-export type UpdateInfo = {
-  version: string;
-  protocolVersion: number;
-  git?: { sha: string; branch: string; dirty: boolean };
-  /** The commit this gateway process started on; `git` is the clone on disk. */
-  running?: { commit?: string; startedAt: string };
-  service: "launchd" | "systemd" | "none";
-  upgrading?: { phase: string; error?: string };
-};
+export type UpdateInfo = AdminUpdateInfo;
 
 /** The gateway commit this page was loaded against. A different one later means stale assets. */
 let pageCommit: string | undefined;

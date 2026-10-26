@@ -1,6 +1,8 @@
 import type {
+  AdapterAuthStatus,
   AdapterDiscoverItem,
   AdapterPublicInfo,
+  AdminUpdateInfo,
   ConfigPatch,
   DirListing,
   FilePreview,
@@ -8,13 +10,16 @@ import type {
   HostOverview,
   LogPage,
   LogPriority,
+  MessageAttachment,
+  ModelListResponse,
+  ReachabilityInfo,
+  RedactedConfig,
+  ScheduleList,
   ServiceScope,
   ServiceStateFilter,
   ServiceUnit,
-  MessageAttachment,
-  ModelListResponse,
-  RedactedConfig,
   ThreadSummary,
+  UsageTotals,
 } from "@glassys/protocol";
 
 /*
@@ -104,16 +109,7 @@ export const api = {
     req<{ threads: ThreadSummary[]; currentId: string | null }>(`/api/threads/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
-  reachability: () =>
-    req<{
-      bind: string;
-      port: number;
-      publicUrl: string;
-      loopback: boolean;
-      hostname?: string;
-      user?: string;
-      git?: { branch: string; dirty: boolean };
-    }>("/api/reachability"),
+  reachability: () => req<ReachabilityInfo>("/api/reachability"),
   workspaces: (root?: string) =>
     req<{ recents: string[]; pins: string[]; workspaces: { path: string; name: string }[] }>(
       root ? `/api/workspaces?root=${encodeURIComponent(root)}` : "/api/workspaces",
@@ -124,34 +120,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ cwd }),
     }),
-  usage: () =>
-    req<{
-      inputTokens: number;
-      outputTokens: number;
-      byAdapter: Record<string, { inputTokens: number; outputTokens: number }>;
-      updatedAt: string;
-    }>("/api/usage"),
+  usage: () => req<UsageTotals>("/api/usage"),
   vapid: () => req<{ publicKey: string; subject: string }>("/api/push/vapid"),
   pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
     req<{ ok: boolean }>("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) }),
   pushUnsubscribe: (endpoint: string) =>
     req<{ ok: boolean }>("/api/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) }),
-  schedules: () =>
-    req<{
-      timezone?: string;
-      schedules: Array<{
-        id: string;
-        text: string;
-        cwd: string;
-        threadId?: string;
-        cron?: string;
-        at?: string;
-        enabled: boolean;
-        nextRun: string | null;
-        lastRun?: string;
-        lastError?: string;
-      }>;
-    }>("/api/schedules"),
+  schedules: () => req<ScheduleList>("/api/schedules"),
   createSchedule: (body: { text: string; cwd?: string; threadId?: string; cron?: string; at?: string; enabled?: boolean }) =>
     req<{ id: string; nextRun: string | null }>("/api/schedules", { method: "POST", body: JSON.stringify(body) }),
   patchSchedule: (id: string, body: Record<string, unknown>) =>
@@ -160,15 +135,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteSchedule: (id: string) => req<{ ok: boolean }>(`/api/schedules/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  adminUpdate: () =>
-    req<{
-      version: string;
-      protocolVersion: number;
-      git?: { sha: string; branch: string; dirty: boolean };
-      running?: { commit?: string; startedAt: string };
-      service: "launchd" | "systemd" | "none";
-      upgrading?: { phase: string; error?: string };
-    }>("/api/admin/update"),
+  adminUpdate: () => req<AdminUpdateInfo>("/api/admin/update"),
   adminUpdateCheck: () =>
     req<{ behind: number; sha: string; branch: string; dirty: boolean }>("/api/admin/update/check", { method: "POST" }),
   upgrade: () => req<{ ok: boolean; upgrading: boolean }>("/api/admin/upgrade", { method: "POST" }),
@@ -186,14 +153,7 @@ export const api = {
     return data as MessageAttachment;
   },
   adapterStatus: (adapter: string) =>
-    req<{
-      loggedIn: boolean;
-      email?: string;
-      apiKeyConfigured: boolean;
-      loginUrl?: string;
-      loginStatus?: string;
-      loginError?: string;
-    }>(`/api/auth/adapter-status?adapter=${encodeURIComponent(adapter)}`),
+    req<AdapterAuthStatus>(`/api/auth/adapter-status?adapter=${encodeURIComponent(adapter)}`),
   adapterLogin: (adapter: string) =>
     req<{ ok: boolean; url?: string }>("/api/auth/adapter-login", { method: "POST", body: JSON.stringify({ adapter }) }),
   adapterLoginCancel: () => req<{ ok: boolean }>("/api/auth/adapter-login/cancel", { method: "POST" }),
