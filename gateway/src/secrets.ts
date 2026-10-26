@@ -6,6 +6,7 @@ import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { log, paths } from "./paths.js";
 import { createMutex } from "./lock.js";
+import { listAdapters } from "./adapters.js";
 
 const withSecretsLock = createMutex();
 
@@ -25,13 +26,10 @@ export interface SecretsFile {
   vapid?: VapidKeys;
 }
 
-const ENV_BY_ADAPTER: Record<string, string[]> = {
-  cursor: ["CURSOR_API_KEY"],
-  claude: ["ANTHROPIC_API_KEY"],
-  gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-  codex: ["CODEX_API_KEY", "OPENAI_API_KEY"],
-  opencode: ["OPENCODE_API_KEY"],
-};
+/** Each adapter's key variables, as it declares them in capabilities.auth.envNames. */
+function envByAdapter(): Array<[string, readonly string[]]> {
+  return listAdapters().map((a) => [a.id, a.capabilities.auth?.envNames ?? []]);
+}
 
 const empty = (): SecretsFile => ({ jwtSecret: "", operatorPasswordHash: "", jwtEpoch: 0, adapters: {} });
 
@@ -91,7 +89,7 @@ export function envJwtSecret(): string {
 
 function applyEnv(file: SecretsFile): SecretsFile {
   const adapters = { ...file.adapters };
-  for (const [id, names] of Object.entries(ENV_BY_ADAPTER)) {
+  for (const [id, names] of envByAdapter()) {
     for (const name of names) {
       const v = (process.env[name] || "").trim();
       if (v) {
@@ -111,7 +109,7 @@ function applyEnv(file: SecretsFile): SecretsFile {
 
 /** Empty credential env vars must not exist — CLIs would skip their login stores. */
 export function clearBlankCredentialEnv(): void {
-  const names = Object.values(ENV_BY_ADAPTER).flat();
+  const names = envByAdapter().flatMap(([, n]) => n);
   for (const name of names) {
     if (process.env[name] !== undefined && process.env[name]!.trim() === "") delete process.env[name];
   }
@@ -178,7 +176,7 @@ export function adapterApiKey(s: SecretsFile, adapterId: string): string {
 }
 
 export function adapterKeyFromEnv(adapterId: string): boolean {
-  return (ENV_BY_ADAPTER[adapterId] ?? []).some((name) => Boolean((process.env[name] || "").trim()));
+  return (envByAdapter().find(([id]) => id === adapterId)?.[1] ?? []).some((name) => Boolean((process.env[name] || "").trim()));
 }
 
 export const MIN_OPERATOR_PASSWORD = 8;

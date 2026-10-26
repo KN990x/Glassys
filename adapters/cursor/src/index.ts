@@ -145,6 +145,7 @@ export const cursorAdapter: Adapter = {
   id: "cursor",
   displayName: "Cursor",
   description: "Local Cursor SDK. Thinking, tools, and diffs from onDelta.",
+  identityOptions: ["settingSources", "sandbox", "autoRun"],
   capabilities: {
     models: true,
     sandbox: true,

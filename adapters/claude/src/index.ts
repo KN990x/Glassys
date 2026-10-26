@@ -407,6 +407,7 @@ export const claudeAdapter: Adapter = {
   id: "claude",
   displayName: "Claude Code",
   description: "Anthropic Claude Agent SDK (local Claude Code runtime).",
+  identityOptions: ["permissionMode", "autoRun"],
   capabilities: {
     models: true,
     sandbox: false,

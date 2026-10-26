@@ -76,6 +76,11 @@ export interface Adapter {
   readonly displayName: string;
   readonly description?: string;
   readonly capabilities: AdapterCapabilities;
+  /**
+   * Option keys that pick a different agent: changing one archives the live thread and starts a
+   * new agent, as changing the adapter or the cwd does. Unset: none of its options do.
+   */
+  readonly identityOptions?: readonly string[];
   /** `ctx` carries the saved options and store when the adapter is the configured one (ACP asks its agent). */
   listModels(apiKey?: string, cwd?: string, ctx?: { options: Record<string, unknown>; storeDir: string }): Promise<ModelListResponse>;
   create(opts: AdapterCreateOptions): Promise<AdapterSession>;

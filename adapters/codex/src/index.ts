@@ -179,6 +179,7 @@ export const codexAdapter: Adapter = {
   id: "codex",
   displayName: "Codex",
   description: "OpenAI Codex SDK (runStreamed / resumeThread). Not print-mode exec.",
+  identityOptions: ["sandboxMode"],
   capabilities: {
     models: true,
     sandbox: false,

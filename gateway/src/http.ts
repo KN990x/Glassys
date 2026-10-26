@@ -377,7 +377,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "GET" && path === "/api/auth/adapter-status") {
     if (!(await requireAuth(req, res))) return true;
-    const adapter = url.searchParams.get("adapter") || "cursor";
+    /* No adapter named: the configured one, not whichever was the product default. */
+    const adapter = url.searchParams.get("adapter") || (await loadConfig()).agent.adapter;
     try {
       send(res, 200, await adapterAuthStatus(adapter));
     } catch (err) {
@@ -390,7 +391,9 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const body = (await readJson(req)) as { adapter?: string };
     try {
-      const result = await adapterLogin(body.adapter || "cursor");
+      const result = await adapterLogin(
+        typeof body.adapter === "string" && body.adapter ? body.adapter : (await loadConfig()).agent.adapter,
+      );
       send(res, 200, { ok: true, configured: true, url: result.url });
     } catch (err) {
       if (err instanceof UnknownAdapterError) {

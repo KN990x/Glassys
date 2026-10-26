@@ -136,6 +136,21 @@ describe("config patch", () => {
     expect(agentFingerprint(a)).toBe(agentFingerprint(b));
   });
 
+  it("takes the identity options from the adapter itself", async () => {
+    const { agentFingerprint } = await import("./config.js");
+    const a = defaultConfig();
+    a.agent.adapter = "cursor";
+    a.agent.cwd = "/tmp/ws";
+    a.agent.options = { sandbox: false, autoRun: true };
+    const b = structuredClone(a);
+    b.agent.options = { sandbox: true, autoRun: true };
+    expect(agentFingerprint(a)).not.toBe(agentFingerprint(b));
+    /* A model change is not an identity change: it applies on the next send. */
+    const c = structuredClone(a);
+    c.agent.model = "composer-2.5";
+    expect(agentFingerprint(a)).toBe(agentFingerprint(c));
+  });
+
   it("rejects switching adapter when probe fails", async () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
     process.env.GLASSYS_DATA_DIR = dir;

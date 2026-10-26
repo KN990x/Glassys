@@ -318,20 +318,11 @@ export async function redacted(cfg?: GlassysConfig, restart?: boolean): Promise<
   };
 }
 
+/** The options that make up the agent's identity, as the adapter declares them. */
 export function identityOptions(adapter: string, options: Record<string, unknown> | undefined): Record<string, unknown> {
   const o = options ?? {};
-  switch (adapter) {
-    case "cursor":
-      return { settingSources: o.settingSources, sandbox: o.sandbox, autoRun: o.autoRun };
-    case "claude":
-      return { permissionMode: o.permissionMode, autoRun: o.autoRun };
-    case "acp":
-      return { command: o.command, args: o.args, registryId: o.registryId, autoRun: o.autoRun };
-    case "codex":
-      return { sandboxMode: o.sandboxMode };
-    default:
-      return {};
-  }
+  const keys = tryGetAdapter(adapter)?.identityOptions ?? [];
+  return Object.fromEntries(keys.map((k) => [k, o[k]]));
 }
 
 export function agentFingerprint(cfg: GlassysConfig): string {

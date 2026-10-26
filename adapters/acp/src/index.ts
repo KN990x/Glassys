@@ -455,6 +455,7 @@ export const acpAdapter: Adapter = {
   id: "acp",
   displayName: "ACP (any agent)",
   description: "Generic Agent Client Protocol host. File and terminal writes apply when auto-run is on. Pick a registry agent or a command.",
+  identityOptions: ["command", "args", "registryId", "autoRun"],
   capabilities: {
     models: true,
     sandbox: false,
