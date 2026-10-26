@@ -109,3 +109,25 @@ describe("acpModelsFrom", () => {
     expect(acpModelsFrom({ sessionId: "s" })).toBeUndefined();
   });
 });
+
+describe("acp model listing", () => {
+  it("falls back to Agent default, with the reason, when the agent cannot be started to ask", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { acpAdapter } = await import("./index.js");
+    const storeDir = await mkdtemp(join(tmpdir(), "glassys-acp-list-"));
+    const listed = await acpAdapter.listModels(undefined, storeDir, {
+      storeDir,
+      options: { command: process.execPath, args: ["-e", "process.exit(3)"] },
+    });
+    expect(listed.source).toBe("fallback");
+    expect(listed.models.map((m) => m.id)).toEqual(["default"]);
+    expect(listed.error).toBeTruthy();
+  });
+
+  it("asks nothing without a command", async () => {
+    const { acpAdapter } = await import("./index.js");
+    expect(await acpAdapter.listModels(undefined, "/tmp", { storeDir: "/tmp", options: {} })).toMatchObject({ source: "fallback" });
+  });
+});
