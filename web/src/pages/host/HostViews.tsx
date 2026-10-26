@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useCopy } from "../../useCopy";
 import type {
   DirListing,
@@ -81,7 +81,11 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
        list is what decides when to reload. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+  /* New deps ask for something else (another file, another folder): what was shown belongs to the
+     old ask, so it goes instead of sitting under the new path. A manual reload() keeps it. */
   useEffect(() => {
+    setData(null);
+    setError("");
     void reload();
     return () => {
       generation.current += 1;
@@ -534,9 +538,13 @@ export function LogsView({
   const generation = useRef(0);
   const fullLoads = useRef(0);
 
+  /** Whether the list follows the newest line; the operator scrolling up turns it off. */
+  const stickToBottom = useRef(true);
+
   const load = useCallback(async () => {
     const gen = ++generation.current;
     fullLoads.current += 1;
+    stickToBottom.current = true;
     setLoading(true);
     try {
       const page = await source.hostLogs({
@@ -593,10 +601,25 @@ export function LogsView({
     return () => clearInterval(id);
   }, [follow, source, unit, scope, priority, caps?.logs]);
 
-  // Stay on the newest line, like tail -f, unless the operator scrolled up.
-  useEffect(() => {
+  /*
+   * Stay on the newest line, like tail -f, unless the operator scrolled up. Decided from where the
+   * list was before the new rows came in: measured after them, a first load (scrolled to the top)
+   * never moved, and a burst taller than the margin stopped following.
+   */
+  useLayoutEffect(() => {
     const el = listRef.current;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
+  }, [entries]);
+
+  /* Follow trims old rows; a selection must not count lines that are gone. */
+  useEffect(() => {
+    if (!entries) return;
+    setSelected((sel) => {
+      if (!sel.size) return sel;
+      const keys = new Set(entries.map((e) => e.key));
+      const kept = [...sel].filter((k) => keys.has(k));
+      return kept.length === sel.size ? sel : new Set(kept);
+    });
   }, [entries]);
 
   if (caps && !caps.logs) {
@@ -655,7 +678,17 @@ export function LogsView({
       {error ? <Callout tone="danger">{error}</Callout> : null}
       {!entries && loading ? <Skeleton rows={8} label={t("host.loading")} /> : null}
       {entries ? (
-        <div className="log-list" ref={listRef} role="listbox" aria-multiselectable="true" aria-label={t("nav.logs")}>
+        <div
+          className="log-list"
+          ref={listRef}
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={t("nav.logs")}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+        >
           {entries.length === 0 ? <p className="muted host-empty">{t("logs.empty")}</p> : null}
           {entries.map((e) => (
             <LogLine key={e.key} entry={e} selected={selected.has(e.key)} locale={locale} onToggle={toggleLine} />
