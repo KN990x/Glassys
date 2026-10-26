@@ -24,16 +24,10 @@ import { requestRestart } from "./restart.js";
 import { HttpError, publicErrorMessage } from "./errors.js";
 import {
   applyConfigPatch,
-  adapterAuthStatus,
-  adapterLogin,
-  adapterLoginCancel,
   cwdErrorInPatch,
   deleteLiveThread,
-  discoverAdapter,
   exportLiveThread,
-  listAdapterInfo,
   listLiveThreads,
-  listModels,
   openWorkspace,
   pinWorkspaces,
   renameLiveThread,
@@ -42,6 +36,14 @@ import {
   switchLiveThread,
   validateCwd,
 } from "./runtime.js";
+import {
+  adapterAuthStatus,
+  adapterLogin,
+  adapterLoginCancel,
+  discoverAdapter,
+  listAdapterInfo,
+  listModels,
+} from "./adapter-info.js";
 import { loadState } from "./state.js";
 import { listWorkspaces } from "./workspaces.js";
 import { MAX_UPLOAD_BYTES, readUploadBody, saveUpload } from "./uploads.js";
@@ -325,17 +327,9 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       send(res, 400, { error: cwdError });
       return true;
     }
-    try {
-      const { restart } = await applyConfigPatch(patch);
-      if (patch.operatorPassword) await revalidateSockets();
-      send(res, 200, await redacted(undefined, restart));
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    const { restart } = await applyConfigPatch(patch);
+    if (patch.operatorPassword) await revalidateSockets();
+    send(res, 200, await redacted(undefined, restart));
     return true;
   }
 
@@ -432,15 +426,7 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/admin/update/check") {
     if (!(await requireAuth(req, res))) return true;
-    try {
-      send(res, 200, await fetchBehind());
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    send(res, 200, await fetchBehind());
     return true;
   }
 
@@ -450,16 +436,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
       send(res, 409, { error: "a run is in progress" });
       return true;
     }
-    try {
-      await startUpgrade();
-      send(res, 202, { ok: true, upgrading: true });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await startUpgrade();
+    send(res, 202, { ok: true, upgrading: true });
     return true;
   }
 
@@ -511,66 +489,42 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/schedules") {
     if (!(await requireAuth(req, res))) return true;
-    try {
-      const body = scheduleInput(await readJson(req));
-      const cfg = await loadConfig();
-      /* The workspace the job will move the agent to when it fires: check it now, not then. */
-      const cwd = body.cwd || cfg.agent.cwd;
-      const cwdCheck = await validateCwd(cwd);
-      if (!cwdCheck.ok) throw new HttpError(400, cwdCheck.error);
-      const job = await createSchedule({
-        text: body.text ?? "",
-        cwd,
-        threadId: body.threadId,
-        cron: body.cron,
-        at: body.at,
-        enabled: body.enabled,
-      });
-      send(res, 200, { ...job, nextRun: previewNextRun(job) });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    const body = scheduleInput(await readJson(req));
+    const cfg = await loadConfig();
+    /* The workspace the job will move the agent to when it fires: check it now, not then. */
+    const cwd = body.cwd || cfg.agent.cwd;
+    const cwdCheck = await validateCwd(cwd);
+    if (!cwdCheck.ok) throw new HttpError(400, cwdCheck.error);
+    const job = await createSchedule({
+      text: body.text ?? "",
+      cwd,
+      threadId: body.threadId,
+      cron: body.cron,
+      at: body.at,
+      enabled: body.enabled,
+    });
+    send(res, 200, { ...job, nextRun: previewNextRun(job) });
     return true;
   }
 
   if (method === "PATCH" && path.startsWith("/api/schedules/")) {
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/schedules/".length));
-    try {
-      const body = scheduleInput(await readJson(req));
-      if (body.cwd !== undefined) {
-        const cwdCheck = await validateCwd(body.cwd);
-        if (!cwdCheck.ok) throw new HttpError(400, cwdCheck.error);
-      }
-      const job = await patchSchedule(id, body);
-      send(res, 200, { ...job, nextRun: previewNextRun(job) });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
+    const body = scheduleInput(await readJson(req));
+    if (body.cwd !== undefined) {
+      const cwdCheck = await validateCwd(body.cwd);
+      if (!cwdCheck.ok) throw new HttpError(400, cwdCheck.error);
     }
+    const job = await patchSchedule(id, body);
+    send(res, 200, { ...job, nextRun: previewNextRun(job) });
     return true;
   }
 
   if (method === "DELETE" && path.startsWith("/api/schedules/")) {
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/schedules/".length));
-    try {
-      await deleteSchedule(id);
-      send(res, 200, { ok: true });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await deleteSchedule(id);
+    send(res, 200, { ok: true });
     return true;
   }
 
@@ -582,32 +536,16 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
 
   if (method === "POST" && path === "/api/threads") {
     if (!(await requireAuth(req, res))) return true;
-    try {
-      await startNewLiveThread();
-      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await startNewLiveThread();
+    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
     return true;
   }
 
   if (method === "POST" && path.startsWith("/api/threads/") && path.endsWith("/switch")) {
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/threads/".length, -"/switch".length));
-    try {
-      await switchLiveThread(id);
-      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await switchLiveThread(id);
+    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
     return true;
   }
 
@@ -615,52 +553,28 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/threads/".length));
     const body = (await readJson(req)) as { title?: string };
-    try {
-      await renameLiveThread(id, typeof body.title === "string" ? body.title : "");
-      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await renameLiveThread(id, typeof body.title === "string" ? body.title : "");
+    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
     return true;
   }
 
   if (method === "GET" && path.startsWith("/api/threads/") && path.endsWith("/export")) {
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/threads/".length, -"/export".length));
-    try {
-      const file = await exportLiveThread(id);
-      res.writeHead(200, {
-        "Content-Type": "text/markdown; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${file.filename}"`,
-      });
-      res.end(file.markdown);
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    const file = await exportLiveThread(id);
+    res.writeHead(200, {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${file.filename}"`,
+    });
+    res.end(file.markdown);
     return true;
   }
 
   if (method === "DELETE" && path.startsWith("/api/threads/")) {
     if (!(await requireAuth(req, res))) return true;
     const id = decodePathParam(path.slice("/api/threads/".length));
-    try {
-      await deleteLiveThread(id);
-      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await deleteLiveThread(id);
+    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId() });
     return true;
   }
 
@@ -743,51 +657,27 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     if (!(await requireAuth(req, res))) return true;
     const state = await loadState();
     const root = url.searchParams.get("root");
-    try {
-      send(res, 200, {
-        recents: state.recentCwds || [],
-        pins: state.pinnedCwds || [],
-        workspaces: root ? await listWorkspaces(root) : [],
-      });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    send(res, 200, {
+      recents: state.recentCwds || [],
+      pins: state.pinnedCwds || [],
+      workspaces: root ? await listWorkspaces(root) : [],
+    });
     return true;
   }
 
   if (method === "PUT" && path === "/api/workspaces/pins") {
     if (!(await requireAuth(req, res))) return true;
     const body = (await readJson(req)) as { pins?: string[] };
-    try {
-      const pins = await pinWorkspaces(Array.isArray(body.pins) ? body.pins : []);
-      send(res, 200, { pins });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    const pins = await pinWorkspaces(Array.isArray(body.pins) ? body.pins : []);
+    send(res, 200, { pins });
     return true;
   }
 
   if (method === "POST" && path === "/api/workspaces/open") {
     if (!(await requireAuth(req, res))) return true;
     const body = (await readJson(req)) as { cwd?: string };
-    try {
-      await openWorkspace(String(body.cwd || ""));
-      send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId(), config: await redacted() });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    await openWorkspace(String(body.cwd || ""));
+    send(res, 200, { threads: await listLiveThreads(), currentId: liveThreadId(), config: await redacted() });
     return true;
   }
 
@@ -796,16 +686,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     const mime = String(req.headers["content-type"] || "").split(";")[0]?.trim() || "";
     const name =
       (typeof url.searchParams.get("name") === "string" && url.searchParams.get("name")) || "image";
-    try {
-      const body = await readBuffer(req, MAX_UPLOAD_BYTES + 1);
-      send(res, 200, await saveUpload(body, mime, name));
-    } catch (err) {
-      if (err instanceof HttpError) {
-        send(res, err.status, { error: err.message });
-        return true;
-      }
-      throw err;
-    }
+    const body = await readBuffer(req, MAX_UPLOAD_BYTES + 1);
+    send(res, 200, await saveUpload(body, mime, name));
     return true;
   }
 
