@@ -1,4 +1,3 @@
-import { AdapterError } from "@glassys/adapter-contract";
 import { log } from "./paths.js";
 
 export class HttpError extends Error {
@@ -21,8 +20,12 @@ export function publicErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * The agent still has a run open, so the send is retried with `force`. Judged by the message only:
+ * the SDKs' generic "retryable" flag also covers rate limits and network errors, and resending
+ * those at once with `force` only repeats the failure.
+ */
 export function isActiveRunError(err: unknown): boolean {
-  if (err instanceof AdapterError && err.retryable) return true;
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
   return (
     msg.includes("active run") ||

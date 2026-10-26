@@ -3,8 +3,9 @@ import { AdapterError } from "@glassys/adapter-contract";
 import { isActiveRunError, publicErrorMessage } from "./errors.js";
 
 describe("isActiveRunError", () => {
-  it("accepts retryable AdapterError and known busy messages", () => {
-    expect(isActiveRunError(new AdapterError("nope", "run", true))).toBe(true);
+  it("accepts known busy messages, not any retryable error", () => {
+    expect(isActiveRunError(new AdapterError("rate limited, retry later", "run", true))).toBe(false);
+    expect(isActiveRunError(new AdapterError("agent already has an active run", "run", true))).toBe(true);
     expect(isActiveRunError(new Error("agent already has an active run"))).toBe(true);
     expect(isActiveRunError(new Error("Agent is busy"))).toBe(true);
   });
