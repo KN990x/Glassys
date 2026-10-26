@@ -58,6 +58,32 @@ describe("http api", () => {
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
+  it("asks for a session on every route but the public ones, including routes added later", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("./http.ts", import.meta.url), "utf8");
+    const routes = new Set<string>();
+    for (const m of source.matchAll(/method === "(\w+)" && path === "([^"]+)"/g)) routes.add(`${m[1]} ${m[2]}`);
+    for (const m of source.matchAll(/method === "(\w+)" && path\.startsWith\("([^"]+)"\)(?: && path\.endsWith\("([^"]+)"\))?/g)) {
+      routes.add(`${m[1]} ${m[2]}x${m[3] ?? ""}`);
+    }
+    const publicRoutes = new Set([
+      "GET /health",
+      "GET /api/auth/status",
+      "POST /api/auth/setup",
+      "POST /api/auth/login",
+      "POST /api/auth/logout",
+    ]);
+    expect(routes.size).toBeGreaterThan(30);
+    const open: string[] = [];
+    for (const route of routes) {
+      if (publicRoutes.has(route)) continue;
+      const [method, path] = route.split(" ");
+      const res = await fetch(`${base}${path}`, { method });
+      if (res.status !== 401) open.push(`${route} → ${res.status}`);
+    }
+    expect(open).toEqual([]);
+  });
+
   it("reports the gateway package version on /health", async () => {
     const res = await fetch(`${base}/health`);
     expect(res.status).toBe(200);
