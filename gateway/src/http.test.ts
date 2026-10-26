@@ -495,7 +495,7 @@ describe("http api", () => {
     expect(["none", "launchd", "systemd"]).toContain(snap.service);
     expect(snap.upgrading === undefined || snap.upgrading.phase === "idle").toBe(true);
 
-    const vapid = await fetch(`${base}/api/push/vapid`, { headers: auth });
+    const vapid = await fetch(`${base}/api/push/vapid`, { method: "POST", headers: auth });
     expect(vapid.status).toBe(200);
     const keys = (await vapid.json()) as { publicKey: string; subject: string };
     expect(keys.publicKey.length).toBeGreaterThan(20);

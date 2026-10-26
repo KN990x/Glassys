@@ -441,7 +441,8 @@ async function handleHttpInner(req: IncomingMessage, res: ServerResponse): Promi
     return true;
   }
 
-  if (method === "GET" && path === "/api/push/vapid") {
+  /* POST: the first call generates the key pair and saves it, so it goes through the origin check. */
+  if (method === "POST" && path === "/api/push/vapid") {
     if (!(await requireAuth(req, res))) return true;
     send(res, 200, await ensureVapidKeys());
     return true;

@@ -121,7 +121,7 @@ export const api = {
       body: JSON.stringify({ cwd }),
     }),
   usage: () => req<UsageTotals>("/api/usage"),
-  vapid: () => req<{ publicKey: string; subject: string }>("/api/push/vapid"),
+  vapid: () => req<{ publicKey: string; subject: string }>("/api/push/vapid", { method: "POST" }),
   pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
     req<{ ok: boolean }>("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) }),
   pushUnsubscribe: (endpoint: string) =>

@@ -6,7 +6,7 @@ This is how Glassys is installed: the agent needs the real workspace, host `git`
 
 ## Run as a user service (recommended)
 
-One line from an empty directory (Node.js **22.13+** and pnpm; Corepack: `corepack enable`):
+One line from an empty directory (Node.js **22.13+** and pnpm; Corepack: `corepack enable`, after `npm install -g corepack` on Node 25+):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KN990x/Glassys/main/scripts/install.sh | bash
@@ -39,7 +39,7 @@ The user-service unit runs as **your login user** with `WorkingDirectory` set to
 
 Data defaults to `<repo>/data`. Override with `GLASSYS_DATA_DIR` when you run `service:install`. The installer copies `GLASSYS_PORT` / `GLASSYS_BIND` into the unit when those env vars are set at install time, then checks `GET /health` on loopback and, if that fails, on the bind address. It does not copy API keys into the unit.
 
-Schedules (`data/schedules.json`) and Web Push subscriptions (`data/push-subscriptions.json`) are runtime state, not yaml. Cron jobs do not catch up after downtime; one-shot `at` jobs that are already due do fire. `GET /api/push/vapid` mints VAPID keys on first use (subject is `https://…` when `publicUrl` is https, otherwise `mailto:operator@localhost`).
+Schedules (`data/schedules.json`) and Web Push subscriptions (`data/push-subscriptions.json`) are runtime state, not yaml. Cron jobs do not catch up after downtime; one-shot `at` jobs that are already due do fire. `POST /api/push/vapid` mints VAPID keys on first use (subject is `https://…` when `publicUrl` is https, otherwise `mailto:operator@localhost`).
 
 Open `http://127.0.0.1:8787` (or `GLASSYS_PORT` if you set it) and complete the onboarding wizard before using chat. Defaults: bind `127.0.0.1:8787`. Do not bind `0.0.0.0` unless you understand that auto-run + host cwd is operator access to the machine.
 
