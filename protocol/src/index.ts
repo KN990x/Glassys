@@ -385,7 +385,8 @@ export type ServerMessage =
    * failed cancel or thread change, transcript writes failing. Never persisted, never reduced into
    * the transcript; `run.error` is only ever the end of a run.
    */
-  | { type: "notice"; level: "error" | "warn"; message: string; about?: NoticeSubject }
+  /** `messageId`: with about "message", the client id of the message refused, when it sent one. */
+  | { type: "notice"; level: "error" | "warn"; message: string; about?: NoticeSubject; messageId?: string }
   | { type: "transcript.snapshot"; events: TranscriptEvent[]; truncated?: boolean; lastSeq?: number }
   | TranscriptEvent;
 

@@ -216,9 +216,10 @@ describe("websocket handshake", () => {
     await snap;
     const refused = waitMessage(ws, "notice");
     const attachment = { id: "a", mime: "image/png", name: "a.png" };
-    ws.send(JSON.stringify({ type: "user.message", text: "hi", attachments: Array(5).fill(attachment) }));
+    const id = "3f1c2a4e-5b6d-4c7e-8f90-a1b2c3d4e5f6";
+    ws.send(JSON.stringify({ type: "user.message", text: "hi", id, attachments: Array(5).fill(attachment) }));
     const notice = await refused;
-    expect(notice).toMatchObject({ level: "error", message: "Too many attachments", about: "message" });
+    expect(notice).toMatchObject({ level: "error", message: "Too many attachments", about: "message", messageId: id });
     const unknown = waitMessage(ws, "notice");
     ws.send(JSON.stringify({ type: "nonsense" }));
     expect(await unknown).toMatchObject({ about: "request" });

@@ -5,6 +5,7 @@ import {
   clampKeepaliveSeconds,
   DEFAULT_KEEPALIVE_SECONDS,
   isClientMessage,
+  isMessageId,
   type ClientMessage,
   type ConfigPatch,
   type NoticeSubject,
@@ -325,7 +326,13 @@ async function handleClient(
   switch (msg.type) {
     case "user.message":
       await enqueueMessage(msg.text, msg.attachments, msg.id, "user", (message) =>
-        hub.send(ws, { type: "notice", level: "error", message, about: "message" }),
+        hub.send(ws, {
+          type: "notice",
+          level: "error",
+          message,
+          about: "message",
+          ...(isMessageId(msg.id) ? { messageId: msg.id } : {}),
+        }),
       );
       break;
     case "run.cancel":
