@@ -32,7 +32,12 @@ const recordRaw = fixtureRecorder("opencode");
 
 export { EventPump } from "./pump.js";
 
-const OPENCODE_IDLE_MS = 600_000;
+const DEFAULT_OPENCODE_IDLE_MS = 600_000;
+let OPENCODE_IDLE_MS = DEFAULT_OPENCODE_IDLE_MS;
+
+export function setOpencodeIdleMsForTests(ms?: number): void {
+  OPENCODE_IDLE_MS = ms ?? DEFAULT_OPENCODE_IDLE_MS;
+}
 const OPENCODE_DRAIN_MS = 2_000;
 
 const FALLBACK: ModelCatalogItem[] = [{ id: "default", displayName: "Default (OpenCode config)" }];
@@ -326,6 +331,8 @@ class OpencodeSession implements AdapterSession {
             drainArmed = true;
             continue;
           }
+          /* Stop the prompt in the server too: left running, it collides with the next send. */
+          await this.abortPrompt();
           throw new AdapterError("OpenCode timed out waiting for run events", "run");
         }
         for (const leftover of this.pump.drain()) {
@@ -333,11 +340,7 @@ class OpencodeSession implements AdapterSession {
           await handle(leftover);
         }
         if (isCancelled()) {
-          try {
-            await checked(this.client.session.abort({ path: { id: this.agentId }, query: { directory: this.directory } } as never));
-          } catch {
-            /* ignore */
-          }
+          await this.abortPrompt();
           await Promise.race([prompt.catch(() => undefined), new Promise((r) => setTimeout(r, OPENCODE_DRAIN_MS))]);
           return "cancelled";
         }
@@ -355,6 +358,14 @@ class OpencodeSession implements AdapterSession {
         activeRuns -= 1;
       }
     });
+  }
+
+  private async abortPrompt(): Promise<void> {
+    try {
+      await checked(this.client.session.abort({ path: { id: this.agentId }, query: { directory: this.directory } } as never));
+    } catch {
+      /* ignore */
+    }
   }
 
   private async reject(permissionId: string): Promise<void> {

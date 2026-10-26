@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const seen: Record<string, unknown[]> = { create: [], prompt: [], abort: [], subscribe: [], get: [] };
 let endStream: () => void = () => undefined;
+let hangPrompt = false;
 
 vi.mock("@opencode-ai/sdk", () => ({
   createOpencode: async () => ({
@@ -18,6 +19,7 @@ vi.mock("@opencode-ai/sdk", () => ({
         },
         prompt: async (args: unknown) => {
           seen.prompt!.push(args);
+          if (hangPrompt) await new Promise(() => undefined);
           return { data: {} };
         },
         abort: async (args: unknown) => {
@@ -67,6 +69,26 @@ describe("opencode workspace directory", () => {
     expect(session.closed).toBe(true);
     await session.dispose();
     await opencodeAdapter.shutdown?.();
+  });
+});
+
+describe("opencode idle timeout", () => {
+  it("aborts the prompt in the server before failing the run", async () => {
+    const { setOpencodeIdleMsForTests } = await import("./index.js");
+    setOpencodeIdleMsForTests(50);
+    hangPrompt = true;
+    try {
+      const session = await opencodeAdapter.create(opts);
+      const before = seen.abort!.length;
+      const run = await session.send("hi", () => undefined);
+      await expect(run.wait()).rejects.toThrow(/timed out/);
+      expect(seen.abort!.length).toBe(before + 1);
+      expect(seen.abort!.at(-1)).toMatchObject({ path: { id: "ses_1" } });
+      await session.dispose();
+    } finally {
+      hangPrompt = false;
+      setOpencodeIdleMsForTests();
+    }
   });
 });
 
