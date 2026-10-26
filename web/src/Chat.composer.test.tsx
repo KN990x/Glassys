@@ -142,7 +142,8 @@ describe("Chat composer and layout", () => {
     saveConfig.mockReset();
     socket.sent.length = 0;
     vi.unstubAllGlobals();
-    sessionStorage.removeItem("glassys.hideLoopback");
+    /* Drafts are kept per thread in sessionStorage; one test's draft must not appear in the next. */
+    sessionStorage.clear();
   });
 
   async function renderChat() {
@@ -320,6 +321,30 @@ describe("Chat composer and layout", () => {
     const rail = host.querySelector(".sidebar")?.textContent ?? "";
     expect(rail).toContain("/opt/stack");
     expect(rail).toContain("ops");
+  });
+
+  it("keeps each thread's draft: switching away and back restores what was typed there", async () => {
+    sessionStorage.clear();
+    await renderChat();
+    const threads = (currentId: string) => ({
+      type: "threads.snapshot" as const,
+      threads: ["t1", "t2"].map((id) => ({ id, title: id, adapter: "cursor", cwd: "/opt/stack", updatedAt: "2026-01-02T00:00:00.000Z" })),
+      currentId,
+    });
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+      socket.emit(threads("t1"));
+    });
+    const textarea = () => host.querySelector("textarea") as HTMLTextAreaElement;
+    await typeIn(textarea(), "half a thought for t1");
+    await act(async () => socket.emit(threads("t2")));
+    expect(textarea().value).toBe("");
+    await typeIn(textarea(), "something for t2");
+    await act(async () => socket.emit(threads("t1")));
+    expect(textarea().value).toBe("half a thought for t1");
+    await act(async () => socket.emit(threads("t2")));
+    expect(textarea().value).toBe("something for t2");
   });
 
   it("shows Working and queued together when a run and the FIFO both have work", async () => {
