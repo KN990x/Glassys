@@ -18,7 +18,7 @@ import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
 import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
-import { cwdExposesDataDir, defaultOptionsFor, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
+import { cwdExposesDataDir, defaultOptionsFor, optionAutoRun, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { Callout, StatusBadge } from "../components/Primitives";
 import { SandboxModeSelect } from "../components/SandboxModeSelect";
@@ -652,7 +652,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
               )}
               {caps?.autoRun && (
                 <Switch
-                  checked={optionBool(options, "autoRun", true)}
+                  checked={optionAutoRun(options)}
                   label={t("wizard.exec.autoRun")}
                   hint={caps?.toolConfirmation === "auto-review-deny" ? t("settings.autoRunHint") : undefined}
                   onChange={(next) => setOptions(setAutoRun(options, next, caps?.toolConfirmation))}

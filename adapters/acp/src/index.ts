@@ -20,7 +20,7 @@ import {
   type PromptAttachment,
 } from "@glassys/adapter-contract";
 import {
-  optionBool,
+  optionAutoRun,
   optionString,
   optionStringArray,
   type AdapterDiscoverItem,
@@ -451,12 +451,13 @@ export const acpAdapter: Adapter = {
     return {
       ...agent,
       model: agent.model || "default",
+      /* Normalized values last: spread after them, a malformed hand-edited value won. */
       options: {
-        autoRun: optionBool(agent.options, "autoRun", true),
+        ...agent.options,
+        autoRun: optionAutoRun(agent.options),
         command: optionString(agent.options, "command", ""),
         args: optionStringArray(agent.options, "args", []),
         registryId: optionString(agent.options, "registryId", ""),
-        ...agent.options,
       },
     };
   },

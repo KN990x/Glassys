@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { AdapterCapabilities, RedactedConfig } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
-import { optionBool, optionString, sandboxState, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
+import { optionAutoRun, optionBool, optionString, sandboxState, setAutoRun, setOption, setPermissionMode } from "../adapterOptions";
 import { SandboxModeSelect } from "./SandboxModeSelect";
 import { operatorError } from "../operatorError";
 import { useConfirm } from "./ConfirmDialog";
@@ -42,7 +42,7 @@ export function PermissionChip({
 
   if (!caps || !visible) return null;
 
-  const autoRun = optionBool(config.agent.options, "autoRun", true);
+  const autoRun = optionAutoRun(config.agent.options);
   const sandbox = optionBool(config.agent.options, "sandbox", false);
   const mode = optionString(config.agent.options, "permissionMode", autoRun ? "bypassPermissions" : "dontAsk");
   const label =

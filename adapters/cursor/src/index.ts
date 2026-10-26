@@ -12,7 +12,7 @@ import {
   type AdapterRun,
   type AdapterSession,
 } from "@glassys/adapter-contract";
-import { optionBool, optionStringArray, type AgentConfig, type ModelParam, type SettingSource } from "@glassys/protocol";
+import { optionAutoRun, optionSafetyBool, optionStringArray, type AgentConfig, type ModelParam, type SettingSource } from "@glassys/protocol";
 import { cursorMapState, mapCursorDelta } from "./mapper.js";
 import { runResultErrorMessage, wrapSdkError } from "./errors.js";
 import {
@@ -41,8 +41,8 @@ function localOpts(opts: AdapterCreateOptions) {
   return {
     cwd: opts.cwd,
     settingSources: settingSources(opts),
-    sandboxOptions: { enabled: optionBool(opts.options, "sandbox", false) },
-    autoReview: !optionBool(opts.options, "autoRun", true),
+    sandboxOptions: { enabled: optionSafetyBool(opts.options, "sandbox", false, true) },
+    autoReview: !optionAutoRun(opts.options),
     store: new JsonlLocalAgentStore(opts.storeDir),
   };
 }

@@ -11,7 +11,7 @@ import {
   isProtectedPath,
   toolKindFromName,
 } from "@glassys/adapter-contract";
-import { optionBool } from "@glassys/protocol";
+import { optionAutoRun } from "@glassys/protocol";
 
 export const MAX_ACP_READ_BYTES = 1_048_576;
 export const TERMINAL_KILL_GRACE_MS = 3_000;
@@ -251,7 +251,7 @@ export function registerHostHandlers(
   protectedPaths: readonly string[] = [],
   ledger: HostLedger = hostLedger(),
 ) {
-  const autoRun = optionBool(options, "autoRun", true);
+  const autoRun = optionAutoRun(options);
 
   rpc.handle("fs/read_text_file", async (params) => {
     const rec = asRecord(params) ?? {};

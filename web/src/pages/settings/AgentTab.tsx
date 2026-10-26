@@ -18,7 +18,7 @@ import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } 
 import { Switch } from "../../components/Switch";
 import { SandboxModeSelect } from "../../components/SandboxModeSelect";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { cwdExposesDataDir, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
+import { cwdExposesDataDir, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
 
 export function AgentTab({
@@ -71,7 +71,7 @@ export function AgentTab({
   const t = useT();
   const [newThreadOpen, setNewThreadOpen] = useState(false);
   const caps = currentAdapter?.capabilities;
-  const autoRun = optionBool(draft.agent.options, "autoRun", true);
+  const autoRun = optionAutoRun(draft.agent.options);
   const sandbox = optionBool(draft.agent.options, "sandbox", false);
   const sandboxed = sandboxState(caps, draft.agent.options);
   const tone = riskTone({ autoRun, sandbox: sandboxed.on, sandboxSupported: sandboxed.supported });

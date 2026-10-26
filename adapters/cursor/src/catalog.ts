@@ -1,6 +1,7 @@
 import {
   mergeModelCatalog,
-  optionBool,
+  optionAutoRun,
+  optionSafetyBool,
   optionStringArray,
   type AgentConfig,
   type ModelCatalogItem,
@@ -179,11 +180,12 @@ export const CURSOR_DEFAULT_MODEL = {
 export function normalizeCursorConfig(agent: AgentConfig): AgentConfig {
   const next: AgentConfig = {
     ...agent,
+    /* Normalized values last: spread after them, a malformed hand-edited value won. */
     options: {
-      settingSources: optionStringArray(agent.options, "settingSources", ["project", "user"]),
-      sandbox: optionBool(agent.options, "sandbox", false),
-      autoRun: optionBool(agent.options, "autoRun", true),
       ...agent.options,
+      settingSources: optionStringArray(agent.options, "settingSources", ["project", "user"]),
+      sandbox: optionSafetyBool(agent.options, "sandbox", false, true),
+      autoRun: optionAutoRun(agent.options),
     },
   };
   const hadParams = Array.isArray(agent.modelParams) && agent.modelParams.length > 0;

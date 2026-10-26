@@ -17,8 +17,21 @@ import {
   isClientMessage,
   isPersistedTranscriptEvent,
   isTranscriptEvent,
+  optionAutoRun,
+  optionSafetyBool,
   resolveTheme,
 } from "../src/index.js";
+
+describe("safety options", () => {
+  it("keep the default when unset and fail closed on anything but a boolean", () => {
+    expect(optionAutoRun({})).toBe(true);
+    expect(optionAutoRun({ autoRun: false })).toBe(false);
+    expect(optionAutoRun({ autoRun: "true" })).toBe(false);
+    expect(optionAutoRun({ autoRun: 1 })).toBe(false);
+    expect(optionSafetyBool({}, "sandbox", false, true)).toBe(false);
+    expect(optionSafetyBool({ sandbox: "no" }, "sandbox", false, true)).toBe(true);
+  });
+});
 
 describe("protocol v1", () => {
   it("freezes major version 1", () => {

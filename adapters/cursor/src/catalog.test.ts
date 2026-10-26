@@ -104,6 +104,17 @@ describe("cursor catalog", () => {
     expect(CURSOR_STATIC_CATALOG[0]?.variants?.find((v) => v.isDefault)?.params).toEqual([{ id: "effort", value: "xhigh" }]);
   });
 
+  it("never lets a malformed hand-edited option win over the normalized one", () => {
+    const cfg = normalizeCursorConfig({
+      adapter: "cursor",
+      cwd: "/tmp",
+      model: "composer-2.5",
+      modelParams: [],
+      options: { autoRun: "false", sandbox: "yes", extra: 1 },
+    });
+    expect(cfg.options).toMatchObject({ autoRun: false, sandbox: true, extra: 1 });
+  });
+
   it("rewrites an empty model to grok-4.6 extra high and keeps Composer when chosen", () => {
     const empty = normalizeCursorConfig({
       adapter: "cursor",

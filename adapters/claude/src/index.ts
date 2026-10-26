@@ -14,7 +14,7 @@ import {
   type AdapterSession,
   type PromptAttachment,
 } from "@glassys/adapter-contract";
-import { mergeModelCatalog, optionBool, optionString, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
+import { mergeModelCatalog, optionAutoRun, optionString, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { claudeMapState, claudeRunStatus, claudeSessionId, isClaudeResult, mapClaudeMessage } from "./mapper.js";
 
 /** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
@@ -174,7 +174,7 @@ function protectedPathHooks(opts: AdapterCreateOptions) {
  * mode was stored: that pairing would let every tool run while Settings says auto-run is off.
  */
 export function claudePermissionMode(options: Record<string, unknown> | undefined): string {
-  const autoRun = optionBool(options, "autoRun", true);
+  const autoRun = optionAutoRun(options);
   const stored = optionString(options, "permissionMode", "");
   if (!autoRun) return stored && stored !== "bypassPermissions" ? stored : "dontAsk";
   return stored || "bypassPermissions";
@@ -423,7 +423,7 @@ export const claudeAdapter: Adapter = {
       model: agent.model || "sonnet",
       options: {
         ...agent.options,
-        autoRun: optionBool(agent.options, "autoRun", true),
+        autoRun: optionAutoRun(agent.options),
         permissionMode: claudePermissionMode(agent.options),
       },
     };

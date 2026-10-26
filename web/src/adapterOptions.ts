@@ -1,6 +1,6 @@
-import { optionBool, optionString, optionStringArray, type AdapterCapabilities, type AdapterPublicInfo } from "@glassys/protocol";
+import { optionAutoRun, optionBool, optionString, optionStringArray, type AdapterCapabilities, type AdapterPublicInfo } from "@glassys/protocol";
 
-export { optionBool, optionString, optionStringArray };
+export { optionAutoRun, optionBool, optionString, optionStringArray };
 
 export function defaultOptionsFor(adapter: AdapterPublicInfo): Record<string, unknown> {
   const o: Record<string, unknown> = {};

@@ -552,6 +552,26 @@ export function optionBool(options: Record<string, unknown> | undefined, key: st
   return typeof v === "boolean" ? v : fallback;
 }
 
+/**
+ * A safety switch (auto-run, sandbox): unset is the default, a boolean is itself, and anything
+ * else a hand edit left there ("false", "no", 0) is the safe side, never the permissive default.
+ */
+export function optionSafetyBool(
+  options: Record<string, unknown> | undefined,
+  key: string,
+  fallback: boolean,
+  safe: boolean,
+): boolean {
+  const v = options?.[key];
+  if (v === undefined || v === null) return fallback;
+  return typeof v === "boolean" ? v : safe;
+}
+
+/** Auto-run defaults on; a malformed value turns it off. */
+export function optionAutoRun(options: Record<string, unknown> | undefined): boolean {
+  return optionSafetyBool(options, "autoRun", true, false);
+}
+
 export function optionString(options: Record<string, unknown> | undefined, key: string, fallback = ""): string {
   const v = options?.[key];
   return typeof v === "string" ? v : fallback;
