@@ -81,6 +81,7 @@ export function Settings({
   focusSection,
   schedulePrefill,
   leaveGuard,
+  newVersion = false,
 }: {
   config: RedactedConfig;
   onClose: () => void;
@@ -95,6 +96,8 @@ export function Settings({
   currentThreadId?: string | null;
   focusSection?: "schedules" | "updates";
   schedulePrefill?: string;
+  /** The gateway now runs another commit than the one this page loaded against (useGatewaySession). */
+  newVersion?: boolean;
 }) {
   const t = useT();
   const { confirm, confirmDialog } = useConfirm();
@@ -265,18 +268,24 @@ export function Settings({
     }
   }
 
+  /*
+   * Once. With `t` as a dependency, previewing a language refetched the adapters, and the new list
+   * then cleared and refetched the models, the adapter status and the registry too.
+   */
+  const tRef = useRef(t);
+  tRef.current = t;
   useEffect(() => {
     api
       .adapters()
       .then((r) => {
         setAdapters(r.adapters);
-        setAdaptersError(r.adapters.length ? "" : t("wizard.adapters.empty"));
+        setAdaptersError(r.adapters.length ? "" : tRef.current("wizard.adapters.empty"));
       })
       .catch(() => {
         setAdapters([]);
-        setAdaptersError(t("wizard.adapters.failed"));
+        setAdaptersError(tRef.current("wizard.adapters.failed"));
       });
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     api
@@ -661,6 +670,7 @@ export function Settings({
               )}
               {tab === "updates" && (
                 <UpdatesTab
+                  reloadNeeded={newVersion}
                   update={update}
                   setUpdate={setUpdate}
                   behind={behind}

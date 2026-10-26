@@ -8,10 +8,8 @@ import { Callout, SettingGroup, SettingRow, StatusBadge } from "../../components
 
 export type UpdateInfo = AdminUpdateInfo;
 
-/** The gateway commit this page was loaded against. A different one later means stale assets. */
-let pageCommit: string | undefined;
-
 export function UpdatesTab({
+  reloadNeeded,
   update,
   setUpdate,
   behind,
@@ -21,6 +19,8 @@ export function UpdatesTab({
   setError,
   confirm,
 }: {
+  /** This page's assets are older than the gateway serving it: reload before anything else. */
+  reloadNeeded: boolean;
   update: UpdateInfo | null;
   setUpdate: (next: UpdateInfo | null) => void;
   behind: number | null;
@@ -33,8 +33,6 @@ export function UpdatesTab({
   const t = useT();
   const upgrading = update?.upgrading?.phase && update.upgrading.phase !== "idle";
   const runningCommit = update?.running?.commit;
-  if (runningCommit && !pageCommit) pageCommit = runningCommit;
-  const reloadNeeded = Boolean(runningCommit && pageCommit && runningCommit !== pageCommit);
   const restartPending = Boolean(runningCommit && update?.git?.sha && runningCommit !== update.git.sha);
   return (
     <>

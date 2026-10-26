@@ -355,6 +355,40 @@ describe("Chat composer and layout", () => {
     expect(host.querySelector(".draft-thumbs img")?.getAttribute("alt")).toBe("shot.png");
   });
 
+  it("waits for a pasted image to finish uploading before it sends", async () => {
+    const { api } = await import("./api");
+    let finish!: () => void;
+    vi.mocked(api.upload).mockImplementationOnce(
+      (file: File) =>
+        new Promise((resolve) => {
+          finish = () => resolve({ id: `up-${file.name}`, mime: file.type, name: file.name });
+        }),
+    );
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    await typeIn(textarea, "look at this");
+    const form = host.querySelector("form.composer") as HTMLFormElement;
+    await act(async () => {
+      const ev = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "clipboardData", { value: { files: [new File([new Uint8Array([1])], "shot.png", { type: "image/png" })] } });
+      form.dispatchEvent(ev);
+    });
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
+    await act(async () => finish());
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    const sent = socket.sent.find((m) => (m as { type?: string }).type === "user.message") as { attachments?: unknown[] } | undefined;
+    expect(sent?.attachments).toHaveLength(1);
+  });
+
   it("does not send on Enter on a phone", async () => {
     vi.stubGlobal("matchMedia", (q: string) => ({
       matches: q === "(pointer: coarse)",
@@ -485,6 +519,29 @@ describe("Chat composer and layout", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("hands back only the message a refusal names", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    for (const text of ["check nginx", "and php-fpm"]) {
+      await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, text);
+      await act(async () => {
+        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+    }
+    const [first, second] = socket.sent.filter((m) => (m as { type?: string }).type === "user.message") as Array<{ id: string }>;
+    await act(async () => {
+      socket.emit({ type: "notice", level: "error", message: "Queue is full", about: "message", messageId: second!.id });
+    });
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("and php-fpm");
+    await act(async () => {
+      socket.emit({ type: "user.message", text: "check nginx", id: first!.id, seq: 1 });
+    });
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("and php-fpm");
   });
 
   it("keeps the composer clear once the gateway echoes the message", async () => {

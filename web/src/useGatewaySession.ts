@@ -25,7 +25,7 @@ export function useGatewaySession(opts: {
   /** The gateway echoed a message this screen sent (or took it back). */
   onEcho?: (id: string) => void;
   /** A message this socket sent was refused: queue full, gateway busy, onboarding. */
-  onRefusal?: (message: string) => void;
+  onRefusal?: (message: string, messageId?: string) => void;
   /** Any other notice: a failed cancel or thread change, transcript writes failing. */
   onNotice?: (message: string, level: "error" | "warn") => void;
   /** A config.error for this socket. */
@@ -88,7 +88,7 @@ export function useGatewaySession(opts: {
         }
         /* Notices end no run: a refusal during a run must not close its open cards. */
         if (msg.type === "notice") {
-          if (msg.about === "message") o.onRefusal?.(msg.message);
+          if (msg.about === "message") o.onRefusal?.(msg.message, msg.messageId);
           else o.onNotice?.(msg.message, msg.level);
           return;
         }

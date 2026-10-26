@@ -105,9 +105,9 @@ export function Chat({
       clearTimeout(pending.timer);
       unconfirmed.current.delete(id);
     },
-    onRefusal: (message) => {
+    onRefusal: (message, messageId) => {
       const text = operatorError(message, tRef.current);
-      if (unconfirmed.current.size) restoreRef.current(text);
+      if (unconfirmed.current.size) restoreRef.current(text, messageId);
       else setSendError(text);
     },
     onNotice: (message, level) => setNotice({ text: operatorError(message, tRef.current), level }),
@@ -118,6 +118,8 @@ export function Chat({
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
   const uploadingRef = useRef(0);
+  /* The same count for rendering: send waits until every attachment is in the message. */
+  const [uploading, setUploading] = useState(0);
   const [attachError, setAttachError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [configError, setConfigError] = useState("");
@@ -212,18 +214,24 @@ export function Chat({
   const pickerModel = draftModel?.id ?? config.agent.model;
   const pickerParams = draftModel?.params ?? config.agent.modelParams ?? [];
 
-  const loadModels = useCallback(async () => {
+  /* Only the latest ask may land: after an adapter switch, a slow reply for the old one used to. */
+  const modelsAsk = useRef(0);
+  const loadModels = useCallback(async (adapter: string) => {
+    const ask = ++modelsAsk.current;
+    setModelsLoaded(false);
     try {
-      const r = await api.models();
+      const r = await api.models(adapter);
+      if (ask !== modelsAsk.current) return;
       setModels(r.models);
       setModelSource(r.source);
       setCatalogError(r.error || "");
     } catch (err) {
+      if (ask !== modelsAsk.current) return;
       setModels([]);
       setModelSource("fallback");
       setCatalogError(err instanceof Error ? err.message : "");
     } finally {
-      setModelsLoaded(true);
+      if (ask === modelsAsk.current) setModelsLoaded(true);
     }
   }, []);
 
@@ -232,6 +240,7 @@ export function Chat({
     if (conn === "connected") setRestartNote("");
   }, [conn]);
 
+  /* tRef, not t: a language preview in Settings must not refetch everything below. */
   const loadAdapters = useCallback(() => {
     setAdaptersError("");
     api
@@ -239,12 +248,12 @@ export function Chat({
       .then((r) => setAdapters(r.adapters))
       .catch((err) => {
         setAdapters([]);
-        setAdaptersError(err instanceof Error ? err.message : t("wizard.adapters.failed"));
+        setAdaptersError(err instanceof Error ? err.message : tRef.current("wizard.adapters.failed"));
       });
-  }, [t]);
+  }, []);
 
   useEffect(() => {
-    void loadModels();
+    void loadModels(config.agent.adapter);
     loadAdapters();
     /* No thread list over HTTP: every WS handshake sends threads.snapshot, and a slower HTTP
        reply landed after a newer snapshot and put an old list back. */
@@ -356,6 +365,13 @@ export function Chat({
     if (next === "overview" || next === "services" || next === "logs") setLastHostView(next);
   }, []);
 
+  /* Search filters the transcript: from a host view it first goes back to it (⌘F, palette, topbar). */
+  const openSearch = useCallback(() => {
+    showView("chat");
+    setSearchOpen(true);
+    queueMicrotask(() => searchRef.current?.focus());
+  }, [showView]);
+
   const toggleActivity = useCallback((next: boolean) => {
     setActivityOpen(next);
     try {
@@ -381,10 +397,7 @@ export function Chat({
       composer: composer.current,
       toggleActivity,
       collapseRail,
-      openSearch: () => {
-        setSearchOpen(true);
-        queueMicrotask(() => searchRef.current?.focus());
-      },
+      openSearch,
       closeSearch: () => {
         setSearchOpen(false);
         setSearch("");
@@ -451,7 +464,8 @@ export function Chat({
     () => (search.trim() ? blocks.filter((b) => blockMatchesQuery(b, search)) : blocks),
     [blocks, search],
   );
-  const canSend = Boolean(text.trim() || drafts.length) && conn === "connected" && snapshotReady && protocolError === null;
+  const canSend =
+    Boolean(text.trim() || drafts.length) && uploading === 0 && conn === "connected" && snapshotReady && protocolError === null;
   const queuedIds = useMemo(() => new Set(queueItems.map((item) => item.id)), [queueItems]);
   const lastTool = useMemo(() => {
     for (let i = blocks.length - 1; i >= 0; i--) {
@@ -690,11 +704,7 @@ export function Chat({
       toggleActivity,
       collapseRail,
       changeTheme: (next) => void changeTheme(next),
-      openSearch: () => {
-        showView("chat");
-        setSearchOpen(true);
-        queueMicrotask(() => searchRef.current?.focus());
-      },
+      openSearch,
       restart: () => void onRestart(),
       switchThread: (id) => void onSwitchThread(id),
       openCwd: (cwd) => void onOpenCwd(cwd),
@@ -717,15 +727,22 @@ export function Chat({
       return;
     }
     uploadingRef.current += list.length;
+    setUploading(uploadingRef.current);
+    /* The thread these were added in: a switch meanwhile must not hand them to the next one. */
+    const thread = loadedDraftFor.current;
     try {
       for (const file of list) {
         const att = await api.upload(file);
-        setDrafts((cur) => [...cur, att]);
+        if (thread && loadedDraftFor.current !== thread) {
+          const saved = loadDraft(thread);
+          saveDraft(thread, saved.text, [...saved.attachments, att]);
+        } else setDrafts((cur) => [...cur, att]);
       }
     } catch (err) {
       setAttachError(operatorError(err instanceof Error ? err.message : t("chat.attachFailed"), t));
     } finally {
       uploadingRef.current -= list.length;
+      setUploading(uploadingRef.current);
     }
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -734,6 +751,8 @@ export function Chat({
     e.preventDefault();
     const value = text.trim();
     if ((!value && !drafts.length) || conn !== "connected" || !snapshotReady || protocolError !== null) return;
+    /* Enter right after a paste: the image is not in `drafts` yet and would go with the next message. */
+    if (uploadingRef.current > 0) return;
     const id = newMessageId();
     if (!send({
       type: "user.message",
@@ -755,12 +774,18 @@ export function Chat({
     if (composer.current) resizeComposer(composer.current);
   }
 
-  /** Put every unconfirmed message back into an empty composer, in the order sent, and say why. */
-  function restoreUnconfirmed(reason: string) {
-    const pending = [...unconfirmed.current.values()];
+  /**
+   * Put unconfirmed messages back into an empty composer, in the order sent, and say why. A refusal
+   * that names its message hands back only that one: the others may still be accepted, and
+   * resending them would send them twice. Without a name (an older gateway, a timeout) all of them.
+   */
+  function restoreUnconfirmed(reason: string, onlyId?: string) {
+    const only = onlyId ? unconfirmed.current.get(onlyId) : undefined;
+    const pending = only ? [only] : [...unconfirmed.current.values()];
     if (!pending.length) return;
     for (const p of pending) clearTimeout(p.timer);
-    unconfirmed.current.clear();
+    if (onlyId && only) unconfirmed.current.delete(onlyId);
+    else unconfirmed.current.clear();
     const text = pending
       .map((p) => p.text)
       .filter(Boolean)
@@ -1028,10 +1053,7 @@ export function Chat({
             open: searchOpen,
             value: search,
             onChange: setSearch,
-            onOpen: () => {
-              setSearchOpen(true);
-              queueMicrotask(() => searchRef.current?.focus());
-            },
+            onOpen: openSearch,
             onClose: () => {
               setSearchOpen(false);
               setSearch("");
@@ -1082,6 +1104,7 @@ export function Chat({
                 currentThreadId={currentThreadId}
                 focusSection={settingsFocus}
                 schedulePrefill={schedulePrefill}
+                newVersion={newVersion}
               />
             </Suspense>
           )}
