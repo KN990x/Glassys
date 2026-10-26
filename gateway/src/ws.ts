@@ -59,6 +59,8 @@ interface SocketState {
   pingTimer?: ReturnType<typeof setInterval>;
   handshakeTimer?: ReturnType<typeof setTimeout>;
   alive: boolean;
+  /** The close handler already ran: anything registered for this socket after it would leak. */
+  closed: boolean;
 }
 
 export function attachWs(
@@ -108,7 +110,7 @@ export function attachWs(
   });
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    const state: SocketState = { hello: false, auth: false, alive: true };
+    const state: SocketState = { hello: false, auth: false, alive: true, closed: false };
     const enqueue = createMutex();
     state.handshakeTimer = setTimeout(() => {
       if (state.auth) return;
@@ -120,6 +122,8 @@ export function attachWs(
     }, handshakeTimeoutMs);
 
     const startBeat = (seconds: number) => {
+      /* The config read can finish after a quick close; an interval set then would never stop. */
+      if (state.closed) return;
       if (state.pingTimer) clearInterval(state.pingTimer);
       const beat = clampKeepaliveSeconds(seconds) * 1000;
       state.pingTimer = setInterval(() => {
@@ -151,6 +155,7 @@ export function attachWs(
     });
 
     ws.on("close", () => {
+      state.closed = true;
       if (state.handshakeTimer) clearTimeout(state.handshakeTimer);
       if (state.pingTimer) clearInterval(state.pingTimer);
       hub.remove(ws);
@@ -246,54 +251,68 @@ async function handleClient(
 
   if (msg.type === "auth") {
     const token = (await verifySession(msg.token)) ? msg.token : await requestSessionToken(req);
+    if (state.closed) return;
     if (!token) {
       hub.send(ws, { type: "auth.error", message: "unauthorized" });
       return;
     }
     state.auth = true;
     trackSocketSession(ws, token);
-    if (state.handshakeTimer) clearTimeout(state.handshakeTimer);
-    const config = await redacted();
-    /* Buffer broadcasts from here on; the snapshot then says how far it got (lastSeq), and
-       buffered events it already holds are dropped by seq instead of sent twice. */
-    hub.add(ws, { buffer: true });
-    await drainEmit();
-    const snap = await readTranscriptSnapshot();
-    hub.send(ws, { type: "auth.ok" });
-    hub.send(ws, { type: "config", config });
-    hub.send(ws, {
-      type: "transcript.snapshot",
-      events: snap.events,
-      ...(snap.truncated ? { truncated: true } : {}),
-      lastSeq: snap.lastSeq,
-    });
-    for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
-      hub.send(ws, buffered);
-    }
-    hub.send(ws, { type: "session", ...snapshotRuntime() });
-    hub.send(ws, { type: "queue.snapshot", items: snapshotQueue() });
-    hub.send(ws, {
-      type: "threads.snapshot",
-      threads: await listLiveThreads(),
-      currentId: snapshotRuntime().threadId ?? null,
-    });
-    for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
-      hub.send(ws, leftover);
-    }
-    if (hub.release(ws)) {
-      /* Events were dropped while this socket caught up: start it over from what is on disk,
-         buffering again meanwhile so nothing falls between the new snapshot and live events. */
+    try {
+      if (state.handshakeTimer) clearTimeout(state.handshakeTimer);
+      const config = await redacted();
+      /* Buffer broadcasts from here on; the snapshot then says how far it got (lastSeq), and
+         buffered events it already holds are dropped by seq instead of sent twice. */
       hub.add(ws, { buffer: true });
       await drainEmit();
-      const fresh = await readTranscriptSnapshot();
+      const snap = await readTranscriptSnapshot();
+      hub.send(ws, { type: "auth.ok" });
+      hub.send(ws, { type: "config", config });
       hub.send(ws, {
         type: "transcript.snapshot",
-        events: fresh.events,
-        ...(fresh.truncated ? { truncated: true } : {}),
-        lastSeq: fresh.lastSeq,
+        events: snap.events,
+        ...(snap.truncated ? { truncated: true } : {}),
+        lastSeq: snap.lastSeq,
       });
-      for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), fresh.lastSeq)) hub.send(ws, leftover);
-      hub.release(ws);
+      for (const buffered of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
+        hub.send(ws, buffered);
+      }
+      hub.send(ws, { type: "session", ...snapshotRuntime() });
+      hub.send(ws, { type: "queue.snapshot", items: snapshotQueue() });
+      hub.send(ws, {
+        type: "threads.snapshot",
+        threads: await listLiveThreads(),
+        currentId: snapshotRuntime().threadId ?? null,
+      });
+      for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
+        hub.send(ws, leftover);
+      }
+      if (hub.release(ws)) {
+        /* Events were dropped while this socket caught up: start it over from what is on disk,
+           buffering again meanwhile so nothing falls between the new snapshot and live events. */
+        hub.add(ws, { buffer: true });
+        await drainEmit();
+        const fresh = await readTranscriptSnapshot();
+        hub.send(ws, {
+          type: "transcript.snapshot",
+          events: fresh.events,
+          ...(fresh.truncated ? { truncated: true } : {}),
+          lastSeq: fresh.lastSeq,
+        });
+        for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), fresh.lastSeq)) hub.send(ws, leftover);
+        hub.release(ws);
+      }
+    } catch (err) {
+      /* Left buffering without a snapshot, the socket would never see a live event again. */
+      log("error", "ws handshake", { error: String(err) });
+      hub.remove(ws);
+      ws.close(1011, "handshake failed");
+    } finally {
+      /* Closed mid-handshake: its close handler ran before the entries above were added. */
+      if (state.closed) {
+        hub.remove(ws);
+        untrackSocket(ws);
+      }
     }
     return;
   }

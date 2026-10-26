@@ -227,6 +227,20 @@ describe("websocket handshake", () => {
     ws.close();
   });
 
+  it("forgets a socket that closes in the middle of its auth", async () => {
+    const { trackedSocketCount } = await import("./sessions.js");
+    for (let i = 0; i < 20; i++) {
+      const ws = await openClient(url, origin);
+      ws.send(JSON.stringify({ type: "hello", protocolVersion: PROTOCOL_VERSION }));
+      await waitMessage(ws, "hello.ok");
+      ws.send(JSON.stringify({ type: "auth", token }));
+      ws.terminate();
+    }
+    await new Promise((r) => setTimeout(r, 200));
+    expect(trackedSocketCount()).toBe(0);
+    expect(hub.size).toBe(0);
+  });
+
   it("closes sockets that never finish hello/auth", async () => {
     await closeWs(wss);
     wss = attachWs(server, 25, 80);
