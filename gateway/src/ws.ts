@@ -280,7 +280,21 @@ async function handleClient(
     for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), snap.lastSeq)) {
       hub.send(ws, leftover);
     }
-    hub.release(ws);
+    if (hub.release(ws)) {
+      /* Events were dropped while this socket caught up: start it over from what is on disk,
+         buffering again meanwhile so nothing falls between the new snapshot and live events. */
+      hub.add(ws, { buffer: true });
+      await drainEmit();
+      const fresh = await readTranscriptSnapshot();
+      hub.send(ws, {
+        type: "transcript.snapshot",
+        events: fresh.events,
+        ...(fresh.truncated ? { truncated: true } : {}),
+        lastSeq: fresh.lastSeq,
+      });
+      for (const leftover of flushHandshakeBuffer(hub.takeBuffer(ws), fresh.lastSeq)) hub.send(ws, leftover);
+      hub.release(ws);
+    }
     return;
   }
 

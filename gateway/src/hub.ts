@@ -19,6 +19,8 @@ export class Hub {
   private clients = new Set<WebSocket>();
   /** While a socket is in this map, broadcasts are queued instead of sent. */
   private buffers = new Map<WebSocket, ServerMessage[]>();
+  /** Sockets whose handshake buffer overflowed: the oldest events were dropped. */
+  private overflowed = new Set<WebSocket>();
 
   add(ws: WebSocket, opts?: { buffer?: boolean }): void {
     this.clients.add(ws);
@@ -32,14 +34,19 @@ export class Hub {
     return buf.splice(0, buf.length);
   }
 
-  /** Stop buffering. Remaining queued broadcasts are dropped. */
-  release(ws: WebSocket): void {
+  /**
+   * Stop buffering. Remaining queued broadcasts are dropped. True when the buffer overflowed on
+   * the way: the socket missed events and needs a fresh snapshot, not a silent gap.
+   */
+  release(ws: WebSocket): boolean {
     this.buffers.delete(ws);
+    return this.overflowed.delete(ws);
   }
 
   remove(ws: WebSocket): void {
     this.clients.delete(ws);
     this.buffers.delete(ws);
+    this.overflowed.delete(ws);
   }
 
   send(ws: WebSocket, msg: ServerMessage): void {
@@ -56,7 +63,10 @@ export class Hub {
       const buf = this.buffers.get(ws);
       if (buf) {
         buf.push(msg);
-        if (buf.length > MAX_HANDSHAKE_BUFFER) buf.splice(0, buf.length - MAX_HANDSHAKE_BUFFER);
+        if (buf.length > MAX_HANDSHAKE_BUFFER) {
+          buf.splice(0, buf.length - MAX_HANDSHAKE_BUFFER);
+          this.overflowed.add(ws);
+        }
         continue;
       }
       try {

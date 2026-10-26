@@ -56,6 +56,20 @@ describe("hub", () => {
     expect(JSON.parse(sent[1]).text).toBe("y");
   });
 
+  it("says when a handshake buffer overflowed, so the socket can be given a fresh snapshot", async () => {
+    const { MAX_HANDSHAKE_BUFFER } = await import("./hub.js");
+    const hub = new Hub();
+    const fake = fakeSocket([]);
+    hub.add(fake, { buffer: true });
+    hub.broadcast({ type: "text.delta", text: "a" });
+    expect(hub.release(fake)).toBe(false);
+    hub.add(fake, { buffer: true });
+    for (let i = 0; i <= MAX_HANDSHAKE_BUFFER; i++) hub.broadcast({ type: "text.delta", text: String(i) });
+    expect(hub.takeBuffer(fake)).toHaveLength(MAX_HANDSHAKE_BUFFER);
+    expect(hub.release(fake)).toBe(true);
+    expect(hub.release(fake)).toBe(false);
+  });
+
   it("drops buffered events the snapshot already holds, by seq", () => {
     const buffered: ServerMessage[] = [
       { type: "text.delta", text: "in-snapshot", seq: 41 },
