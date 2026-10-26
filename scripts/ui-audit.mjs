@@ -86,7 +86,8 @@ function channel(c) {
   return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
 }
 function luminance(hex) {
-  const h = hex.replace("#", "");
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = [...h].map((c) => c + c).join("");
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
@@ -94,13 +95,26 @@ function contrast(a, b) {
   const [x, y] = [luminance(a), luminance(b)];
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
+/** Every custom property with its raw value, so a token that is not a plain colour is seen too. */
 function tokens(block) {
   const out = {};
-  for (const m of block.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{6})/gi)) out[m[1]] = m[2];
+  for (const m of block.matchAll(/(--[a-z0-9-]+):\s*([^;]+);/gi)) out[m[1]] = m[2].trim();
   return out;
 }
-const darkBlock = css.slice(css.indexOf(":root {"), css.indexOf('html[data-theme="light"]'));
-const lightBlock = css.slice(css.indexOf('html[data-theme="light"]'), css.indexOf("/* ---", css.indexOf('html[data-theme="light"]')));
+/** Hex colours only: anything else (rgb(), oklch(), a var(), 8-digit alpha) cannot be judged here. */
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+/* A block boundary that moved used to slice the wrong text and check nothing; it fails instead. */
+function block(startMarker, endMarker, from = 0) {
+  const start = css.indexOf(startMarker, from);
+  const end = start < 0 ? -1 : css.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end < 0) {
+    failures.push(`ui-audit: cannot find the block between "${startMarker}" and "${endMarker}" in styles.css`);
+    return "";
+  }
+  return css.slice(start, end);
+}
+const darkBlock = block(":root {", 'html[data-theme="light"]');
+const lightBlock = block('html[data-theme="light"]', "/* ---");
 const dark = tokens(darkBlock);
 const light = { ...dark, ...tokens(lightBlock) };
 
@@ -119,7 +133,12 @@ const INK = [
 ];
 for (const [name, palette] of [["dark", dark], ["light", light]]) {
   for (const [ink, surfaces, min] of INK) {
-    if (!palette[ink]) continue;
+    for (const surface of [ink, ...surfaces]) {
+      if (!HEX.test(palette[surface] ?? "")) {
+        failures.push(`contrast ${name}: ${surface} is ${palette[surface] ? `"${palette[surface]}", not a hex colour` : "missing"}; its contrast goes unchecked`);
+      }
+    }
+    if (![ink, ...surfaces].every((t) => HEX.test(palette[t] ?? ""))) continue;
     for (const surface of surfaces) {
       const r = contrast(palette[ink], palette[surface]);
       if (r < min) {
@@ -162,9 +181,11 @@ const EXTERNAL = new Set(["org"]);
  * variants, so the prefix counts as rendering every class that starts with it.
  */
 const composed = [...markup.matchAll(/([a-z][a-z0-9-]*-)\$\{/g)].map((m) => m[1]);
+/* A whole class name: `.tool` must not pass because `tool-head` is rendered. */
+const rendered = (cls) => new RegExp(`(?<![a-z0-9-])${cls}(?![a-z0-9-])`).test(markup);
 for (const cls of [...declared].sort()) {
   if (EXTERNAL.has(cls)) continue;
-  if (markup.includes(cls)) continue;
+  if (rendered(cls)) continue;
   if (composed.some((prefix) => cls.startsWith(prefix))) continue;
   failures.push(`dead selector: .${cls} is declared in styles.css but nothing renders it`);
 }
