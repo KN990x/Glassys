@@ -400,13 +400,22 @@ export function Chat({
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
+  /** Set by an open Settings: asks about unsaved changes before any close from outside it. */
+  const settingsLeaveGuard = useRef<(() => Promise<boolean>) | null>(null);
+
   useEffect(() => {
-    function onPop() {
+    async function onPop() {
       overlayPopped();
+      setThreadOpen(false);
+      const guard = settingsLeaveGuard.current;
+      if (guard && !(await guard())) {
+        /* The operator kept their changes: Settings stays, and so does its history entry. */
+        pushOverlay("settings");
+        return;
+      }
       setSettings(false);
       setSettingsFocus(undefined);
       setSchedulePrefill("");
-      setThreadOpen(false);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -933,7 +942,7 @@ export function Chat({
   if (attachError) alerts.push({ id: "attach", tone: "error", text: attachError, onDismiss: () => setAttachError("") });
   if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
 
-  function navigate(target: NavTarget) {
+  async function navigate(target: NavTarget) {
     if (target === "threads") {
       if (threadOpen) closeThreads();
       else openThreads();
@@ -945,7 +954,11 @@ export function Chat({
       return;
     }
     if (threadOpen) closeThreads();
-    if (settings) closeSettings();
+    if (settings) {
+      const guard = settingsLeaveGuard.current;
+      if (guard && !(await guard())) return;
+      closeSettings();
+    }
     if (target === "host") return showView(lastHostView);
     if (target === "files") return showView("files");
     showView("chat");
@@ -1054,6 +1067,7 @@ export function Chat({
               <Settings
                 config={config}
                 onClose={closeSettings}
+                leaveGuard={settingsLeaveGuard}
                 onConfig={onConfig}
                 onLogout={onLogout}
                 currentThreadId={currentThreadId}

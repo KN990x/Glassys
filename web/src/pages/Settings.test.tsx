@@ -262,6 +262,56 @@ describe("Settings draft against a live config", () => {
     expect(host.querySelector(".settings-dirty")).not.toBeNull();
     expect(shown.at(-1)?.space.name).toBe("edge-01");
   });
+
+  it("asks before an outside close and takes the preview back however it goes away", async () => {
+    const { Settings } = await import("./Settings");
+    const shown: RedactedConfig[] = [];
+    let open!: (v: boolean) => void;
+    const guard: { current: (() => Promise<boolean>) | null } = { current: null };
+    function Harness() {
+      const [config, setConfig] = useState(cfg());
+      const [visible, setVisible] = useState(true);
+      open = setVisible;
+      shown.push(config);
+      return (
+        <I18nProvider locale="en">
+          {visible && (
+            <Settings config={config} onClose={() => undefined} onConfig={setConfig} onLogout={() => undefined} leaveGuard={guard} />
+          )}
+        </I18nProvider>
+      );
+    }
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => {
+      root = createRoot(host);
+      root.render(<Harness />);
+    });
+    expect(guard.current).toBeTypeOf("function");
+    const name = host.querySelector("#set-host-label") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(name, "edge-01");
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(shown.at(-1)?.space.name).toBe("edge-01");
+    /* The back gesture asks first; keeping the changes keeps the screen. */
+    let answer!: Promise<boolean>;
+    await act(async () => {
+      answer = guard.current!();
+    });
+    const cancel = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Cancel");
+    await act(async () => {
+      cancel?.click();
+    });
+    expect(await answer).toBe(false);
+    expect(shown.at(-1)?.space.name).toBe("edge-01");
+    /* Unmounted without going through the guard (a tab, a sign-out): the preview goes too. */
+    await act(async () => {
+      open(false);
+    });
+    expect(shown.at(-1)?.space.name).toBe(cfg().space.name);
+    expect(guard.current).toBeNull();
+  });
 });
 
 describe("rebaseDraft", () => {

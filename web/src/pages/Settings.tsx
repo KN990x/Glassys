@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type {
   AdapterDiscoverItem,
   AdapterPublicInfo,
@@ -79,9 +79,16 @@ export function Settings({
   currentThreadId,
   focusSection,
   schedulePrefill,
+  leaveGuard,
 }: {
   config: RedactedConfig;
   onClose: () => void;
+  /**
+   * Set while this screen is open: closes from outside (the back gesture, a tab) call it first.
+   * It asks about unsaved changes, puts the previewed theme and language back, and says whether
+   * the screen may close.
+   */
+  leaveGuard?: MutableRefObject<(() => Promise<boolean>) | null>;
   onConfig: (c: RedactedConfig) => void;
   onLogout: () => void;
   currentThreadId?: string | null;
@@ -167,12 +174,30 @@ export function Settings({
 
   const dirty = Boolean(password || apiKey || clearKey) || draftDiffers(draft, baseline);
 
-  async function requestClose() {
+  async function confirmLeave(): Promise<boolean> {
     if (dirty && !(await confirm({ title: t("confirm.titleDiscard"), message: t("settings.discard"), confirmLabel: t("confirm.discard"), destructive: true })))
-      return;
+      return false;
     revertPreview();
-    onCloseRef.current();
+    return true;
   }
+  const confirmLeaveRef = useRef(confirmLeave);
+  confirmLeaveRef.current = confirmLeave;
+
+  async function requestClose() {
+    if (await confirmLeaveRef.current()) onCloseRef.current();
+  }
+
+  useEffect(() => {
+    if (leaveGuard) leaveGuard.current = () => confirmLeaveRef.current();
+    return () => {
+      if (leaveGuard) leaveGuard.current = null;
+      /* However this screen went away, a preview it applied must not outlive it. */
+      if (previewSent.current) {
+        previewSent.current = null;
+        onConfigRef.current(baselineRef.current);
+      }
+    };
+  }, [leaveGuard]);
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
 
