@@ -3,7 +3,7 @@ import type { RedactedConfig, ScheduleList } from "@glassys/protocol";
 import { api } from "../../api";
 import { useT } from "../../i18n";
 import { operatorError } from "../../operatorError";
-import { formatRelativeShort } from "../../format";
+import { formatRelativeShort, zonedLocalToIso } from "../../format";
 import { Callout, EmptyRow, SettingGroup, SettingRow, StatusBadge } from "../../components/Primitives";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { Switch } from "../../components/Switch";
@@ -115,7 +115,7 @@ export function SchedulesTab({
                     cwd: savedCwd,
                     threadId: currentThreadId || undefined,
                     cron: scheduleCron.trim() || undefined,
-                    at: scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
+                    at: scheduleAt ? zonedLocalToIso(scheduleAt, scheduleTz) : undefined,
                   });
                   setScheduleText("");
                   setScheduleCron("");

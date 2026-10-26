@@ -146,3 +146,39 @@ export function newMessageId(c: Pick<Crypto, "getRandomValues"> & { randomUUID?:
   const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+/** How far `tz` is ahead of UTC at instant `ms`, in milliseconds. */
+function zoneOffsetMs(ms: number, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(ms));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return wall - Math.floor(ms / 1000) * 1000;
+}
+
+/**
+ * A `datetime-local` value read as wall time in `tz` (the gateway's zone, which runs the job), as
+ * an ISO instant. `new Date(value)` reads it in the browser's zone, an hour or more off when the
+ * phone and the host are in different places. An unknown zone falls back to the browser's.
+ */
+export function zonedLocalToIso(local: string, tz: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(local);
+  if (!m || !tz) return new Date(local).toISOString();
+  const asUtc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0));
+  try {
+    /* Twice: the offset at the first guess can differ from the one at the answer across a DST change. */
+    let ms = asUtc - zoneOffsetMs(asUtc, tz);
+    ms = asUtc - zoneOffsetMs(ms, tz);
+    return new Date(ms).toISOString();
+  } catch {
+    return new Date(local).toISOString();
+  }
+}

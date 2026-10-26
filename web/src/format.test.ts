@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isMessageId } from "@glassys/protocol";
 import {
+  zonedLocalToIso,
   newMessageId,
   blockMatchesQuery,
   cwdBasename,
@@ -93,5 +94,16 @@ describe("qrPath", () => {
     const drawn = [...d.matchAll(/h(\d+)v1/g)].reduce((n, m) => n + Number(m[1]), 0);
     expect(size).toBe(qr.size);
     expect(drawn).toBe(dark);
+  });
+});
+
+describe("zonedLocalToIso", () => {
+  it("reads the picked time in the gateway's zone, across DST, and falls back without one", () => {
+    expect(zonedLocalToIso("2026-10-26T06:00", "Europe/Madrid")).toBe("2026-10-26T05:00:00.000Z");
+    expect(zonedLocalToIso("2026-07-01T06:00", "Europe/Madrid")).toBe("2026-07-01T04:00:00.000Z");
+    expect(zonedLocalToIso("2026-07-01T06:00", "America/New_York")).toBe("2026-07-01T10:00:00.000Z");
+    expect(zonedLocalToIso("2026-07-01T06:00", "UTC")).toBe("2026-07-01T06:00:00.000Z");
+    expect(zonedLocalToIso("2026-07-01T06:00", "")).toBe(new Date("2026-07-01T06:00").toISOString());
+    expect(zonedLocalToIso("2026-07-01T06:00", "Not/AZone")).toBe(new Date("2026-07-01T06:00").toISOString());
   });
 });
