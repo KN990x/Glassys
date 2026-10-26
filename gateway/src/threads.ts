@@ -1,4 +1,6 @@
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 import { writeFileAtomic } from "./atomic.js";
 import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -102,6 +104,26 @@ async function readEvents(path: string): Promise<TranscriptEvent[]> {
   } catch {
     return [];
   }
+}
+
+/**
+ * The first user message with text, read line by line and no further: the title needs only that,
+ * and a long thread's transcript runs to tens of MB.
+ */
+async function readFirstUserMessage(path: string): Promise<TranscriptEvent[]> {
+  const lines = createInterface({ input: createReadStream(path, { encoding: "utf8" }), crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      if (!line.includes('"user.message"')) continue;
+      const [event] = parseJsonl<TranscriptEvent>(line);
+      if (event?.type === "user.message" && event.text.trim()) return [event];
+    }
+  } catch {
+    /* missing or unreadable: no title from it */
+  } finally {
+    lines.close();
+  }
+  return [];
 }
 
 function agentFromMeta(meta: ThreadMeta): AgentConfig {
@@ -298,7 +320,7 @@ async function archiveLiveThreadUnlocked(agentId: string | null, agent?: AgentCo
   const id = currentThreadId ?? (await loadState()).threadId;
   if (!id) return null;
   const cfgAgent = agent ?? (await loadConfig()).agent;
-  const events = await readEvents(paths.threadTranscript(id));
+  const events = await readFirstUserMessage(paths.threadTranscript(id));
   const prev = (await loadMeta(id)) ?? metaFromAgent(id, cfgAgent, agentId);
   const generated = titleFrom(cfgAgent.cwd, events) || prev.title;
   const meta: ThreadMeta = {
