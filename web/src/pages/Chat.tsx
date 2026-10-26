@@ -3,17 +3,14 @@ import { Suspense, lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef
 import { useStableCallback } from "../useStableCallback";
 import { useGatewaySession } from "../useGatewaySession";
 import type {
-  AdapterPublicInfo,
   HostCapabilities,
   MessageAttachment,
-  ModelCatalogItem,
-  ModelListSource,
   ModelParam,
   RedactedConfig,
   Theme,
   ThreadSummary,
 } from "@glassys/protocol";
-import { PROTOCOL_VERSION, MAX_ATTACHMENTS } from "@glassys/protocol";
+import { MAX_ATTACHMENTS } from "@glassys/protocol";
 import { useT } from "../i18n";
 import { api } from "../api";
 import { Composer } from "../components/Composer";
@@ -39,14 +36,16 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "../useMediaQuery";
 import { overlayPopped, popOverlay, pushOverlay } from "../overlayHistory";
 import { Skeleton } from "../components/Primitives";
+import { useChatCatalog } from "./useChatCatalog";
+import { useHostContext } from "./useHostContext";
+import { useUnconfirmedSends } from "./useUnconfirmedSends";
+import { chatAlerts } from "./chatAlerts";
 
 const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Settings })));
 const HostViews = lazy(() => import("./host/HostViews").then((m) => ({ default: m.HostViews })));
 
 const COMPOSER_MAX_PX = 160;
 const NO_PALETTE_ITEMS: ReturnType<typeof buildPaletteItems> = [];
-/** How long a sent message may go unechoed before it is handed back to the composer. */
-const SEND_CONFIRM_MS = 10_000;
 const LOOPBACK_DISMISS_KEY = "glassys.hideLoopback";
 const RAIL_KEY = "glassys.railCollapsed";
 const ACTIVITY_KEY = "glassys.activityOpen";
@@ -77,6 +76,14 @@ export function Chat({
 }) {
   const t = useT();
   const { confirm, confirmDialog } = useConfirm();
+  const [text, setText] = useState("");
+  const [drafts, setDrafts] = useState<MessageAttachment[]>([]);
+  const [sendError, setSendError] = useState("");
+  const unconfirmed = useUnconfirmedSends((backText, backDrafts, reason) => {
+    setText((cur) => (cur.trim() ? cur : backText));
+    setDrafts((cur) => (cur.length ? cur : backDrafts));
+    setSendError(reason);
+  });
   const {
     conn,
     protocolError,
@@ -99,22 +106,16 @@ export function Chat({
     keepaliveSeconds: config.network.wsKeepaliveSeconds,
     onConfig,
     onLogout,
-    onEcho: (id) => {
-      const pending = unconfirmed.current.get(id);
-      if (!pending) return;
-      clearTimeout(pending.timer);
-      unconfirmed.current.delete(id);
-    },
+    onEcho: unconfirmed.confirmed,
     onRefusal: (message, messageId) => {
-      const text = operatorError(message, tRef.current);
-      if (unconfirmed.current.size) restoreRef.current(text, messageId);
-      else setSendError(text);
+      const reason = operatorError(message, tRef.current);
+      if (unconfirmed.hasPending()) unconfirmed.handBack(reason, messageId);
+      else setSendError(reason);
     },
     onNotice: (message, level) => setNotice({ text: operatorError(message, tRef.current), level }),
     onConfigError: (message) => setConfigError(message ? operatorError(message, tRef.current) : ""),
   });
   const [threadOpen, setThreadOpen] = useState(false);
-  const [drafts, setDrafts] = useState<MessageAttachment[]>([]);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
   const uploadingRef = useRef(0);
@@ -123,21 +124,15 @@ export function Chat({
   const [attachError, setAttachError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [configError, setConfigError] = useState("");
-  const [sendError, setSendError] = useState("");
   const [notice, setNotice] = useState<{ text: string; level: "error" | "warn" } | null>(null);
   const [modelError, setModelError] = useState("");
-  const [text, setText] = useState("");
   const [draftModel, setDraftModel] = useState<{ id: string; params: ModelParam[] } | null>(null);
   const [settings, setSettings] = useState(false);
-  const [models, setModels] = useState<ModelCatalogItem[]>([]);
-  /** Until the first catalogue answer, an empty list means "not yet", not "none". */
-  const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [modelSource, setModelSource] = useState<ModelListSource>("live");
-  const [catalogError, setCatalogError] = useState("");
-  const [adapters, setAdapters] = useState<AdapterPublicInfo[]>([]);
-  const [adaptersError, setAdaptersError] = useState("");
-  const [hostLabel, setHostLabel] = useState("");
-  const [loopback, setLoopback] = useState(false);
+  const { models, modelsLoaded, modelSource, catalogError, adapters, adaptersError, loadAdapters } = useChatCatalog(
+    config.agent.adapter,
+    config.agent.cwd,
+  );
+  const { hostLabel, loopback, git, pins, setPins, recents, refreshWorkspaces } = useHostContext(config.agent.cwd);
   const [hideLoopback, setHideLoopback] = useState(() => {
     try {
       return sessionStorage.getItem(LOOPBACK_DISMISS_KEY) === "1";
@@ -145,7 +140,6 @@ export function Chat({
       return false;
     }
   });
-  const [git, setGit] = useState<{ branch: string; dirty: boolean } | undefined>();
   const [atBottom, setAtBottom] = useState(true);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -173,18 +167,8 @@ export function Chat({
   const [slashOpen, setSlashOpen] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState<"schedules" | "updates" | undefined>();
   const [schedulePrefill, setSchedulePrefill] = useState("");
-  const [pins, setPins] = useState<string[]>([]);
-  const [recents, setRecents] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const [restartNote, setRestartNote] = useState("");
-  /**
-   * Messages sent and not yet echoed back, oldest first. A socket can look open while the link is
-   * dead; without this, the composer was cleared and the message silently lost. Every one is kept:
-   * a second send used to replace the first, which was then lost if neither got through.
-   */
-  const unconfirmed = useRef(
-    new Map<string, { text: string; drafts: MessageAttachment[]; timer: ReturnType<typeof setTimeout> }>(),
-  );
   const scroller = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const threadBtn = useRef<HTMLButtonElement>(null);
@@ -214,66 +198,10 @@ export function Chat({
   const pickerModel = draftModel?.id ?? config.agent.model;
   const pickerParams = draftModel?.params ?? config.agent.modelParams ?? [];
 
-  /* Only the latest ask may land: after an adapter switch, a slow reply for the old one used to. */
-  const modelsAsk = useRef(0);
-  const loadModels = useCallback(async (adapter: string) => {
-    const ask = ++modelsAsk.current;
-    setModelsLoaded(false);
-    try {
-      const r = await api.models(adapter);
-      if (ask !== modelsAsk.current) return;
-      setModels(r.models);
-      setModelSource(r.source);
-      setCatalogError(r.error || "");
-    } catch (err) {
-      if (ask !== modelsAsk.current) return;
-      setModels([]);
-      setModelSource("fallback");
-      setCatalogError(err instanceof Error ? err.message : "");
-    } finally {
-      if (ask === modelsAsk.current) setModelsLoaded(true);
-    }
-  }, []);
-
   /* Clears the "restarting" note once the gateway is back. */
   useEffect(() => {
     if (conn === "connected") setRestartNote("");
   }, [conn]);
-
-  /* tRef, not t: a language preview in Settings must not refetch everything below. */
-  const loadAdapters = useCallback(() => {
-    setAdaptersError("");
-    api
-      .adapters()
-      .then((r) => setAdapters(r.adapters))
-      .catch((err) => {
-        setAdapters([]);
-        setAdaptersError(err instanceof Error ? err.message : tRef.current("wizard.adapters.failed"));
-      });
-  }, []);
-
-  useEffect(() => {
-    void loadModels(config.agent.adapter);
-    loadAdapters();
-    /* No thread list over HTTP: every WS handshake sends threads.snapshot, and a slower HTTP
-       reply landed after a newer snapshot and put an old list back. */
-    api
-      .reachability()
-      .then((r) => {
-        const parts = [r.user, r.hostname].filter((p): p is string => Boolean(p && p.trim()));
-        setHostLabel(parts.join("@"));
-        setLoopback(r.loopback);
-        setGit(r.git);
-      })
-      .catch(() => undefined);
-    api
-      .workspaces()
-      .then((r) => {
-        setRecents(r.recents || []);
-        setPins(r.pins || []);
-      })
-      .catch(() => undefined);
-  }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd]);
 
   /* Read at a thread change only: the draft being left is whatever the composer holds then. */
   const composerState = useRef({ text, drafts });
@@ -598,16 +526,6 @@ export function Chat({
     setSettings(true);
   }
 
-  async function refreshSites() {
-    try {
-      const r = await api.workspaces();
-      setRecents(r.recents || []);
-      setPins(r.pins || []);
-    } catch {
-      /* ignore */
-    }
-  }
-
   async function onOpenCwd(cwd: string) {
     if (cwd === config.agent.cwd) {
       closeThreads();
@@ -629,7 +547,7 @@ export function Chat({
       onConfig(r.config);
       closeThreads();
       setSendError("");
-      await refreshSites();
+      await refreshWorkspaces();
     } catch (err) {
       rollbackTranscript(prevBlocks, mark);
       setSendError(operatorError(err instanceof Error ? err.message : "busy", t));
@@ -763,40 +681,13 @@ export function Chat({
       setSendError(t("chat.sendFailed"));
       return;
     }
-    unconfirmed.current.set(id, {
-      text: value,
-      drafts,
-      timer: setTimeout(() => restoreUnconfirmed(t("chat.notDelivered")), SEND_CONFIRM_MS),
-    });
+    unconfirmed.track(id, value, drafts, () => tRef.current("chat.notDelivered"));
     setSendError("");
     setText("");
     setDrafts([]);
     if (composer.current) resizeComposer(composer.current);
   }
 
-  /**
-   * Put unconfirmed messages back into an empty composer, in the order sent, and say why. A refusal
-   * that names its message hands back only that one: the others may still be accepted, and
-   * resending them would send them twice. Without a name (an older gateway, a timeout) all of them.
-   */
-  function restoreUnconfirmed(reason: string, onlyId?: string) {
-    const only = onlyId ? unconfirmed.current.get(onlyId) : undefined;
-    const pending = only ? [only] : [...unconfirmed.current.values()];
-    if (!pending.length) return;
-    for (const p of pending) clearTimeout(p.timer);
-    if (onlyId && only) unconfirmed.current.delete(onlyId);
-    else unconfirmed.current.clear();
-    const text = pending
-      .map((p) => p.text)
-      .filter(Boolean)
-      .join("\n\n");
-    const drafts = pending.flatMap((p) => p.drafts).slice(0, MAX_ATTACHMENTS);
-    setText((cur) => (cur.trim() ? cur : text));
-    setDrafts((cur) => (cur.length ? cur : drafts));
-    setSendError(reason);
-  }
-  const restoreRef = useRef(restoreUnconfirmed);
-  restoreRef.current = restoreUnconfirmed;
 
   function cancelRun() {
     if (!send({ type: "run.cancel" })) setSendError(t("chat.sendFailed"));
@@ -921,60 +812,33 @@ export function Chat({
     setThreadOpen(true);
   }
 
-  const alerts: Alert[] = [];
-  if (protocolError !== null) {
-    alerts.push({
-      id: "protocol",
-      tone: "error",
-      text: `${t("protocol.incompatible")} (${t("protocol.expected")} ${PROTOCOL_VERSION}, ${t("protocol.got")} ${protocolError})`,
-    });
-  }
-  if (configError) alerts.push({ id: "config", tone: "error", text: configError });
-  if (newVersion) {
-    alerts.push({
-      id: "new-version",
-      tone: "info",
-      text: t("settings.updateReloadNote"),
-      action: { label: t("settings.updateReload"), run: () => window.location.reload() },
-    });
-  }
-  if (loopback && !hideLoopback) {
-    alerts.push({
-      id: "loopback",
-      tone: "warn",
-      text: t("reach.loopback"),
-      onDismiss: () => {
-        try {
-          sessionStorage.setItem(LOOPBACK_DISMISS_KEY, "1");
-        } catch {
-          /* private mode */
-        }
-        setHideLoopback(true);
-      },
-    });
-  }
-  if (adaptersError) {
-    alerts.push({
-      id: "adapters",
-      tone: "error",
-      text: t("chat.adaptersFailed"),
-      action: { label: t("chat.adaptersRetry"), run: () => loadAdapters() },
-    });
-  }
-  if (config.restartRequired) {
-    alerts.push({
-      id: "restart",
-      tone: "warn",
-      text: restartNote ? `${t("settings.restartRequired")} ${restartNote}` : t("settings.restartRequired"),
-      action: { label: t("settings.restart"), run: () => void onRestart() },
-    });
-  } else if (restartNote) {
-    alerts.push({ id: "restart-note", tone: "info", text: restartNote });
-  }
-  if (sendError) alerts.push({ id: "send", tone: "error", text: sendError, onDismiss: () => setSendError("") });
-  if (notice) alerts.push({ id: "notice", tone: notice.level, text: notice.text, onDismiss: () => setNotice(null) });
-  if (attachError) alerts.push({ id: "attach", tone: "error", text: attachError, onDismiss: () => setAttachError("") });
-  if (modelError) alerts.push({ id: "model", tone: "error", text: modelError, onDismiss: () => setModelError("") });
+  const alerts = chatAlerts({
+    t,
+    protocolError,
+    configError,
+    newVersion,
+    loopback:
+      loopback && !hideLoopback
+        ? {
+            dismiss: () => {
+              try {
+                sessionStorage.setItem(LOOPBACK_DISMISS_KEY, "1");
+              } catch {
+                /* private mode */
+              }
+              setHideLoopback(true);
+            },
+          }
+        : undefined,
+    adaptersFailed: adaptersError ? { retry: () => loadAdapters() } : undefined,
+    restartRequired: Boolean(config.restartRequired),
+    restartNote,
+    onRestart: () => void onRestart(),
+    send: sendError ? { text: sendError, dismiss: () => setSendError("") } : undefined,
+    notice: notice ? { ...notice, dismiss: () => setNotice(null) } : undefined,
+    attach: attachError ? { text: attachError, dismiss: () => setAttachError("") } : undefined,
+    model: modelError ? { text: modelError, dismiss: () => setModelError("") } : undefined,
+  });
 
   async function navigate(target: NavTarget) {
     if (target === "threads") {
