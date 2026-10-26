@@ -28,17 +28,20 @@ export type Activity = {
 
 const CHANGE_KINDS = new Set(["write", "edit"]);
 
-/* Lines of a command's output, counted without splitting up to 64 KB into an array; remembered
-   per chunk string, since the panel re-derives on every streamed frame and most chunks are done. */
-const lineCounts = new Map<string, number>();
-function lineCount(chunk: string): number {
+/*
+ * Lines of a command's output, counted without splitting up to 64 KB into an array; remembered
+ * per block, since the panel re-derives on every streamed frame and most blocks are done. Keyed
+ * by the block object, not the text: a string key kept up to 500 dead 64 KB chunks alive while a
+ * command streamed, and a block the reducer replaced simply drops out of the WeakMap.
+ */
+const lineCounts = new WeakMap<object, { chunk: string; lines: number }>();
+function lineCount(block: object, chunk: string): number {
   if (!chunk) return 0;
-  const known = lineCounts.get(chunk);
-  if (known !== undefined) return known;
+  const known = lineCounts.get(block);
+  if (known && known.chunk === chunk) return known.lines;
   let n = 1;
   for (let i = chunk.indexOf("\n"); i >= 0; i = chunk.indexOf("\n", i + 1)) n++;
-  if (lineCounts.size > 500) lineCounts.clear();
-  lineCounts.set(chunk, n);
+  lineCounts.set(block, { chunk, lines: n });
   return n;
 }
 
@@ -69,7 +72,7 @@ export function deriveActivity(blocks: Block[]): Activity {
         command: block.command,
         title: block.title,
         status: block.status,
-        lines: lineCount(block.chunk),
+        lines: lineCount(block, block.chunk),
       });
     }
 
