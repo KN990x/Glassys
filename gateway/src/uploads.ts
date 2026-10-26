@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { copyFile, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { MessageAttachment, TranscriptEvent } from "@glassys/protocol";
@@ -131,15 +132,45 @@ function safeUploadName(id: string, name: string): string {
   return `${id}-${base}`;
 }
 
+/** Names Glassys writes there: `<uuid>-<name>`, or the first 8 characters of the id in older copies. */
+const COPY_NAME = /^[0-9a-f]{8}/;
+
+function errCode(err: unknown): string | undefined {
+  return (err as NodeJS.ErrnoException).code;
+}
+
+/**
+ * `$cwd/.glassys-uploads` when it is a real directory, created if missing. The workspace is
+ * the agent's (or a cloned repo's): a symlink there could point the copy, the .gitignore and the
+ * clean-up at any directory the gateway can write.
+ */
+async function workspaceUploadDir(cwd: string, create: boolean): Promise<string | null> {
+  const dir = join(cwd, UPLOAD_DIR);
+  try {
+    if ((await lstat(dir)).isDirectory()) return dir;
+    if (!create) return null;
+    throw new Error(`${dir} is not a directory; remove it so Glassys can copy attachments there`);
+  } catch (err) {
+    if (errCode(err) !== "ENOENT") throw err;
+    if (!create) return null;
+  }
+  await mkdir(dir).catch((err) => {
+    if (errCode(err) !== "EEXIST") throw err;
+  });
+  if (!(await lstat(dir)).isDirectory()) throw new Error(`${dir} is not a directory`);
+  return dir;
+}
+
 /** Copy uploads into `$cwd/.glassys-uploads` so sandboxed agents can read them. */
 export async function materializeAttachments(
   cwd: string,
   attachments?: MessageAttachment[],
 ): Promise<PromptAttachment[]> {
   if (!attachments?.length) return [];
-  const destDir = join(cwd, UPLOAD_DIR);
-  await mkdir(destDir, { recursive: true });
-  await writeFile(join(destDir, ".gitignore"), "*\n", "utf8").catch((err) => {
+  const destDir = (await workspaceUploadDir(cwd, true))!;
+  /* "wx": never through a planted link, never over an operator's own file. */
+  await writeFile(join(destDir, ".gitignore"), "*\n", { encoding: "utf8", flag: "wx" }).catch((err) => {
+    if (errCode(err) === "EEXIST") return;
     log("warn", "could not write .glassys-uploads/.gitignore; copied images may show up in git", {
       cwd,
       error: String(err),
@@ -150,7 +181,12 @@ export async function materializeAttachments(
     const file = await readUploadBody(item.id);
     if (!file) continue;
     const dest = join(destDir, safeUploadName(item.id, file.name));
-    await copyFile(join(paths.uploads(), item.id), dest);
+    try {
+      await copyFile(join(paths.uploads(), item.id), dest, constants.COPYFILE_EXCL);
+    } catch (err) {
+      /* The same upload sent again is already there; anything else in its place is not ours. */
+      if (errCode(err) !== "EEXIST" || !(await lstat(dest)).isFile()) throw err;
+    }
     out.push({ path: dest, mime: file.mime, name: file.name, body: file.body });
   }
   return out;
@@ -232,8 +268,12 @@ export async function gcUploads(now = Date.now()): Promise<void> {
       }
     }
     if (now - mtime < UNREFERENCED_TTL_MS) continue;
-    await rm(data, { force: true });
-    await rm(meta, { force: true });
+    try {
+      await rm(data, { force: true });
+      await rm(meta, { force: true });
+    } catch (err) {
+      log("warn", "could not remove an old upload", { id, error: String(err) });
+    }
   }
   await gcCwdUploads(referenced, now);
 }
@@ -255,26 +295,26 @@ async function gcCwdUploads(referenced: Set<string>, now: number): Promise<void>
     /* ignore */
   }
   for (const cwd of cwds) {
-    const dir = join(cwd, UPLOAD_DIR);
     let names: string[] = [];
+    let dir: string | null = null;
     try {
-      names = await readdir(dir);
+      dir = await workspaceUploadDir(cwd, false);
+      if (dir) names = await readdir(dir);
     } catch {
       continue;
     }
+    if (!dir) continue;
     for (const name of names) {
-      if (name === ".gitignore") continue;
-      const prefix = name.slice(0, 8);
-      if (prefixes.has(prefix)) continue;
+      /* Only copies Glassys made: regular files, named like one, never a link or a folder. */
+      if (!COPY_NAME.test(name) || prefixes.has(name.slice(0, 8))) continue;
       const file = join(dir, name);
-      let mtime = now;
       try {
-        mtime = (await stat(file)).mtimeMs;
-      } catch {
-        continue;
+        const st = await lstat(file);
+        if (!st.isFile() || now - st.mtimeMs < UNREFERENCED_TTL_MS) continue;
+        await rm(file, { force: true });
+      } catch (err) {
+        log("warn", "could not remove an old attachment copy", { file, error: String(err) });
       }
-      if (now - mtime < UNREFERENCED_TTL_MS) continue;
-      await rm(file, { force: true });
     }
   }
 }

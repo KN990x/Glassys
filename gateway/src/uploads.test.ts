@@ -80,4 +80,40 @@ describe("uploads", () => {
     await gcUploads(Date.now());
     expect(await readdir(join(cwd, ".glassys-uploads"))).not.toContain(copies[0]);
   });
+
+  it("refuses a .glassys-uploads that is a symlink out of the workspace", async () => {
+    const { readdir, readFile, symlink, writeFile } = await import("node:fs/promises");
+    const cwd = await mkdtemp(join(tmpdir(), "glassys-cwdlink-"));
+    const outside = await mkdtemp(join(tmpdir(), "glassys-outside-"));
+    await writeFile(join(outside, ".gitignore"), "keep\n");
+    await symlink(outside, join(cwd, ".glassys-uploads"));
+    const att = await saveUpload(Buffer.from("png-bytes"), "image/png", "shot.png");
+    await expect(materializeAttachments(cwd, [att])).rejects.toThrow(/not a directory/);
+    expect(await readFile(join(outside, ".gitignore"), "utf8")).toBe("keep\n");
+    expect(await readdir(outside)).toEqual([".gitignore"]);
+  });
+
+  it("cleans the workspace copies without following links or tripping on folders", async () => {
+    const { mkdir, readdir, symlink, utimes, writeFile } = await import("node:fs/promises");
+    const YAML = (await import("yaml")).default;
+    const { defaultConfig } = await import("@glassys/protocol");
+    const cwd = await mkdtemp(join(tmpdir(), "glassys-cwdgc-"));
+    const outside = await mkdtemp(join(tmpdir(), "glassys-gcout-"));
+    const cfg = defaultConfig();
+    cfg.agent.cwd = cwd;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const up = join(cwd, ".glassys-uploads");
+    await mkdir(up);
+    const old = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    await writeFile(join(outside, "precious.txt"), "x");
+    await utimes(join(outside, "precious.txt"), old, old);
+    await symlink(join(outside, "precious.txt"), join(up, "deadbeef-link.png"));
+    await mkdir(join(up, "abcdef12-folder"));
+    await writeFile(join(up, "notes.txt"), "operator file");
+    await utimes(join(up, "notes.txt"), old, old);
+    const { gcUploads } = await import("./uploads.js");
+    await expect(gcUploads(Date.now())).resolves.toBeUndefined();
+    expect(await readdir(outside)).toEqual(["precious.txt"]);
+    expect((await readdir(up)).sort()).toEqual(["abcdef12-folder", "deadbeef-link.png", "notes.txt"]);
+  });
 });
