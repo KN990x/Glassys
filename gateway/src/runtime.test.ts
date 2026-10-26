@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import { pendingRun, type Adapter, type AdapterSession } from "@glassys/adapter-contract";
+import { CANCEL_ESCALATE_MS, pendingRun, type Adapter, type AdapterSession } from "@glassys/adapter-contract";
 import { defaultConfig, type ServerMessage } from "@glassys/protocol";
 
 const control = vi.hoisted(() => {
@@ -173,6 +173,11 @@ describe("runtime queue", () => {
     await waitStartupResumeForTests();
     expect(control.creates).toBe(0);
     expect((await loadState()).agentId).toBe("agent-old");
+  });
+
+  it("waits on a cancelled run longer than an adapter waits before closing it", async () => {
+    const { DEFAULT_RUN_CANCEL_TIMEOUT_MS } = await import("./runtime.js");
+    expect(DEFAULT_RUN_CANCEL_TIMEOUT_MS).toBeGreaterThan(CANCEL_ESCALATE_MS);
   });
 
   it("rejects messages before onboarding is complete", async () => {
@@ -538,6 +543,55 @@ describe("runtime queue", () => {
     }
   });
 
+  it("ends a run once when the adapter reports its failure twice", async () => {
+    const origCreate = fakeAdapter.create.bind(fakeAdapter);
+    fakeAdapter.create = async () => ({
+      agentId: "agent-twice",
+      async send(text, onEvent) {
+        return pendingRun(`run-${text}`, async () => {
+          onEvent({ type: "run.error", message: "quota", phase: "run" });
+          onEvent({ type: "run.error", message: "quota", phase: "run" });
+          return "finished";
+        });
+      },
+      async dispose() {
+        /* noop */
+      },
+    });
+    try {
+      const { enqueueMessage, readTranscript, drainEmit, runtimeBusy } = await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(() => !runtimeBusy());
+      await drainEmit();
+      const events = await readTranscript();
+      expect(events.filter((e) => e.type === "run.error")).toHaveLength(1);
+      expect(events.some((e) => e.type === "run.done")).toBe(false);
+    } finally {
+      fakeAdapter.create = origCreate;
+    }
+  });
+
+  it("starts a run that fails before it has a session, so its end closes a run", async () => {
+    const origCreate = fakeAdapter.create.bind(fakeAdapter);
+    fakeAdapter.create = async () => {
+      throw new Error("no agent today");
+    };
+    try {
+      const { enqueueMessage, readTranscript, drainEmit, runtimeBusy } = await import("./runtime.js");
+      await enqueueMessage("one");
+      await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.error"));
+      await waitUntil(() => !runtimeBusy());
+      await drainEmit();
+      const events = await readTranscript();
+      const message = events.find((e) => e.type === "user.message");
+      const types = events.map((e) => e.type).filter((t) => t.startsWith("run."));
+      expect(types).toEqual(["run.start", "run.error"]);
+      expect(events.find((e) => e.type === "run.start")).toMatchObject({ messageId: message && "id" in message ? message.id : "?" });
+    } finally {
+      fakeAdapter.create = origCreate;
+    }
+  });
+
   it("keeps draining the queue when a run throws", async () => {
     const origCreate = fakeAdapter.create.bind(fakeAdapter);
     let boom = true;
@@ -756,7 +810,9 @@ describe("runtime queue", () => {
       const { enqueueMessage, cancelRun, readTranscript, drainEmit } = await import("./runtime.js");
       void enqueueMessage("one");
       await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
-      await expect(cancelRun()).resolves.toBeUndefined();
+      const told: string[] = [];
+      await expect(cancelRun((m) => told.push(m))).resolves.toBeUndefined();
+      expect(told).toEqual(["Cancel failed: cannot cancel"]);
       control.go();
       await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.cancelled"));
       await drainEmit();
@@ -822,6 +878,14 @@ describe("runtime queue", () => {
       spy.mockRestore();
       await chmod(liveTranscriptPath(), 0o600);
     }
+    /* What could not be written is kept and lands once the disk takes it again. */
+    const { flushLiveTranscript } = await import("./threads.js");
+    await flushLiveTranscript();
+    const saved = await readTranscript();
+    expect(saved.some((e) => e.type === "user.message" && e.text === "two")).toBe(true);
+    expect(saved.some((e) => e.type === "text.delta" && e.text === "echo:two")).toBe(true);
+    const seqs = saved.flatMap((e) => (typeof e.seq === "number" ? [e.seq] : []));
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
   });
 
   it("refuses to switch to a thread whose folder is gone, without leaving the live one", async () => {

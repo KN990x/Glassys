@@ -156,6 +156,7 @@ function abortStartingRun(): void {
 
 export const MAX_QUEUE = 32;
 export { MAX_ATTACHMENTS };
+/** Above the adapters' CANCEL_ESCALATE_MS, so their interrupt-then-close runs before this gives up. */
 export const DEFAULT_RUN_CANCEL_TIMEOUT_MS = 15_000;
 export const DEFAULT_ENQUEUE_ROTATING_RETRIES = 200;
 let runCancelTimeoutMs = DEFAULT_RUN_CANCEL_TIMEOUT_MS;
@@ -662,7 +663,7 @@ async function processQueue(): Promise<void> {
         } catch (err) {
           log("error", "runOnce failed", { error: String(err) });
           try {
-            await emit({
+            await endRun(item.job, {
               type: "run.error",
               message: err instanceof Error ? err.message : String(err),
               phase: "run",
@@ -697,20 +698,35 @@ async function processQueue(): Promise<void> {
       runStartedAt = undefined;
     });
     log("error", "processQueue crashed", { error: String(err) });
-    try {
-      await emit({
-        type: "run.error",
-        message: err instanceof Error ? err.message : String(err),
-        phase: "run",
-      });
-    } catch (emitErr) {
-      log("error", "emit after processQueue crash failed", { error: String(emitErr) });
-    }
+    /* Outside any run (those end in runOnce's own catch): tell the screens, keep it out of the thread. */
+    hub.broadcast({
+      type: "notice",
+      level: "error",
+      message: err instanceof Error ? err.message : String(err),
+      about: "agent",
+    });
     /* Try again, but not in a tight loop if whatever crashed it keeps failing. */
     queueCrashes += 1;
     const wait = Math.min(30_000, 250 * 2 ** Math.min(queueCrashes - 1, 7));
     setTimeout(() => void processQueue().catch((next) => log("error", "processQueue", { error: String(next) })), wait).unref?.();
   }
+}
+
+/** The message whose run.start went out last: every end of a run is preceded by its start. */
+let startedMessageId: string | null = null;
+
+async function startRun(job: QueueJob): Promise<void> {
+  startedMessageId = job.id;
+  await emit({ type: "run.start", runId: randomUUID(), messageId: job.id });
+}
+
+/**
+ * End `job`'s run. One that failed or was cancelled before it got going (no session yet, a crash)
+ * gets its run.start first, so the end has a run to close and the message shows as answered.
+ */
+async function endRun(job: QueueJob, end: ServerMessage): Promise<void> {
+  if (startedMessageId !== job.id) await startRun(job);
+  await emit(end);
 }
 
 async function runOnce(job: QueueJob, gen: number): Promise<void> {
@@ -725,15 +741,15 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       handle = await abortable(ensureSessionShared(job), starting.signal);
     } catch (err) {
       if (err instanceof RunAborted || cancelGeneration !== gen) {
-        await emit({ type: "run.cancelled" });
+        await endRun(job, { type: "run.cancelled" });
         return;
       }
-      await emit({ type: "run.error", message: err instanceof Error ? err.message : String(err), phase: "startup" });
+      await endRun(job, { type: "run.error", message: err instanceof Error ? err.message : String(err), phase: "startup" });
       return;
     }
 
     if (cancelGeneration !== gen) {
-      await emit({ type: "run.cancelled" });
+      await endRun(job, { type: "run.cancelled" });
       return;
     }
 
@@ -753,7 +769,11 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
       lastEventAt = nowFn();
       /* Output again: a later silence deserves its own warning. */
       stalledEmitted = false;
-      if (event.type === "run.error") sawRunError = true;
+      if (event.type === "run.error") {
+        /* One end per run: OpenCode and Codex can each report the same failure from two events. */
+        if (sawRunError) return;
+        sawRunError = true;
+      }
       if (event.type === "thinking.delta" && !thinkingOpen) {
         thinkingOpen = true;
         closedByRuntime = false;
@@ -790,11 +810,10 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
     };
 
     const cfg = await loadConfig();
-    const runId = randomUUID();
     runStartedAt = nowFn();
     lastEventAt = nowFn();
     resetPushRunFlags();
-    await emit({ type: "run.start", runId, messageId: job.id });
+    await startRun(job);
     await broadcastSession();
     const stallSeconds = cfg.session.stallSeconds;
     if (stallSeconds > 0) {
@@ -889,7 +908,7 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
             phase: failure instanceof AdapterError ? failure.phase : "run",
           });
         }
-      } else await emit({ type: "run.done" });
+      } else if (!sawRunError) await emit({ type: "run.done" });
     } catch (err) {
       if (cancelGeneration !== gen) {
         await closeThinkingIfOpen();
@@ -969,16 +988,8 @@ export async function enqueueMessage(
       });
     } catch (err) {
       log("error", "persist user.message failed", { error: String(err) });
-      try {
-        await emit({
-          type: "run.error",
-          message: err instanceof Error ? err.message : String(err),
-          phase: "startup",
-        });
-      } catch {
-        /* already logged */
-      }
-      return false;
+      /* No run began: a refusal for the sender, not a run.error in the conversation. */
+      return reject(err instanceof Error ? err.message : String(err));
     }
 
     const queued = await withQueueLock(async () => {
@@ -1018,7 +1029,11 @@ export async function cancelQueued(id: string): Promise<void> {
   await broadcastQueue();
 }
 
-export async function cancelRun(): Promise<void> {
+/**
+ * Cancel the run in flight. The run still ends (as cancelled, or after the cancel timeout) when the
+ * adapter's own cancel fails; `onFailure` tells whoever asked that the agent did not take it.
+ */
+export async function cancelRun(onFailure?: (message: string) => void): Promise<void> {
   bumpCancelGeneration();
   if (!currentRun) {
     abortStartingRun();
@@ -1028,6 +1043,7 @@ export async function cancelRun(): Promise<void> {
     await currentRun.cancel();
   } catch (err) {
     log("warn", "cancel failed", { error: String(err) });
+    onFailure?.(`Cancel failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

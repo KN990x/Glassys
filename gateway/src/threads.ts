@@ -213,6 +213,8 @@ export async function ensureLiveThread(): Promise<string> {
 export const TRANSCRIPT_FLUSH_MS = 100;
 
 let pending: TranscriptEvent[] = [];
+/** Events kept in memory while the transcript cannot be written; the oldest go first past this. */
+const MAX_UNWRITTEN_EVENTS = 5_000;
 let pendingThread: string | null = null;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 /** Last seq handed out, and the thread it belongs to (read from the file when the thread changes). */
@@ -248,7 +250,20 @@ async function flushUnlocked(): Promise<void> {
   const id = pendingThread;
   const batch = pending;
   pending = [];
-  await appendLines(id, batch.map((e) => `${JSON.stringify(e)}\n`).join(""));
+  try {
+    await appendLines(id, batch.map((e) => `${JSON.stringify(e)}\n`).join(""));
+  } catch (err) {
+    /*
+     * Those events already went to the screens with their seq; dropped here, a reload would show a
+     * hole. Keep them for the next flush (a disk that filled up may have room again), bounded so a
+     * disk that never recovers cannot fill the memory too.
+     */
+    if (pendingThread === id) {
+      pending = batch.concat(pending);
+      if (pending.length > MAX_UNWRITTEN_EVENTS) pending.splice(0, pending.length - MAX_UNWRITTEN_EVENTS);
+    }
+    throw err;
+  }
 }
 
 /** Write whatever the live thread still holds in memory. */
