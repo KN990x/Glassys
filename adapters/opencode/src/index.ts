@@ -313,8 +313,12 @@ class OpencodeSession implements AdapterSession {
             usage.seen = true;
             continue;
           }
+          if (ev.type === "run.error") {
+            /* The same failure arrives on message.updated and on session.error: report it once. */
+            if (failed) continue;
+            failed = true;
+          }
           onEvent(ev);
-          if (ev.type === "run.error") failed = true;
         }
         if (isOpencodeError(event)) failed = true;
       };

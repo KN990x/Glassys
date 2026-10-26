@@ -121,3 +121,18 @@ describe("codex effort, images and lost threads", () => {
     expect(session.agentId).toBe("new");
   });
 });
+
+describe("codex failures", () => {
+  it("reports a stream error and the turn.failed after it once", async () => {
+    scripted.push([
+      { type: "thread.started", thread_id: "thread-e" },
+      { type: "error", message: "quota exceeded" },
+      { type: "turn.failed", error: { message: "quota exceeded" } },
+    ]);
+    const session = await codexAdapter.create(opts);
+    const events: Array<{ type: string }> = [];
+    const status = await (await session.send("hi", (e) => events.push(e as { type: string }))).wait();
+    expect(status).toBe("error");
+    expect(events.filter((e) => e.type === "run.error")).toHaveLength(1);
+  });
+});

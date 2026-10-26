@@ -156,8 +156,12 @@ class CodexSession implements AdapterSession {
         if (tid) this.agentId = tid;
         recordRaw?.(event);
         for (const ev of mapCodexJsonl(event, state)) {
+          if (ev.type === "run.error") {
+            /* A stream `error` is followed by `turn.failed` for the same failure: report it once. */
+            if (status === "error") continue;
+            status = "error";
+          }
           onEvent(ev);
-          if (ev.type === "run.error") status = "error";
         }
       }
       if (this.thread.id) this.agentId = this.thread.id;

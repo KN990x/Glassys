@@ -109,6 +109,29 @@ describe("opencode usage", () => {
   });
 });
 
+describe("opencode failures", () => {
+  it("reports a failure seen on message.updated and session.error once", async () => {
+    const error = { name: "ProviderAuthError", data: { message: "bad key" } };
+    turnEvents = [
+      {
+        type: "message.updated",
+        properties: { info: { id: "msg_e", sessionID: "ses_1", role: "assistant", time: { created: 1 }, error } },
+      },
+      { type: "session.error", properties: { sessionID: "ses_1", error } },
+    ];
+    try {
+      const session = await opencodeAdapter.create(opts);
+      const events: Array<{ type: string }> = [];
+      const run = await session.send("hi", (e) => events.push(e as { type: string }));
+      await run.wait();
+      expect(events.filter((e) => e.type === "run.error")).toHaveLength(1);
+      await session.dispose();
+    } finally {
+      turnEvents = [];
+    }
+  });
+});
+
 describe("opencode idle timeout", () => {
   it("aborts the prompt in the server before failing the run", async () => {
     const { setOpencodeIdleMsForTests } = await import("./index.js");
