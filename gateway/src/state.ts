@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import { readJsonFile } from "./json-file.js";
 import { writeFileAtomic } from "./atomic.js";
 import { PROFILE_ID } from "@glassys/protocol";
 import { paths } from "./paths.js";
@@ -39,19 +40,14 @@ const empty = (): PersistedState => ({
 });
 
 async function readUnlocked(): Promise<PersistedState> {
-  try {
-    const raw = await readFile(paths.state(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<PersistedState>;
-    return {
-      ...empty(),
-      ...parsed,
-      recentCwds: Array.isArray(parsed.recentCwds) ? parsed.recentCwds.filter((p) => typeof p === "string") : [],
-      pinnedCwds: Array.isArray(parsed.pinnedCwds) ? parsed.pinnedCwds.filter((p) => typeof p === "string") : [],
-      usage: { ...emptyUsage(), ...(parsed.usage && typeof parsed.usage === "object" ? parsed.usage : {}) },
-    };
-  } catch {
-    return empty();
-  }
+  const parsed = (await readJsonFile<Partial<PersistedState> | null>(paths.state())) ?? {};
+  return {
+    ...empty(),
+    ...parsed,
+    recentCwds: Array.isArray(parsed.recentCwds) ? parsed.recentCwds.filter((p) => typeof p === "string") : [],
+    pinnedCwds: Array.isArray(parsed.pinnedCwds) ? parsed.pinnedCwds.filter((p) => typeof p === "string") : [],
+    usage: { ...emptyUsage(), ...(parsed.usage && typeof parsed.usage === "object" ? parsed.usage : {}) },
+  };
 }
 
 export async function loadState(): Promise<PersistedState> {

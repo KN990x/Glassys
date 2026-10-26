@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import { readJsonFile } from "./json-file.js";
 import { dirname } from "node:path";
 import { writeFileAtomic } from "./atomic.js";
 import { createMutex } from "./lock.js";
@@ -24,12 +25,9 @@ async function load(): Promise<Map<string, number>> {
   const path = paths.revokedSessions();
   if (cache?.path === path) return cache.entries;
   let entries = new Map<string, number>();
-  try {
-    const raw = JSON.parse(await readFile(path, "utf8")) as { revoked?: Record<string, number> };
-    entries = new Map(Object.entries(raw.revoked ?? {}).filter(([, exp]) => typeof exp === "number"));
-  } catch {
-    /* none yet */
-  }
+  /* An unreadable list must not quietly bring revoked sessions back to life. */
+  const raw = await readJsonFile<{ revoked?: Record<string, number> } | null>(path);
+  entries = new Map(Object.entries(raw?.revoked ?? {}).filter(([, exp]) => typeof exp === "number"));
   cache = { path, entries: prune(entries) };
   return cache.entries;
 }

@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import { readJsonFile } from "./json-file.js";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 import { writeFileAtomic } from "./atomic.js";
@@ -52,12 +53,8 @@ export function resetPushRunFlags(): void {
 }
 
 async function readSubs(): Promise<PushSubscriptionRecord[]> {
-  try {
-    const raw = JSON.parse(await readFile(paths.pushSubscriptions(), "utf8")) as { subscriptions?: PushSubscriptionRecord[] };
-    return Array.isArray(raw.subscriptions) ? raw.subscriptions.filter((s) => s && typeof s.endpoint === "string") : [];
-  } catch {
-    return [];
-  }
+  const raw = await readJsonFile<{ subscriptions?: PushSubscriptionRecord[] } | null>(paths.pushSubscriptions());
+  return Array.isArray(raw?.subscriptions) ? raw.subscriptions.filter((s) => s && typeof s.endpoint === "string") : [];
 }
 
 async function writeSubs(subscriptions: PushSubscriptionRecord[]): Promise<void> {

@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import { readJsonFile } from "./json-file.js";
 import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
@@ -36,17 +37,17 @@ const empty = (): SecretsFile => ({ jwtSecret: "", operatorPasswordHash: "", jwt
 
 let cache: { path: string; file: SecretsFile } | null = null;
 
+/** A missing file is a fresh install; an unreadable one throws, so nothing regenerates over it. */
 async function readDisk(): Promise<SecretsFile> {
-  try {
-    const raw = await readFile(paths.secrets(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<SecretsFile> & { cursorApiKey?: string };
-    const adapters = { ...(parsed.adapters ?? {}) };
-    if (parsed.cursorApiKey && !adapters.cursor?.apiKey) adapters.cursor = { apiKey: parsed.cursorApiKey };
-    const jwtEpoch = typeof parsed.jwtEpoch === "number" && Number.isInteger(parsed.jwtEpoch) ? parsed.jwtEpoch : 0;
-    return { ...empty(), ...parsed, jwtEpoch, adapters, vapid: parsed.vapid };
-  } catch {
-    return empty();
+  const parsed = await readJsonFile<Partial<SecretsFile> & { cursorApiKey?: string }>(paths.secrets());
+  if (parsed === undefined) return empty();
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${paths.secrets()} does not hold a JSON object; fix or remove it`);
   }
+  const adapters = { ...(parsed.adapters ?? {}) };
+  if (parsed.cursorApiKey && !adapters.cursor?.apiKey) adapters.cursor = { apiKey: parsed.cursorApiKey };
+  const jwtEpoch = typeof parsed.jwtEpoch === "number" && Number.isInteger(parsed.jwtEpoch) ? parsed.jwtEpoch : 0;
+  return { ...empty(), ...parsed, jwtEpoch, adapters, vapid: parsed.vapid };
 }
 
 export const MIN_JWT_SECRET_BYTES = 32;

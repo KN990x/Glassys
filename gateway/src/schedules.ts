@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import { readJsonFile } from "./json-file.js";
 import { writeFileAtomic } from "./atomic.js";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -64,12 +65,8 @@ function nowMs(): number {
 }
 
 async function readJobs(): Promise<ScheduleJob[]> {
-  try {
-    const raw = JSON.parse(await readFile(paths.schedules(), "utf8")) as { jobs?: ScheduleJob[] };
-    return Array.isArray(raw.jobs) ? raw.jobs.filter((j) => j && typeof j.text === "string") : [];
-  } catch {
-    return [];
-  }
+  const raw = await readJsonFile<{ jobs?: ScheduleJob[] } | null>(paths.schedules());
+  return Array.isArray(raw?.jobs) ? raw.jobs.filter((j) => j && typeof j.text === "string") : [];
 }
 
 async function writeJobs(jobs: ScheduleJob[]): Promise<void> {
