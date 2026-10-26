@@ -15,11 +15,14 @@ import {
   type AdapterSession,
   type PromptAttachment,
 } from "@glassys/adapter-contract";
-import { mergeModelCatalog, optionAutoRun, optionString, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
+import { effectivePermissionMode, mergeModelCatalog, optionAutoRun, type AgentConfig, type ModelCatalogItem } from "@glassys/protocol";
 import { claudeMapState, claudeRunStatus, claudeSessionId, isClaudeResult, mapClaudeMessage } from "./mapper.js";
 
 /** Raw SDK events to a JSONL file when GLASSYS_RECORD_FIXTURES is set (see fixtureRecorder). */
 const recordRaw = fixtureRecorder("claude");
+
+/** Picked when the operator has not chosen one; the catalog below lists it too. */
+const CLAUDE_DEFAULT_MODEL = "sonnet";
 
 export const CLAUDE_STATIC_CATALOG: ModelCatalogItem[] = [
   { id: "opus", displayName: "Opus" },
@@ -169,23 +172,15 @@ function protectedPathHooks(opts: AdapterCreateOptions) {
   };
 }
 
-/**
- * The permission mode Claude runs under. Auto-run off never yields `bypassPermissions`, whatever
- * mode was stored: that pairing would let every tool run while Settings says auto-run is off.
- */
-export function claudePermissionMode(options: Record<string, unknown> | undefined): string {
-  const autoRun = optionAutoRun(options);
-  const stored = optionString(options, "permissionMode", "");
-  if (!autoRun) return stored && stored !== "bypassPermissions" ? stored : "dontAsk";
-  return stored || "bypassPermissions";
-}
+/** The permission mode Claude runs under: the protocol's rule, which the PWA shows too. */
+export const claudePermissionMode = effectivePermissionMode;
 
 function queryOptions(opts: AdapterCreateOptions, extra: Record<string, unknown> = {}) {
   const permissionMode = claudePermissionMode(opts.options);
   return {
     ...protectedPathHooks(opts),
     cwd: opts.cwd,
-    model: opts.model || "sonnet",
+    model: opts.model || CLAUDE_DEFAULT_MODEL,
     includePartialMessages: true,
     permissionMode,
     allowDangerouslySkipPermissions: permissionMode === "bypassPermissions",
@@ -218,7 +213,7 @@ class ClaudeSession implements AdapterSession {
     opts: AdapterCreateOptions,
   ) {
     this.agentId = agentId;
-    this.model = opts.model || "sonnet";
+    this.model = opts.model || CLAUDE_DEFAULT_MODEL;
     this.opts = opts;
     this.resumeUnconfirmed = usableSessionId(agentId);
   }
@@ -419,14 +414,14 @@ export const claudeAdapter: Adapter = {
     toolConfirmation: "permission-mode",
     attachments: true,
     auth: { kind: "api-key", envNames: ["ANTHROPIC_API_KEY"] },
-    defaultModel: { id: "sonnet", params: [] },
+    defaultModel: { id: CLAUDE_DEFAULT_MODEL, params: [] },
     liveCatalog: true,
   },
 
   normalizeConfig(agent: AgentConfig): AgentConfig {
     return {
       ...agent,
-      model: agent.model || "sonnet",
+      model: agent.model || CLAUDE_DEFAULT_MODEL,
       options: {
         ...agent.options,
         autoRun: optionAutoRun(agent.options),

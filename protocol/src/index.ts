@@ -566,6 +566,17 @@ export function optionAutoRun(options: Record<string, unknown> | undefined): boo
   return optionSafetyBool(options, "autoRun", true, false);
 }
 
+/**
+ * The permission mode Claude runs under (`permissionMode` in its options), decided in one place for
+ * the adapter and every PWA control. Auto-run off never yields `bypassPermissions`, whatever was
+ * stored: that pairing would let every tool run while Settings says auto-run is off.
+ */
+export function effectivePermissionMode(options: Record<string, unknown> | undefined): string {
+  const stored = optionString(options, "permissionMode", "");
+  if (!optionAutoRun(options)) return stored && stored !== "bypassPermissions" ? stored : "dontAsk";
+  return stored || "bypassPermissions";
+}
+
 export function optionString(options: Record<string, unknown> | undefined, key: string, fallback = ""): string {
   const v = options?.[key];
   return typeof v === "string" ? v : fallback;
