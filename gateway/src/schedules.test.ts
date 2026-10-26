@@ -11,7 +11,9 @@ import {
   listSchedules,
   previewNextRun,
   setScheduleIdlePollMsForTests,
+  setScheduleArmRetryMsForTests,
   setScheduleIdleWaitMsForTests,
+  startSchedules,
   stopSchedules,
   tickSchedulesForTests,
 } from "./schedules.js";
@@ -30,6 +32,7 @@ describe("schedules", () => {
     bindScheduleRuntime(null);
     setScheduleIdlePollMsForTests(500);
     setScheduleIdleWaitMsForTests();
+    setScheduleArmRetryMsForTests();
   });
 
   it("persists cron and at jobs", async () => {
@@ -304,6 +307,32 @@ describe("schedules", () => {
     await tickSchedulesForTests();
     await tickSchedulesForTests();
     expect(enqueued).toEqual(["minutely", "later"]);
+  });
+
+  it("keeps looking at a schedules file that stopped parsing, and fires once it is fixed", async () => {
+    const { writeFile } = await import("node:fs/promises");
+    const enqueued: string[] = [];
+    bindScheduleRuntime({
+      enqueue: async (text) => {
+        enqueued.push(text);
+        return true;
+      },
+      isIdle: () => true,
+      liveThreadId: () => null,
+      liveCwd: async () => dir,
+      switchThread: async () => undefined,
+      applyCwd: async () => undefined,
+      now: () => Date.now(),
+    });
+    setScheduleArmRetryMsForTests(20);
+    await writeFile(join(dir, "schedules.json"), "{ not json", "utf8");
+    startSchedules();
+    await new Promise((r) => setTimeout(r, 50));
+    const job = { id: "j1", text: "fixed", cwd: dir, at: new Date(Date.now() - 1000).toISOString(), enabled: true, createdAt: new Date().toISOString() };
+    await writeFile(join(dir, "schedules.json"), JSON.stringify({ jobs: [job] }), "utf8");
+    const start = Date.now();
+    while (!enqueued.length && Date.now() - start < 2000) await new Promise((r) => setTimeout(r, 10));
+    expect(enqueued).toEqual(["fixed"]);
   });
 
   it("skips a job deleted while it waited for the gateway to go idle", async () => {

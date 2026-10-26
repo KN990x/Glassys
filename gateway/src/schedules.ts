@@ -248,6 +248,11 @@ async function soonestDue(): Promise<{ job: ScheduleJob; at: number } | null> {
 }
 
 let armGeneration = 0;
+let armRetryMs = 60_000;
+
+export function setScheduleArmRetryMsForTests(ms?: number): void {
+  armRetryMs = ms ?? 60_000;
+}
 /**
  * The slot the timer was armed for. Croner's `nextRun(now)` skips a slot once `now` reaches it, so
  * a timer that lands on (or just after) its slot must fire what it was armed for instead of asking
@@ -269,7 +274,16 @@ function armTimer(): void {
     timer = setTimeout(() => {
       tickSchedules().catch((err) => log("warn", "schedule tick failed", { error: String(err) }));
     }, Math.min(wait, 60_000));
-  })().catch((err) => log("warn", "schedule arm failed", { error: String(err) }));
+  })().catch((err) => {
+    /*
+     * Most often schedules.json no longer parses. Say so loudly, and look again in a minute
+     * rather than never: a fixed file, or the next save from Settings, brings the jobs back.
+     */
+    log("error", "schedules could not be read; retrying in 60s", { path: paths.schedules(), error: String(err) });
+    if (gen !== armGeneration) return;
+    timer = setTimeout(armTimer, armRetryMs);
+    timer.unref?.();
+  });
 }
 
 async function patchJob(id: string, patch: Partial<ScheduleJob>): Promise<void> {
