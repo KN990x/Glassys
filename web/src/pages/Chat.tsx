@@ -1099,7 +1099,7 @@ export function Chat({
         </>
       }
     >
-      {view !== "chat" ? (
+      {view !== "chat" && (
         <Suspense fallback={<Skeleton rows={8} label={t("host.loading")} />}>
           <HostViews
             view={view}
@@ -1112,104 +1112,105 @@ export function Chat({
             onMention={mentionInComposer}
           />
         </Suspense>
-      ) : (
-        <>
-          <ChatMain
-            alerts={alerts}
-            notices={notices}
-            scrollerRef={scroller}
-            onScroll={() => {
-              const el = scroller.current;
-              if (!el) return;
-              const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
-              pinToBottom.current = bottom;
-              setAtBottom(bottom);
-            }}
-            onResize={() => {
-              /* A pinned transcript stays pinned when a banner above it or a late layout changes its size. */
-              if (pinToBottom.current) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-            }}
-            atBottom={atBottom}
-            onJumpBottom={() => {
-              pinToBottom.current = true;
-              setAtBottom(true);
-              scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-            }}
-            transcript={{
-              blocks: visibleBlocks,
-              allBlocks: blocks,
-              snapshotReady,
-              connecting: conn !== "reconnecting",
-              failed: conn === "error",
-              search,
-              queuedIds,
-              locale: config.space.locale,
-              thinkingDefault: config.display.thinkingDefault,
-              shellLines: config.display.shellLinesVisible,
-              showDiff: config.display.diffPreview,
-              opsChips,
-              onTemplate: insertTemplate,
-              hostLabel,
-              cwd: config.agent.cwd,
-              adapterName: currentAdapter?.displayName || config.agent.adapter,
-              busy,
-            }}
-          />
-          <Composer
-            config={config}
-            onConfig={onConfig}
-            caps={caps}
-            adapterName={currentAdapter?.displayName || config.agent.adapter}
-            models={models}
-            modelsLoading={!modelsLoaded}
-            modelId={pickerModel}
-            modelParams={pickerParams}
-            onModel={(id, params) => void changeModel(id, params)}
-            fallbackCatalog={modelSource === "fallback"}
-            catalogError={catalogError}
-            text={text}
-            onText={setText}
-            drafts={drafts}
-            onRemoveDraft={(id) => setDrafts((cur) => cur.filter((d) => d.id !== id))}
-            onAttach={(files) => void onAttach(files)}
-            onUnsupported={() => setAttachError(t("error.uploadMime"))}
-            fileRef={fileRef}
-            composerRef={composer}
-            onSubmit={submit}
-            onResize={(el) => resizeComposer(el)}
-            canSend={canSend}
-            busy={busy}
-            waiting={waiting}
-            onCancel={cancelRun}
-            queue={queueItems}
-            onQueueCancel={(id) => {
-              if (!send({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
-            }}
-            templates={config.prompts?.templates ?? []}
-            onTemplate={insertTemplate}
-            slashOpen={slashOpen}
-            setSlashOpen={(next) => {
-              setSlashOpen(next);
-              if (next) setPaletteQuery(slashQuery(text) ?? "");
-            }}
-            paletteOpen={paletteOpen}
-            onPalette={() => {
-              setSlashOpen(false);
-              setPaletteQuery("");
-              setPaletteOpen(true);
-            }}
-            status={
-              busy ? (
-                <RunStatus
-                  startedAt={runStartedAt}
-                  step={lastTool && lastTool.kind === "tool" ? lastTool.title : undefined}
-                  canCancel={caps?.cancel !== false}
-                />
-              ) : null
-            }
-          />
-        </>
       )}
+      {/* Kept mounted behind a host view: coming back used to re-parse every markdown block and
+          lose the scroll position. `display: contents` keeps the layout as if it were not there. */}
+      <div className="chat-pane" hidden={view !== "chat"}>
+        <ChatMain
+          alerts={alerts}
+          notices={notices}
+          scrollerRef={scroller}
+          onScroll={() => {
+            const el = scroller.current;
+            if (!el) return;
+            const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+            pinToBottom.current = bottom;
+            setAtBottom(bottom);
+          }}
+          onResize={() => {
+            /* A pinned transcript stays pinned when a banner above it or a late layout changes its size. */
+            if (pinToBottom.current) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+          }}
+          atBottom={atBottom}
+          onJumpBottom={() => {
+            pinToBottom.current = true;
+            setAtBottom(true);
+            scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+          }}
+          transcript={{
+            blocks: visibleBlocks,
+            allBlocks: blocks,
+            snapshotReady,
+            connecting: conn !== "reconnecting",
+            failed: conn === "error",
+            search,
+            queuedIds,
+            locale: config.space.locale,
+            thinkingDefault: config.display.thinkingDefault,
+            shellLines: config.display.shellLinesVisible,
+            showDiff: config.display.diffPreview,
+            opsChips,
+            onTemplate: insertTemplate,
+            hostLabel,
+            cwd: config.agent.cwd,
+            adapterName: currentAdapter?.displayName || config.agent.adapter,
+            busy,
+          }}
+        />
+        <Composer
+          config={config}
+          onConfig={onConfig}
+          caps={caps}
+          adapterName={currentAdapter?.displayName || config.agent.adapter}
+          models={models}
+          modelsLoading={!modelsLoaded}
+          modelId={pickerModel}
+          modelParams={pickerParams}
+          onModel={(id, params) => void changeModel(id, params)}
+          fallbackCatalog={modelSource === "fallback"}
+          catalogError={catalogError}
+          text={text}
+          onText={setText}
+          drafts={drafts}
+          onRemoveDraft={(id) => setDrafts((cur) => cur.filter((d) => d.id !== id))}
+          onAttach={(files) => void onAttach(files)}
+          onUnsupported={() => setAttachError(t("error.uploadMime"))}
+          fileRef={fileRef}
+          composerRef={composer}
+          onSubmit={submit}
+          onResize={(el) => resizeComposer(el)}
+          canSend={canSend}
+          busy={busy}
+          waiting={waiting}
+          onCancel={cancelRun}
+          queue={queueItems}
+          onQueueCancel={(id) => {
+            if (!send({ type: "queue.cancel", id })) setSendError(t("chat.sendFailed"));
+          }}
+          templates={config.prompts?.templates ?? []}
+          onTemplate={insertTemplate}
+          slashOpen={slashOpen}
+          setSlashOpen={(next) => {
+            setSlashOpen(next);
+            if (next) setPaletteQuery(slashQuery(text) ?? "");
+          }}
+          paletteOpen={paletteOpen}
+          onPalette={() => {
+            setSlashOpen(false);
+            setPaletteQuery("");
+            setPaletteOpen(true);
+          }}
+          status={
+            busy ? (
+              <RunStatus
+                startedAt={runStartedAt}
+                step={lastTool && lastTool.kind === "tool" ? lastTool.title : undefined}
+                canCancel={caps?.cancel !== false}
+              />
+            ) : null
+          }
+        />
+      </div>
     </AppShell>
   );
 }

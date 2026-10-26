@@ -1529,6 +1529,10 @@ details label { margin-top: var(--s-2); }
   height: 100%;
 }
 .chat-shell > * { min-width: 0; }
+/* The chat behind a host view stays mounted: no box of its own while shown, none at all hidden. */
+.chat-pane { display: contents; }
+.chat-pane > * { min-width: 0; }
+.chat-pane[hidden] { display: none; }
 .chat-main {
   display: flex;
   flex-direction: column;
