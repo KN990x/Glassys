@@ -83,3 +83,11 @@ export function redactLogExtra(extra?: Record<string, unknown>): Record<string, 
   }
   return out;
 }
+
+/**
+ * A thread or upload id that is safe to put in a path: never empty, never a separator (either
+ * kind: on Windows `\` is one too) and never `..`.
+ */
+export function isSafeId(id: string | undefined | null): id is string {
+  return Boolean(id) && !/[\\/]/.test(id!) && !id!.includes("..");
+}

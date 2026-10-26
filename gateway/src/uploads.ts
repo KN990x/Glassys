@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { MessageAttachment, TranscriptEvent } from "@glassys/protocol";
 import type { PromptAttachment } from "@glassys/adapter-contract";
-import { log, paths } from "./paths.js";
+import { log, paths, isSafeId } from "./paths.js";
 import { HttpError } from "./errors.js";
 import { loadConfig } from "./config.js";
 import { loadState } from "./state.js";
@@ -82,7 +82,7 @@ export async function saveUpload(body: Buffer, mime: string, name: string): Prom
 }
 
 export async function loadUpload(id: string): Promise<StoredUpload | null> {
-  if (!id || id.includes("/") || id.includes("..")) return null;
+  if (!isSafeId(id)) return null;
   try {
     const meta = JSON.parse(await readFile(metaPath(id), "utf8")) as { mime?: string; name?: string };
     const mime = typeof meta.mime === "string" ? meta.mime : "";

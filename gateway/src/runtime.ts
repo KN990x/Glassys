@@ -23,7 +23,7 @@ import { getAdapter, listAdapters, probeAdapter } from "./adapters.js";
 import { cancelLoginJob } from "./adapter-login.js";
 import { invalidateAdapterInfoCache } from "./adapter-info.js";
 import { hub } from "./hub.js";
-import { log, paths } from "./paths.js";
+import { log, paths, isSafeId } from "./paths.js";
 import { loadState, saveState, addUsageTotals } from "./state.js";
 import { appendTranscript, readTranscript, readTranscriptSnapshot } from "./transcript.js";
 import { HttpError, isActiveRunError } from "./errors.js";
@@ -1088,7 +1088,7 @@ async function applyConfigPatchUnlocked(
 }
 
 function assertThreadId(id: string): void {
-  if (!id || id.includes("/") || id.includes("..")) throw new HttpError(400, "invalid thread id");
+  if (!isSafeId(id)) throw new HttpError(400, "invalid thread id");
 }
 
 async function beginIdleThreadOp(): Promise<void> {

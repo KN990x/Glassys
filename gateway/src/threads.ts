@@ -6,7 +6,7 @@ import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentConfig, ModelParam, ThreadSummary, TranscriptEvent } from "@glassys/protocol";
 import { MAX_PINNED_CWDS, PROFILE_ID } from "@glassys/protocol";
-import { paths } from "./paths.js";
+import { paths, isSafeId } from "./paths.js";
 import { createMutex } from "./lock.js";
 import { loadState, saveState } from "./state.js";
 import { loadConfig } from "./config.js";
@@ -482,7 +482,7 @@ export async function refreshLiveTitle(text: string): Promise<void> {
 
 export async function removeThread(id: string): Promise<void> {
   return withThreads(async () => {
-    if (!id || id.includes("/") || id.includes("..")) throw new Error("invalid thread id");
+    if (!isSafeId(id)) throw new Error("invalid thread id");
     if (id === currentThreadId) throw new Error("cannot remove the live thread");
     const meta = await loadMeta(id);
     if (!meta) throw new Error("Thread not found");
@@ -493,7 +493,7 @@ export async function removeThread(id: string): Promise<void> {
 
 export async function renameThread(id: string, title: string): Promise<ThreadMeta> {
   return withThreads(async () => {
-    if (!id || id.includes("/") || id.includes("..")) throw new Error("invalid thread id");
+    if (!isSafeId(id)) throw new Error("invalid thread id");
     const next = title.trim().replace(/\s+/g, " ").slice(0, 80);
     if (!next) throw new Error("title required");
     const meta = await loadMeta(id);
@@ -505,7 +505,7 @@ export async function renameThread(id: string, title: string): Promise<ThreadMet
 }
 
 export async function readThreadBundle(id: string): Promise<{ meta: ThreadMeta; events: TranscriptEvent[] } | null> {
-  if (!id || id.includes("/") || id.includes("..")) return null;
+  if (!isSafeId(id)) return null;
   if (id === currentThreadId) await flushLiveTranscript();
   const meta = await loadMeta(id);
   if (!meta) return null;
