@@ -18,7 +18,7 @@ import { Callout, Disclosure, SettingGroup, SettingRow, Skeleton, StatusBadge } 
 import { Switch } from "../../components/Switch";
 import { SandboxModeSelect } from "../../components/SandboxModeSelect";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { cwdExposesDataDir, effectivePermissionMode, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
+import { takesApiKey, cwdExposesDataDir, effectivePermissionMode, optionAutoRun, optionBool, sandboxState, optionString, optionStringArray, setOption, setAutoRun, setPermissionMode } from "../../adapterOptions";
 import { riskTone } from "../../components/PermissionChip";
 import { ArgsInput } from "../../components/ArgsInput";
 
@@ -311,56 +311,58 @@ export function AgentTab({
         </SettingGroup>
       )}
 
-      <SettingGroup title={t("wizard.step.credential")}>
-        <SettingRow label={t("settings.credStatus")} hint={caps?.auth.envNames?.length ? caps.auth.envNames.join(", ") : undefined}>
-          <div className="row wrap">
-            {caps?.auth.kind === "sdk-login" &&
-              (auth?.loggedIn ? (
-                <StatusBadge tone="ok" dot>
-                  {auth.email || t("wizard.cred.signedIn")}
-                </StatusBadge>
-              ) : (
-                <StatusBadge dot>{t("wizard.cred.signedOut")}</StatusBadge>
-              ))}
-            {keyConfigured && <StatusBadge tone="ok" dot>{t("wizard.cred.keyConfigured")}</StatusBadge>}
-            {keyFromEnv && <StatusBadge tone="warn" dot>{t("settings.cred.fromEnv")}</StatusBadge>}
-          </div>
-        </SettingRow>
-        {caps?.auth.kind === "sdk-login" && (
-          <SettingRow label={t("wizard.cred.login")} hint={t("wizard.cred.loginHint")}>
-            <SdkLoginControls
-              adapterId={draft.agent.adapter}
-              onSignedIn={async () => {
-                setAuth(await api.adapterStatus(draft.agent.adapter));
-                await loadModels(draft.agent.adapter);
-              }}
+      {takesApiKey(caps?.auth) && (
+        <SettingGroup title={t("wizard.step.credential")}>
+          <SettingRow label={t("settings.credStatus")} hint={caps?.auth.envNames?.length ? caps.auth.envNames.join(", ") : undefined}>
+            <div className="row wrap">
+              {caps?.auth.kind === "sdk-login" &&
+                (auth?.loggedIn ? (
+                  <StatusBadge tone="ok" dot>
+                    {auth.email || t("wizard.cred.signedIn")}
+                  </StatusBadge>
+                ) : (
+                  <StatusBadge dot>{t("wizard.cred.signedOut")}</StatusBadge>
+                ))}
+              {keyConfigured && <StatusBadge tone="ok" dot>{t("wizard.cred.keyConfigured")}</StatusBadge>}
+              {keyFromEnv && <StatusBadge tone="warn" dot>{t("settings.cred.fromEnv")}</StatusBadge>}
+            </div>
+          </SettingRow>
+          {caps?.auth.kind === "sdk-login" && (
+            <SettingRow label={t("wizard.cred.login")} hint={t("wizard.cred.loginHint")}>
+              <SdkLoginControls
+                adapterId={draft.agent.adapter}
+                onSignedIn={async () => {
+                  setAuth(await api.adapterStatus(draft.agent.adapter));
+                  await loadModels(draft.agent.adapter);
+                }}
+              />
+            </SettingRow>
+          )}
+          <SettingRow label={t("wizard.cred.rotate")} hint={t("wizard.cred.keyHint")} htmlFor="set-api-key">
+            <input
+              id="set-api-key"
+              type="password"
+              autoComplete="off"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
             />
           </SettingRow>
-        )}
-        <SettingRow label={t("wizard.cred.rotate")} hint={t("wizard.cred.keyHint")} htmlFor="set-api-key">
-          <input
-            id="set-api-key"
-            type="password"
-            autoComplete="off"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
-        </SettingRow>
-        {keyConfigured && (
-          <SettingRow label={t("wizard.cred.clearKey")} hint={clearKey ? t("settings.clearKeyWarn") : undefined}>
-            <button
-              type="button"
-              className="danger tiny"
-              onClick={() => {
-                setClearKey(true);
-                setApiKey("");
-              }}
-            >
-              {t("wizard.cred.clearKey")}
-            </button>
-          </SettingRow>
-        )}
-      </SettingGroup>
+          {keyConfigured && (
+            <SettingRow label={t("wizard.cred.clearKey")} hint={clearKey ? t("settings.clearKeyWarn") : undefined}>
+              <button
+                type="button"
+                className="danger tiny"
+                onClick={() => {
+                  setClearKey(true);
+                  setApiKey("");
+                }}
+              >
+                {t("wizard.cred.clearKey")}
+              </button>
+            </SettingRow>
+          )}
+        </SettingGroup>
+      )}
     </>
   );
 }

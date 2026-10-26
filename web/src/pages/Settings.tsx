@@ -13,7 +13,7 @@ import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { paramsForSelection } from "../components/ModelPicker";
-import { defaultOptionsFor, optionString, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
+import { defaultOptionsFor, missingRequiredOption, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { enableWebPush, disableWebPush } from "../push";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -375,7 +375,7 @@ export function Settings({
       setError(t("wizard.adapter.unavailable"));
       return;
     }
-    if (draft.agent.adapter === "acp" && !optionString(draft.agent.options, "command", "").trim()) {
+    if (missingRequiredOption(adapters.find((a) => a.id === draft.agent.adapter)?.capabilities, draft.agent.options)) {
       setError(t("wizard.acp.commandRequired"));
       return;
     }

@@ -78,4 +78,10 @@ describe("wizardStepIds", () => {
     expect(wizardStepIds({ ...caps, models: true })).toContain("model");
     expect(wizardStepIds({ ...caps, discover: true }).slice(0, 2)).toEqual(["adapter", "acp"]);
   });
+
+  it("asks for a key only when the adapter reads one", () => {
+    expect(wizardStepIds({ ...caps, auth: { kind: "cli-binary", envNames: [] } })).not.toContain("credential");
+    expect(wizardStepIds({ ...caps, auth: { kind: "cli-binary", envNames: ["OPENAI_API_KEY"] } })).toContain("credential");
+    expect(wizardStepIds({ ...caps, auth: { kind: "sdk-login", envNames: [] } })).toContain("credential");
+  });
 });

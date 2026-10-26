@@ -17,6 +17,7 @@ describe("operatorError", () => {
     expect(operatorError("Too many schedules", t)).toBe("i18n:error.tooManySchedules");
     expect(operatorError("Invalid cron expression", t)).toBe("i18n:error.invalidCron");
     expect(operatorError("Cancel failed: socket closed", t)).toBe("i18n:error.cancelFailed socket closed");
+    expect(operatorError("ACP (any agent) needs agent.options.command", t)).toBe("i18n:wizard.acp.commandRequired");
     expect(operatorError("model said something", t)).toBe("model said something");
   });
 });

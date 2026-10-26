@@ -6,7 +6,6 @@ const MESSAGE_KEYS: Record<string, string> = {
   "unknown message": "error.unknownMessage",
   "title required": "error.titleRequired",
   "payload too large": "error.payloadTooLarge",
-  "ACP adapter needs agent.options.command (or a registry pick)": "wizard.acp.commandRequired",
   "Onboarding is not complete": "error.onboarding",
   "Attachments could not be read": "error.attachments",
   "Thread not found": "error.threadNotFound",
@@ -43,6 +42,8 @@ export function operatorError(message: string, t: (key: string) => string): stri
   const key = MESSAGE_KEYS[message];
   if (key) return t(key);
   if (/git fetch failed/i.test(message)) return t("error.gitFetch");
+  /* requiredOptions: only ACP names one today, its command. */
+  if (/ needs agent\.options\.command$/.test(message)) return t("wizard.acp.commandRequired");
   /* The gateway's own prefix; what follows is the adapter's error, passed on as it came. */
   if (message.startsWith("Cancel failed: ")) return `${t("error.cancelFailed")} ${message.slice("Cancel failed: ".length)}`;
   return message;

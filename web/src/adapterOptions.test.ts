@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterPublicInfo } from "@glassys/protocol";
-import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread, cwdExposesDataDir, sandboxState } from "./adapterOptions";
+import { defaultOptionsFor, optionsForAdapter, adapterKeyConfigured, setAutoRun, setPermissionMode, archivesLiveThread, cwdExposesDataDir, sandboxState, missingRequiredOption, takesApiKey } from "./adapterOptions";
 
 const cursor: AdapterPublicInfo = {
   id: "cursor",
@@ -138,5 +138,20 @@ describe("effectivePermissionMode", () => {
     expect(effectivePermissionMode({ autoRun: false, permissionMode: "bypassPermissions" })).toBe("dontAsk");
     expect(effectivePermissionMode({ autoRun: false, permissionMode: "acceptEdits" })).toBe("acceptEdits");
     expect(effectivePermissionMode({ autoRun: true, permissionMode: "acceptEdits" })).toBe("acceptEdits");
+  });
+});
+
+describe("requiredOptions and keys", () => {
+  it("names the first required option left empty", () => {
+    expect(missingRequiredOption({ requiredOptions: ["command"] }, { command: " " })).toBe("command");
+    expect(missingRequiredOption({ requiredOptions: ["command"] }, { command: "gemini" })).toBeUndefined();
+    expect(missingRequiredOption({}, {})).toBeUndefined();
+  });
+
+  it("offers a key field only to adapters that read one", () => {
+    expect(takesApiKey({ kind: "cli-binary", envNames: [] })).toBe(false);
+    expect(takesApiKey({ kind: "cli-binary", envNames: ["OPENAI_API_KEY"] })).toBe(true);
+    expect(takesApiKey({ kind: "api-key" })).toBe(true);
+    expect(takesApiKey(undefined)).toBe(true);
   });
 });

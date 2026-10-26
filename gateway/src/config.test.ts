@@ -51,6 +51,12 @@ describe("config patch", () => {
     await expect(applyPatch({ agent: { adapter: "nope" } })).rejects.toThrow(/Unknown adapter/);
   });
 
+  it("accepts only the fifo queue", async () => {
+    const { assertPatchTypes } = await import("./config.js");
+    expect(() => assertPatchTypes({ session: { queue: "lifo" } })).toThrow(/fifo/);
+    expect(() => assertPatchTypes({ session: { queue: "fifo" } })).not.toThrow();
+  });
+
   it("rejects a non-object agent patch", async () => {
     const dir = await mkdtemp(join(tmpdir(), "glassys-cfg-"));
     process.env.GLASSYS_DATA_DIR = dir;

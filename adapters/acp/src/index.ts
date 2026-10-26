@@ -320,7 +320,8 @@ class AcpSession implements AdapterSession {
 
   static async start(opts: AdapterCreateOptions, resumeId?: string): Promise<AcpSession> {
     const { command, args } = commandOf(opts);
-    const rpc = new JsonRpcStdio(command, args, opts.cwd, opts.apiKey ? { API_KEY: opts.apiKey } : undefined);
+    /* No key goes in: ACP agents sign in their own way, and none reads a generic API_KEY. */
+    const rpc = new JsonRpcStdio(command, args, opts.cwd);
     const ledger = hostLedger();
     const cleanupHost = registerHostHandlers(rpc, opts.cwd, opts.options, opts.protectedPaths, ledger);
     let init: Record<string, unknown> | undefined;
@@ -469,6 +470,7 @@ export const acpAdapter: Adapter = {
     auth: { kind: "cli-binary", envNames: [] },
     defaultModel: { id: "default", params: [] },
     liveCatalog: false,
+    requiredOptions: ["command"],
   },
 
   normalizeConfig(agent: AgentConfig): AgentConfig {

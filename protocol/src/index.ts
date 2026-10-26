@@ -107,6 +107,8 @@ export interface AdapterCapabilities {
   discover: boolean;
   toolConfirmation: ToolConfirmation;
   auth: AdapterAuthCapability;
+  /** `agent.options` keys that must hold a non-empty string before the adapter can be saved (ACP: command). */
+  requiredOptions?: string[];
   /** When false, a static catalog is expected; the PWA must not treat source:fallback as a failure. Default true. */
   liveCatalog?: boolean;
   /** Adapter can pass image parts natively. Missing/false still allows path-note fallback. */

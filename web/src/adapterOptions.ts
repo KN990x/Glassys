@@ -118,3 +118,19 @@ export function sandboxState(
   if (caps?.sandbox) return { supported: true, on: optionBool(options, "sandbox", false) };
   return { supported: false, on: false };
 }
+
+/**
+ * Whether an API key saved in Glassys reaches this adapter. A CLI-backed adapter that names no
+ * variable for it (ACP: each agent signs in its own way) would only store a key nobody reads.
+ */
+export function takesApiKey(auth?: { kind: string; envNames?: readonly string[] }): boolean {
+  return !auth || auth.kind !== "cli-binary" || Boolean(auth.envNames?.length);
+}
+
+/** The first option the adapter requires that `options` leaves empty (capabilities.requiredOptions). */
+export function missingRequiredOption(
+  caps: { requiredOptions?: readonly string[] } | undefined,
+  options: Record<string, unknown> | undefined,
+): string | undefined {
+  return caps?.requiredOptions?.find((name) => !optionString(options, name, "").trim());
+}

@@ -110,6 +110,7 @@ function normalizeLoaded(cfg: GlassysConfig, parsed: unknown): { cfg: GlassysCon
   const stallChanged = stall !== cfg.session.stallSeconds;
   cfg.session.stallSeconds = stall;
   if (typeof cfg.session.notifyOnComplete !== "boolean") cfg.session.notifyOnComplete = true;
+  if (cfg.session.queue !== "fifo") cfg.session.queue = "fifo";
   const templates = Array.isArray(cfg.prompts?.templates)
     ? normalizePromptTemplates(cfg.prompts.templates)
     : defaultConfig().prompts.templates;
@@ -202,6 +203,9 @@ export function assertPatchTypes(patch: Record<string, unknown>): void {
     }
     patch[section] = known;
   }
+  /* The one queue there is; any other string would sit in config.yaml meaning nothing. */
+  const session = patch.session as Record<string, unknown> | undefined;
+  if (session?.queue !== undefined && session.queue !== "fifo") throw new HttpError(400, 'session.queue must be "fifo"');
   const agent = patch.agent;
   if (agent === undefined) return;
   if (!isObj(agent)) throw new HttpError(400, "agent must be an object");
@@ -260,7 +264,9 @@ export async function applyPatch(
     const adapterChanging =
       isObj(rest.agent) && typeof rest.agent.adapter === "string" && rest.agent.adapter !== before.agent.adapter;
     const completing = rest.onboarding?.completed === true;
-    if (adapter && (adapterChanging || completing || (adapter.id === "acp" && isObj(rest.agent)))) {
+    /* Options can decide availability (ACP's command), so new options are probed too. */
+    const optionsChanging = isObj(rest.agent) && rest.agent.options !== undefined;
+    if (adapter && (adapterChanging || completing || optionsChanging)) {
       const availability = await probeAdapter(adapter, after.agent.options);
       if (!availability.ok) throw new HttpError(400, availability.error);
     }
@@ -268,8 +274,10 @@ export async function applyPatch(
       const passwordErr = operatorPasswordError(operatorPassword);
       if (passwordErr) throw new HttpError(400, passwordErr);
     }
-    if (adapter?.id === "acp" && !optionString(after.agent.options, "command", "").trim()) {
-      throw new HttpError(400, "ACP adapter needs agent.options.command (or a registry pick)");
+    for (const name of adapter?.capabilities.requiredOptions ?? []) {
+      if (!optionString(after.agent.options, name, "").trim()) {
+        throw new HttpError(400, `${adapter!.displayName} needs agent.options.${name}`);
+      }
     }
     await saveConfig(after);
     if (cursorApiKey !== undefined) {

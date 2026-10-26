@@ -18,7 +18,7 @@ import { CatalogFallbackNotice } from "../components/CatalogFallback";
 import { SdkLoginControls } from "../components/SdkLogin";
 import { WorkspacePicker } from "../components/WorkspacePicker";
 import { ReachabilityCard } from "../components/Reachability";
-import { cwdExposesDataDir, defaultOptionsFor, effectivePermissionMode, optionAutoRun, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
+import { missingRequiredOption, takesApiKey, cwdExposesDataDir, defaultOptionsFor, effectivePermissionMode, optionAutoRun, optionBool, optionString, optionStringArray, optionsForAdapter, setOption, setAutoRun, setPermissionMode, adapterKeyConfigured } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { Callout, StatusBadge } from "../components/Primitives";
 import { SandboxModeSelect } from "../components/SandboxModeSelect";
@@ -36,10 +36,12 @@ export function wizardStepIds(caps?: {
   sandboxModes?: string[];
   autoRun?: boolean;
   toolConfirmation?: string;
+  auth?: { kind: string; envNames?: readonly string[] };
 }): StepId[] {
   /* ACP cannot be saved without its command, so the command is picked right after the adapter. */
   const s: StepId[] = caps?.discover ? ["adapter", "acp"] : ["adapter"];
-  s.push("workspace", "phone", "credential");
+  s.push("workspace", "phone");
+  if (takesApiKey(caps?.auth)) s.push("credential");
   if (caps?.models !== false) s.push("model");
   if (caps?.settingSources) s.push("rules");
   if (caps?.sandbox || caps?.sandboxModes?.length || caps?.autoRun || caps?.toolConfirmation === "permission-mode") s.push("execution");
@@ -230,7 +232,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
       setError(t("wizard.adapter.unavailable"));
       return;
     }
-    if (caps?.discover && !optionString(options, "command", "").trim()) {
+    if (missingRequiredOption(caps, options)) {
       setError(t("wizard.acp.commandRequired"));
       return;
     }
@@ -287,7 +289,7 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
       setError(t("wizard.model.required"));
       return;
     }
-    if (id === "acp" && !optionString(options, "command", "").trim()) {
+    if (id === "acp" && missingRequiredOption(caps, options)) {
       setError(t("wizard.acp.commandRequired"));
       return;
     }
