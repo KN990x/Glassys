@@ -180,6 +180,7 @@ async function ensureLiveThreadUnlocked(): Promise<string> {
     }
   }
   const cfg = await loadConfig();
+  /* The single transcript.jsonl from before threads. Kept for installs from before v0.1; it can go once the first release has shipped. */
   const legacy = await readEvents(paths.legacyTranscript());
   if (legacy.length) {
     const id = randomUUID();

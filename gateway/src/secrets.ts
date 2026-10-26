@@ -43,6 +43,7 @@ async function readDisk(): Promise<SecretsFile> {
     throw new Error(`${paths.secrets()} does not hold a JSON object; fix or remove it`);
   }
   const adapters = { ...(parsed.adapters ?? {}) };
+  /* The Cursor key from before per-adapter keys. Kept for installs from before v0.1; it can go once the first release has shipped. */
   if (parsed.cursorApiKey && !adapters.cursor?.apiKey) adapters.cursor = { apiKey: parsed.cursorApiKey };
   const jwtEpoch = typeof parsed.jwtEpoch === "number" && Number.isInteger(parsed.jwtEpoch) ? parsed.jwtEpoch : 0;
   return { ...empty(), ...parsed, jwtEpoch, adapters, vapid: parsed.vapid };

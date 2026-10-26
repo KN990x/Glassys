@@ -67,6 +67,7 @@ async function ensureConfigFile(): Promise<void> {
   }
 }
 
+/* Kept for installs from before v0.1; it can go once the first release has shipped. */
 function migrateLegacyAgent(parsed: unknown, agent: AgentConfig): { agent: AgentConfig; changed: boolean } {
   const rawAgent = isObj(parsed) && isObj(parsed.agent) ? parsed.agent : null;
   const options: Record<string, unknown> = { ...(agent.options ?? {}) };
