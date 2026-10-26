@@ -16,7 +16,7 @@ import { writeFileAtomic } from "./atomic.js";
 import { GATEWAY_VERSION, repoRoot, runningBuild } from "./build-info.js";
 import { paths, log } from "./paths.js";
 import { HttpError } from "./errors.js";
-import { SAFE_GIT_ARGS, SAFE_GIT_ENV } from "./host-git.js";
+import { SAFE_GIT_ARGS, safeGitEnv } from "./host-git.js";
 
 const SERVICE_LABEL = "dev.kn990x.glassys";
 const SYSTEMD_UNIT = "glassys.service";
@@ -136,7 +136,7 @@ async function git(args: string[], timeout = GIT_TIMEOUT_MS): Promise<string> {
   const { stdout } = await execFileAsync("git", [...SAFE_GIT_ARGS, "-C", repoRoot(), ...args], {
     timeout,
     windowsHide: true,
-    env: SAFE_GIT_ENV,
+    env: safeGitEnv(),
   });
   return stdout.trim();
 }
