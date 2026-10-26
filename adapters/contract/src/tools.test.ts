@@ -43,6 +43,9 @@ describe("extractDiff", () => {
     expect(toolDenied("cancelled")).toBe(false);
     expect(toolDenied("failed", "Tool call cancelled by the user")).toBe(false);
     expect(toolDenied("completed")).toBe(false);
+    expect(toolDenied(undefined, "cat: /root/notes: Permission denied")).toBe(false);
+    expect(toolDenied(undefined, "EACCES: permission denied, open '/var/lib/app/state'")).toBe(false);
+    expect(toolDenied(undefined, "Permission to use Bash has been denied")).toBe(true);
   });
 
   it("appends attachment paths to the user prompt", () => {

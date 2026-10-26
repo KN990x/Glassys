@@ -79,10 +79,12 @@ export function extractDiff(value: unknown): { diff?: string; stats?: { add: num
 export function toolDenied(status?: string, error?: string): boolean {
   const s = (status || "").toLowerCase();
   const e = (error || "").toLowerCase();
+  /* The OS saying no (`cat: /root/x: Permission denied`, EACCES) is a failed command, not a policy. */
+  const osRefusal = /permission denied|\beacces\b|\beperm\b|operation not permitted|access is denied/.test(e);
   return (
     s === "denied" ||
     s === "rejected" ||
-    e.includes("denied") ||
+    (e.includes("denied") && !osRefusal) ||
     e.includes("not allowed") ||
     e.includes("rejected permission") ||
     e.includes("auto-review") ||
