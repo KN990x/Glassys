@@ -1,3 +1,4 @@
+import { confirmAndRestart } from "../../restart";
 import type { AdminUpdateInfo } from "@glassys/protocol";
 import { api } from "../../api";
 import { useT } from "../../i18n";
@@ -144,12 +145,7 @@ export function UpdatesTab({
           <button
             type="button"
             className="danger"
-            onClick={() => {
-              setRestartNote(t("settings.restarting"));
-              void api.restart().catch((err) => {
-                setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-              });
-            }}
+            onClick={() => void confirmAndRestart(t, confirm, setRestartNote)}
           >
             {t("settings.restart")}
           </button>

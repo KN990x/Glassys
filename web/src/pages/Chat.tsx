@@ -1,3 +1,4 @@
+import { confirmAndRestart } from "../restart";
 import { Suspense, lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type FormEvent } from "react";
 import { useStableCallback } from "../useStableCallback";
 import { useGatewaySession } from "../useGatewaySession";
@@ -572,15 +573,8 @@ export function Chat({
     }
   }
 
-  async function onRestart() {
-    if (!(await confirm({ title: t("confirm.titleRestart"), message: t("settings.restartConfirm"), confirmLabel: t("confirm.restart"), destructive: true })))
-      return;
-    try {
-      setRestartNote(t("settings.restarting"));
-      await api.restart();
-    } catch (err) {
-      setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-    }
+  function onRestart() {
+    return confirmAndRestart(t, confirm, setRestartNote);
   }
 
   function openSettings(section?: "schedules" | "updates", prefill?: string) {

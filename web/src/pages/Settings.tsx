@@ -1,3 +1,4 @@
+import { confirmAndRestart } from "../restart";
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type {
   AdapterDiscoverItem,
@@ -573,22 +574,7 @@ export function Settings({
                   <button
                     type="button"
                     className="ghost tiny"
-                    onClick={() => {
-                      void (async () => {
-                        /* The same ask as the chat's restart: it ends the run in flight. */
-                        const ok = await confirm({
-                          title: t("confirm.titleRestart"),
-                          message: t("settings.restartConfirm"),
-                          confirmLabel: t("confirm.restart"),
-                          destructive: true,
-                        });
-                        if (!ok) return;
-                        setRestartNote(t("settings.restarting"));
-                        await api.restart().catch((err) => {
-                          setRestartNote(operatorError(err instanceof Error ? err.message : t("settings.restartFailed"), t));
-                        });
-                      })();
-                    }}
+                    onClick={() => void confirmAndRestart(t, confirm, setRestartNote)}
                   >
                     {t("settings.restart")}
                   </button>
