@@ -239,14 +239,20 @@ export function Settings({
     };
   }, []);
 
+  /** The latest model list asked for; an older reply (the adapter before a quick switch) is dropped. */
+  const modelsAsk = useRef(0);
+
   async function loadModels(adapterId: string): Promise<ModelCatalogItem[]> {
+    const ask = ++modelsAsk.current;
     try {
       const r = await api.models(adapterId);
+      if (ask !== modelsAsk.current) return r.models;
       setModels(r.models);
       setModelSource(r.source);
       setModelError(r.error || "");
       return r.models;
     } catch (err) {
+      if (ask !== modelsAsk.current) return [];
       setModels([]);
       setModelSource("fallback");
       setModelError(err instanceof Error ? err.message : String(err));
@@ -310,10 +316,16 @@ export function Settings({
     void (async () => {
       const listed = await loadModels(draft.agent.adapter);
       if (cancelled) return;
-      api.adapterStatus(draft.agent.adapter).then(setAuth).catch(() => setAuth(null));
+      api
+        .adapterStatus(draft.agent.adapter)
+        .then((r) => !cancelled && setAuth(r))
+        .catch(() => !cancelled && setAuth(null));
       const adapter = adapters.find((a) => a.id === draft.agent.adapter);
       if (adapter?.capabilities.discover) {
-        api.discover(adapter.id).then((r) => setDiscover(r.agents)).catch(() => setDiscover([]));
+        api
+          .discover(adapter.id)
+          .then((r) => !cancelled && setDiscover(r.agents))
+          .catch(() => !cancelled && setDiscover([]));
       } else setDiscover([]);
       const def = adapter?.capabilities.defaultModel;
       setDraft((d) => {
@@ -632,6 +644,7 @@ export function Settings({
               {tab === "schedules" && (
                 <SchedulesTab
                   draft={draft}
+                  savedCwd={baseline.agent.cwd}
                   schedules={schedules}
                   scheduleTz={scheduleTz}
                   scheduleText={scheduleText}

@@ -24,6 +24,7 @@ export type ScheduleJob = {
 
 export function SchedulesTab({
   draft,
+  savedCwd,
   schedules,
   scheduleTz,
   scheduleText,
@@ -37,6 +38,8 @@ export function SchedulesTab({
   setError,
 }: {
   draft: RedactedConfig;
+  /** The workspace the live thread runs in: a schedule belongs to it, not to an unsaved edit. */
+  savedCwd: string;
   schedules: ScheduleJob[];
   scheduleTz: string;
   scheduleText: string;
@@ -115,7 +118,7 @@ export function SchedulesTab({
                 try {
                   await api.createSchedule({
                     text: scheduleText,
-                    cwd: draft.agent.cwd,
+                    cwd: savedCwd,
                     threadId: currentThreadId || undefined,
                     cron: scheduleCron.trim() || undefined,
                     at: scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
