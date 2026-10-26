@@ -16,6 +16,8 @@ const control = vi.hoisted(() => {
     sessionClosed: false,
     creates: 0,
     resumes: [] as string[],
+    resumeError: null as string | null,
+    resumeHeld: Promise.resolve(),
     hold() {
       this.held = new Promise<void>((resolve) => {
         release = resolve;
@@ -80,6 +82,8 @@ const fakeAdapter: Adapter = {
   },
   async resume(id, opts) {
     control.resumes.push(id);
+    await control.resumeHeld;
+    if (control.resumeError) throw new Error(control.resumeError);
     return this.create(opts);
   },
 };
@@ -113,6 +117,8 @@ describe("runtime queue", () => {
     control.sessionClosed = false;
     control.creates = 0;
     control.resumes = [];
+    control.resumeError = null;
+    control.resumeHeld = Promise.resolve();
     dir = await mkdtemp(join(tmpdir(), "glassys-rt-"));
     ws = await mkdtemp(join(tmpdir(), "glassys-ws-"));
     process.env.GLASSYS_DATA_DIR = dir;
@@ -147,6 +153,28 @@ describe("runtime queue", () => {
     vi.resetModules();
   });
 
+  it("resumes at startup without holding the gateway back, and never creates on failure", async () => {
+    const cfg = defaultConfig();
+    cfg.onboarding.completed = true;
+    cfg.agent.cwd = ws;
+    cfg.session.resumeOnStart = true;
+    await writeFile(join(dir, "config.yaml"), YAML.stringify(cfg), "utf8");
+    const { saveState, loadState } = await import("./state.js");
+    await saveState({ agentId: "agent-old" });
+    let release!: () => void;
+    control.resumeHeld = new Promise<void>((r) => (release = r));
+    control.resumeError = "network is unreachable";
+    const { initRuntime, waitStartupResumeForTests } = await import("./runtime.js");
+    /* Returns while the resume is still out. */
+    await initRuntime();
+    await waitUntil(() => control.resumes.length === 1);
+    expect(control.resumes).toEqual(["agent-old"]);
+    release();
+    await waitStartupResumeForTests();
+    expect(control.creates).toBe(0);
+    expect((await loadState()).agentId).toBe("agent-old");
+  });
+
   it("rejects messages before onboarding is complete", async () => {
     const cfg = defaultConfig();
     cfg.agent.cwd = ws;
@@ -177,6 +205,7 @@ describe("runtime queue", () => {
     const { cwdErrorInPatch } = await import("./runtime.js");
     expect(await cwdErrorInPatch({ onboarding: { completed: true } })).toMatch(/Workspace path/);
     expect(await cwdErrorInPatch({ onboarding: { completed: true }, agent: { cwd: ws } })).toBeNull();
+    await expect(cwdErrorInPatch({ agent: "nope" } as never)).resolves.toBeNull();
   });
 
   it("queues a second message while the first run is in flight", async () => {
@@ -408,6 +437,33 @@ describe("runtime queue", () => {
     expect(await readTranscript()).toEqual([]);
   });
 
+  it("holds a message sent during an identity change until the new thread exists", async () => {
+    control.hold();
+    const { enqueueMessage, applyConfigPatch, readTranscript, drainEmit, listLiveThreads, exportLiveThread } = await import(
+      "./runtime.js"
+    );
+    void enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
+    const other = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
+    await applyConfigPatch({ agent: { cwd: other } });
+    /* The run is still winding down: the reset waits for it, and so does this message. */
+    const sent = enqueueMessage("two");
+    await new Promise((r) => setTimeout(r, 60));
+    control.go();
+    expect(await sent).toBe(true);
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta" && "text" in e && e.text === "echo:two"));
+    await drainEmit();
+    const live = await readTranscript();
+    expect(live.filter((e) => e.type === "user.message").map((e) => ("text" in e ? e.text : ""))).toEqual(["two"]);
+    const threads = await listLiveThreads();
+    const { snapshotRuntime } = await import("./runtime.js");
+    const archived = threads.find((t) => t.id !== snapshotRuntime().threadId);
+    expect(archived).toBeTruthy();
+    const { markdown } = await exportLiveThread(archived!.id);
+    expect(markdown).toContain("one");
+    expect(markdown).not.toContain("two");
+  });
+
   it("keeps draining the queue when a run throws", async () => {
     const origCreate = fakeAdapter.create.bind(fakeAdapter);
     let boom = true;
@@ -484,8 +540,10 @@ describe("runtime queue", () => {
     await waitUntil(async () => (await readTranscript()).some((e) => e.type === "text.delta"));
     const other = await mkdtemp(join(tmpdir(), "glassys-cwd-"));
     await applyConfigPatch({ agent: { cwd: other } });
-    await enqueueMessage("two");
+    /* Accepted once the reset has made the new thread; that needs the old run to wind down. */
+    const sent = enqueueMessage("two");
     control.go();
+    expect(await sent).toBe(true);
     await waitUntil(async () =>
       (await readTranscript()).some((e) => e.type === "text.delta" && "text" in e && e.text === "echo:two"),
     );

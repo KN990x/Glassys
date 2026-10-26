@@ -213,7 +213,9 @@ function reportPersistFailure(err: unknown): void {
 
 async function emit(event: ServerMessage, agentId?: string | null): Promise<void> {
   const done = emitChain.then(async () => {
-    if (agentId) await persistAgentId(agentId);
+    if (agentId) {
+      await persistAgentId(agentId).catch((err) => log("warn", "could not save the agent id", { error: String(err) }));
+    }
     let out = event;
     let flushNow = false;
     const stored = persistable(event);
@@ -226,14 +228,18 @@ async function emit(event: ServerMessage, agentId?: string | null): Promise<void
         reportPersistFailure(err);
       }
     }
-    if (event.type === "run.usage") {
-      const cfg = await loadConfig();
-      await addUsageTotals(cfg.agent.adapter, event.inputTokens, event.outputTokens);
-      await addLiveUsage(event.inputTokens, event.outputTokens);
-      hub.broadcast({ type: "threads.snapshot", threads: await listThreads(), currentId: liveThreadId() });
-    }
     /* Screens first: a slow or failing disk must not hold back (or swallow) what the agent says. */
     hub.broadcast(out);
+    if (event.type === "run.usage") {
+      try {
+        const cfg = await loadConfig();
+        await addUsageTotals(cfg.agent.adapter, event.inputTokens, event.outputTokens);
+        await addLiveUsage(event.inputTokens, event.outputTokens);
+        hub.broadcast({ type: "threads.snapshot", threads: await listThreads(), currentId: liveThreadId() });
+      } catch (err) {
+        log("warn", "could not record usage", { error: String(err) });
+      }
+    }
     if (stored) {
       try {
         if (flushNow) {
@@ -321,8 +327,10 @@ export async function validateCwd(cwd: unknown): Promise<{ ok: true } | { ok: fa
 }
 
 export async function cwdErrorInPatch(patch: ConfigPatch): Promise<string | null> {
-  const nextCwd =
-    patch.agent && "cwd" in patch.agent && typeof patch.agent.cwd === "string" ? patch.agent.cwd : undefined;
+  /* `in` throws on a string or number; the type check that rejects those comes later, in the patch. */
+  const agent: unknown = patch.agent;
+  const rawCwd = agent && typeof agent === "object" ? (agent as { cwd?: unknown }).cwd : undefined;
+  const nextCwd = typeof rawCwd === "string" ? rawCwd : undefined;
   if (nextCwd !== undefined) {
     const check = await validateCwd(nextCwd);
     if (!check.ok) return check.error;
@@ -434,7 +442,12 @@ async function rotateToNewThread(previousAgentId: string | null): Promise<void> 
   await gcUploads();
 }
 
-async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
+/**
+ * `startup`: the gateway's own resume at boot (session.resumeOnStart). It only ever resumes: a
+ * failure there (the network not up yet, a child slow to start) keeps the stored agent for the
+ * next send to try, instead of starting a provider session nobody asked for.
+ */
+async function ensureSession(current?: QueueJob, mode: { startup?: boolean } = {}): Promise<AdapterSession> {
   const cfg = await loadConfig();
   const adapter = getAdapter(cfg.agent.adapter);
   const fp = agentFingerprint(cfg);
@@ -475,6 +488,7 @@ async function ensureSession(current?: QueueJob): Promise<AdapterSession> {
       log("info", "resumed agent", { adapter: adapter.id, agentId: session.agentId });
       return session;
     } catch (err) {
+      if (mode.startup) throw err;
       log("warn", "resume failed, creating a new agent", { error: String(err) });
       try {
         session = await adapter.create(opts);
@@ -528,9 +542,9 @@ async function finishIdentityResetIfIdle(): Promise<void> {
   await performIdentityReset();
 }
 
-function ensureSessionShared(current?: QueueJob): Promise<AdapterSession> {
+function ensureSessionShared(current?: QueueJob, mode: { startup?: boolean } = {}): Promise<AdapterSession> {
   if (!sessionInFlight) {
-    const pending = ensureSession(current).finally(() => {
+    const pending = ensureSession(current, mode).finally(() => {
       if (sessionInFlight === pending) sessionInFlight = null;
     });
     pending.catch(() => undefined);
@@ -745,7 +759,8 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
         thinkingStarted = nowFn();
       }
       if (event.type === "thinking.done") thinkingOpen = false;
-      void emit(event, handle.agentId);
+      /* emit logs its own failures; this only keeps them from being unhandled rejections. */
+      emit(event, handle.agentId).catch(() => undefined);
     };
 
     const closeThinkingIfOpen = async () => {
@@ -768,7 +783,7 @@ async function runOnce(job: QueueJob, gen: number): Promise<void> {
         const idleMs = nowFn() - lastEventAt;
         if (idleMs >= stallSeconds * 1000) {
           stalledEmitted = true;
-          void emit({ type: "run.stalled", idleMs });
+          emit({ type: "run.stalled", idleMs }).catch(() => undefined);
         }
       }, stallPollMs);
     }
@@ -906,7 +921,12 @@ export async function enqueueMessage(
   for (let attempt = 0; attempt < enqueueRotatingRetries; attempt++) {
     const prepared = await withQueueLock(async () => {
       if (shuttingDown) return { kind: "skip" as const };
-      if (rotating) return { kind: "retry" as const };
+      /*
+       * Also while an identity change waits for the run to wind down (up to the cancel timeout):
+       * a message emitted now lands in the thread about to be archived, and is then restored into
+       * the new one too, so the archive keeps a message that never ran there.
+       */
+      if (rotating || pendingIdentityReset) return { kind: "retry" as const };
       const id = isMessageId(clientId) ? clientId : randomUUID();
       if (currentJobId === id || queue.some((j) => j.id === id)) return { kind: "skip" as const };
       const live = queue.filter((j) => j.generation === identityGeneration).length;
@@ -1218,6 +1238,13 @@ export async function exportLiveThread(id: string): Promise<{ filename: string; 
   return { filename: `${slug}.md`, markdown: eventsToMarkdown(bundle.meta, bundle.events) };
 }
 
+/** The boot-time resume, for tests and shutdown to wait on. */
+let startupResume: Promise<void> | null = null;
+
+export async function waitStartupResumeForTests(): Promise<void> {
+  await startupResume;
+}
+
 export async function initRuntime(): Promise<void> {
   shuttingDown = false;
   setTranscriptFlushErrorHandler(reportPersistFailure);
@@ -1227,15 +1254,20 @@ export async function initRuntime(): Promise<void> {
   const cfg = await loadConfig();
   const adapter = getAdapter(cfg.agent.adapter);
   if (cfg.session.resumeOnStart && usableAgentId(state.agentId)) {
-    try {
-      const opts = await createOpts();
-      const canResume =
-        adapter.capabilities.resume ||
-        (adapter.shouldResume ? await adapter.shouldResume(state.agentId, opts) : false);
-      if (canResume) await ensureSession();
-    } catch (err) {
-      log("warn", "startup resume skipped", { error: String(err) });
-    }
+    /* In the background: a resume that hangs must not keep the gateway from listening. */
+    const agentId = state.agentId;
+    startupResume = (async () => {
+      try {
+        const opts = await createOpts();
+        const canResume =
+          adapter.capabilities.resume || (adapter.shouldResume ? await adapter.shouldResume(agentId, opts) : false);
+        if (canResume) await ensureSessionShared(undefined, { startup: true });
+        /* Stopped while the resume was still out: nothing else will close what it opened. */
+        if (shuttingDown) await disposeSession();
+      } catch (err) {
+        log("warn", "startup resume skipped", { error: String(err) });
+      }
+    })();
   }
   bindScheduleRuntime({
     enqueue: (text, source, onReject) => enqueueMessage(text, undefined, undefined, source, onReject),
