@@ -283,6 +283,9 @@ class OpencodeSession implements AdapterSession {
       let failed = false;
       let sawRunEvent = false;
       let drainArmed = false;
+      /* OpenCode bills each assistant message; the PWA shows one usage line per run, as for the
+         other adapters, so the messages are summed and reported once at the end. */
+      const usage = { input: 0, output: 0, seen: false };
       /* The prompt call returns when the turn is over; stop waiting out the long idle timeout. */
       const settle = () => {
         promptSettled = true;
@@ -304,6 +307,12 @@ class OpencodeSession implements AdapterSession {
         const mapped = mapOpencodeEvent(event, state, this.agentId);
         if (mapped.length) sawRunEvent = true;
         for (const ev of mapped) {
+          if (ev.type === "run.usage") {
+            usage.input += ev.inputTokens ?? 0;
+            usage.output += ev.outputTokens ?? 0;
+            usage.seen = true;
+            continue;
+          }
           onEvent(ev);
           if (ev.type === "run.error") failed = true;
         }
@@ -355,6 +364,9 @@ class OpencodeSession implements AdapterSession {
         if (isCancelled()) return "cancelled";
         throw err;
       } finally {
+        if (usage.seen) {
+          onEvent({ type: "run.usage", inputTokens: usage.input || undefined, outputTokens: usage.output || undefined });
+        }
         activeRuns -= 1;
       }
     });

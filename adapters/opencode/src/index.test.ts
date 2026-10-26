@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 const seen: Record<string, unknown[]> = { create: [], prompt: [], abort: [], subscribe: [], get: [] };
 let endStream: () => void = () => undefined;
 let hangPrompt = false;
+/** Events the next prompt produces, before its session.idle. */
+let turnEvents: unknown[] = [];
+let pushEvent: ((e: unknown) => void) | null = null;
 
 vi.mock("@opencode-ai/sdk", () => ({
   createOpencode: async () => ({
@@ -20,6 +23,8 @@ vi.mock("@opencode-ai/sdk", () => ({
         prompt: async (args: unknown) => {
           seen.prompt!.push(args);
           if (hangPrompt) await new Promise(() => undefined);
+          for (const e of turnEvents) pushEvent?.(e);
+          if (turnEvents.length) pushEvent?.({ type: "session.idle", properties: { sessionID: "ses_1" } });
           return { data: {} };
         },
         abort: async (args: unknown) => {
@@ -33,10 +38,20 @@ vi.mock("@opencode-ai/sdk", () => ({
           let finish!: () => void;
           const ended = new Promise<void>((r) => (finish = r));
           endStream = finish;
+          const queued: unknown[] = [];
+          let wake: (() => void) | null = null;
+          pushEvent = (e) => {
+            queued.push(e);
+            wake?.();
+          };
           return {
             stream: (async function* () {
               yield { type: "session.idle", properties: { sessionID: "ses_1" } };
-              await ended;
+              for (;;) {
+                while (queued.length) yield queued.shift();
+                const more = new Promise<"more">((r) => (wake = () => r("more")));
+                if ((await Promise.race([ended.then(() => "end" as const), more])) === "end") return;
+              }
             })(),
           };
         },
@@ -69,6 +84,28 @@ describe("opencode workspace directory", () => {
     expect(session.closed).toBe(true);
     await session.dispose();
     await opencodeAdapter.shutdown?.();
+  });
+});
+
+describe("opencode usage", () => {
+  it("reports one usage line per run, summed over its assistant messages", async () => {
+    const message = (id: string, input: number, output: number) => ({
+      type: "message.updated",
+      properties: {
+        info: { id, sessionID: "ses_1", role: "assistant", time: { created: 1, completed: 2 }, tokens: { input, output, cache: {} } },
+      },
+    });
+    turnEvents = [message("msg_a", 10, 2), message("msg_b", 5, 3)];
+    try {
+      const session = await opencodeAdapter.create(opts);
+      const events: Array<{ type: string }> = [];
+      const run = await session.send("hi", (e) => events.push(e as { type: string }));
+      await run.wait();
+      expect(events.filter((e) => e.type === "run.usage")).toEqual([{ type: "run.usage", inputTokens: 15, outputTokens: 5 }]);
+      await session.dispose();
+    } finally {
+      turnEvents = [];
+    }
   });
 });
 
