@@ -12,7 +12,7 @@ import type {
 import { pickDefaultSelection, adapterSelectable } from "@glassys/protocol";
 import { api } from "../api";
 import { useT } from "../i18n";
-import { paramsForSelection } from "../components/ModelPicker";
+import { paramsForSelection } from "../modelParams";
 import { adapterKeyConfigured, defaultOptionsFor, missingRequiredOption, optionStringArray, setOption, archivesLiveThread } from "../adapterOptions";
 import { operatorError } from "../operatorError";
 import { enableWebPush, disableWebPush } from "../push";

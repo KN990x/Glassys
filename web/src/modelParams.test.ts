@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { paramsForSelection } from "./ModelPicker";
+import { paramsForSelection } from "./modelParams";
 import type { ModelCatalogItem } from "@glassys/protocol";
 
 const grok: ModelCatalogItem = {

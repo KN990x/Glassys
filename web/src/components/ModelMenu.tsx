@@ -1,37 +1,12 @@
 import { useState } from "react";
-import type { ModelCatalogItem, ModelParam, ModelParamDef } from "@glassys/protocol";
+import type { ModelCatalogItem, ModelParam } from "@glassys/protocol";
 import { matchingVariant, modelOptionLabel } from "@glassys/protocol";
 import { useT } from "../i18n";
-import { paramsForSelection } from "./ModelPicker";
+import { applyVariant, boolParam, extraDefs, paramsForSelection, setParam } from "../modelParams";
 import { PopAnchor, Popover } from "./Popover";
 import { SegmentedControl } from "./SegmentedControl";
 import { Switch } from "./Switch";
 import { IconCheck, IconChevronDown } from "./Icon";
-
-function boolParam(def: ModelParamDef): boolean {
-  const values = new Set(def.values.map((v) => v.value));
-  return values.has("true") && values.has("false") && def.values.length <= 2;
-}
-
-function variantParamIds(model: ModelCatalogItem): Set<string> {
-  return new Set((model.variants ?? []).flatMap((v) => v.params.map((p) => p.id)));
-}
-
-function extraDefs(model: ModelCatalogItem): ModelParamDef[] {
-  const used = variantParamIds(model);
-  const defs = model.parameters ?? [];
-  if (!model.variants?.length) return defs;
-  return defs.filter((d) => !used.has(d.id));
-}
-
-function setParam(params: ModelParam[], id: string, value: string): ModelParam[] {
-  return [...params.filter((p) => p.id !== id), { id, value }];
-}
-
-function applyVariant(model: ModelCatalogItem, variantParams: ModelParam[], current: ModelParam[]): ModelParam[] {
-  const used = variantParamIds(model);
-  return [...variantParams, ...current.filter((p) => !used.has(p.id))];
-}
 
 /** The chip's own label: model, and the effort it is running at. */
 function modelChipLabel(model: ModelCatalogItem | undefined, params: ModelParam[], fallback: string): string {
