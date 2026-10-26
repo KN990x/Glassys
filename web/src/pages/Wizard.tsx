@@ -219,6 +219,39 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
     api.discover(adapterId).then((r) => setDiscover(r.agents)).catch(() => setDiscover([]));
   }, [id, adapterId, caps?.discover]);
 
+  /** Check everything the finish needs, then save it all; says what is missing instead. */
+  async function finish() {
+    if (!cwd.trim()) {
+      setError(t("wizard.workspace.required"));
+      return;
+    }
+    if (!current || !adapterSelectable(current)) {
+      setError(t("wizard.adapter.unavailable"));
+      return;
+    }
+    if (caps?.discover && !optionString(options, "command", "").trim()) {
+      setError(t("wizard.acp.commandRequired"));
+      return;
+    }
+    if (caps?.models !== false && !model.trim()) {
+      setError(t("wizard.model.required"));
+      return;
+    }
+    if (
+      !wizardCredentialReady({
+        authKind: caps?.auth.kind,
+        loggedIn: auth?.loggedIn,
+        keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
+        apiKeyDraft: apiKey,
+      })
+    ) {
+      setError(t("wizard.cred.required"));
+      return;
+    }
+    await api.saveConfig(wizardFinishPatch({ adapterId, cwd, model, modelParams, options }));
+    onDone();
+  }
+
   async function next() {
     if (submitting) return;
     const from = step;
@@ -291,72 +324,10 @@ export function Wizard({ config, onDone, onConfig }: { config: RedactedConfig; o
         onConfig(await api.saveConfig({ agent: { model, modelParams } }));
       } else if (id === "rules") {
         onConfig(await api.saveConfig({ agent: { options } }));
-      } else if (id === "execution") {
-        if (!cwd.trim()) {
-          setError(t("wizard.workspace.required"));
-          return;
-        }
-        if (!current || !adapterSelectable(current)) {
-          setError(t("wizard.adapter.unavailable"));
-          return;
-        }
-        if (caps?.discover && !optionString(options, "command", "").trim()) {
-          setError(t("wizard.acp.commandRequired"));
-          return;
-        }
-        if (caps?.models !== false && !model.trim()) {
-          setError(t("wizard.model.required"));
-          return;
-        }
-        if (
-          !wizardCredentialReady({
-            authKind: caps?.auth.kind,
-            loggedIn: auth?.loggedIn,
-            keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
-            apiKeyDraft: apiKey,
-          })
-        ) {
-          setError(t("wizard.cred.required"));
-          return;
-        }
-        await api.saveConfig(
-          wizardFinishPatch({ adapterId, cwd, model, modelParams, options }),
-        );
-        onDone();
-        return;
       }
-      if (step >= steps.length - 1) {
-        if (!cwd.trim()) {
-          setError(t("wizard.workspace.required"));
-          return;
-        }
-        if (!current || !adapterSelectable(current)) {
-          setError(t("wizard.adapter.unavailable"));
-          return;
-        }
-        if (caps?.discover && !optionString(options, "command", "").trim()) {
-          setError(t("wizard.acp.commandRequired"));
-          return;
-        }
-        if (caps?.models !== false && !model.trim()) {
-          setError(t("wizard.model.required"));
-          return;
-        }
-        if (
-          !wizardCredentialReady({
-            authKind: caps?.auth.kind,
-            loggedIn: auth?.loggedIn,
-            keyConfigured: adapterKeyConfigured(config.secrets, adapterId),
-            apiKeyDraft: apiKey,
-          })
-        ) {
-          setError(t("wizard.cred.required"));
-          return;
-        }
-        await api.saveConfig(
-          wizardFinishPatch({ adapterId, cwd, model, modelParams, options }),
-        );
-        onDone();
+      /* The execution step is the last one; either way, this is the finish. */
+      if (id === "execution" || step >= steps.length - 1) {
+        await finish();
         return;
       }
       /* From the step this save belonged to, not wherever the operator is now. */
