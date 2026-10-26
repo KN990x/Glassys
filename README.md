@@ -59,10 +59,10 @@ Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCod
 - **Audience:** operators and sysadmins who want a persistent chat while a local coding agent does systems work on the host.
 - **UI language:** English by default; Spanish (`es`) is available in Settings.
 - **Distribution:** self-hosted. Every operator runs their own instance. Not a Glassys SaaS.
-- **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet; use Gemini through ACP meanwhile), Codex SDK (runs the Codex binary it ships with), plus a generic ACP host for any agent in the ACP registry. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; an ACP agent lists the models it announces (after “Agent default”); Gemini and Codex use a documented static fallback.
+- **Adapters:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + local server, Gemini CLI SDK (not on npm yet; use Gemini through ACP meanwhile), Codex SDK (runs the Codex binary its SDK ships with), plus a generic ACP host for any agent in the ACP registry. Same UI protocol. Cursor, Claude, and OpenCode list models from the live runtime catalog; an ACP agent lists the models it announces (after “Agent default”); Gemini and Codex use a documented static fallback.
 - **v1:** one profile / one agent / **one live thread** / one run at a time (FIFO queue). The thread list includes archived transcripts; only one thread is live.
 
-**Agent / adapter** is the product on the host. **Transport** is how Glassys talks to it (SDK or ACP — never print-mode). **CLI** is the vendor’s terminal app: it may stay installed; its login does not authenticate Glassys. Codex and OpenCode still need their binary on PATH.
+**Agent / adapter** is the product on the host. **Transport** is how Glassys talks to it (SDK or ACP — never print-mode). **CLI** is the vendor’s terminal app: it may stay installed; its login does not authenticate Glassys. OpenCode still needs its `opencode` binary on PATH; Codex uses the one its SDK ships, not the one on PATH.
 
 ## What it is not
 
@@ -138,7 +138,7 @@ curl -fsSL https://raw.githubusercontent.com/KN990x/Glassys/main/scripts/install
 
 Same result as `git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install`. From a clone: `bash scripts/install.sh`.
 
-Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`). The installer clones if needed, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
+Needs Node.js **22.13+** and pnpm (Corepack: `corepack enable`; Node 25+ no longer ships Corepack, so install it first with `npm install -g corepack`, or [install pnpm](https://pnpm.io/installation)). The installer clones if needed, installs, builds if needed, and starts a **user service** (launchd on macOS, systemd --user on Linux). Closing the terminal does not stop Glassys. Open `http://127.0.0.1:8787` (or `GLASSYS_PORT`) and complete the wizard (operator password, adapter, absolute workspace path, **Cursor SDK** sign-in on the host). An API key is optional. The PWA will not enter chat until onboarding is done.
 
 Whoever sets the operator password owns the instance, so setup from any other device, or through a reverse proxy, asks for the one-time **setup code** the installer prints (also in the gateway log, and in `$GLASSYS_DATA_DIR/setup-code` until setup is done). The installer also prints a first-run link with the code in it. Setup in a browser on the host itself needs no code.
 
@@ -191,6 +191,9 @@ Glassys with auto-run and a host workspace is **operator access to that machine*
 - Optional Cloudflare Access JWT (or a documented identity header).
 - Sandbox and auto-run are visible in Settings. Cursor’s headless SDK cannot pause for a human OK; “auto-run off” uses Auto-review, which **denies** risky calls. ACP with auto-run off denies file writes and terminals.
 - Default bind is `127.0.0.1`. CORS / origin allowlist comes from config.
+- Keep the workspace outside Glassys's data directory (secrets, sessions); Settings warns when it is not. Claude and ACP refuse tool calls into it, but Cursor, Codex, OpenCode and Gemini run their tools inside their own process, where Glassys cannot step in: for them only a sandbox or a separate workspace keeps the agent out.
+- An ACP agent starts with the gateway's environment, provider API keys included; registry agents run through `npx`, so pick ones you trust.
+- `edgeAuth: header` trusts the named header as-is: use it only behind a proxy that sets it, never with the port reachable directly.
 - Runs use **WebSocket + keepalive** (default 25s), not SSE. Proxies often cut idle HTTP around 100s; agent runs last minutes.
 
 ## Layout
@@ -231,7 +234,7 @@ Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenC
 - **Adaptadores:** Cursor (`@cursor/sdk` local), Claude Agent SDK, OpenCode SDK + servidor local, Gemini CLI SDK (aún no en npm; mientras tanto, Gemini vía ACP), Codex SDK (usa el binario de Codex que trae consigo), más un host ACP genérico para cualquier agente del registro ACP. El mismo protocolo de UI. Cursor, Claude y OpenCode listan modelos del catálogo vivo del runtime; un agente ACP lista los modelos que anuncia (tras “Agent default”); Gemini y Codex usan un fallback estático documentado.
 - **v1:** un perfil / un agente / **un hilo vivo** / un run a la vez (cola FIFO). La lista de hilos incluye los transcripts archivados; solo un hilo está vivo.
 
-**Agente / adaptador** es el producto en el host. **Transporte** es cómo le habla Glassys (SDK o ACP — nunca print-mode). **CLI** es el programa de terminal del vendor: puede seguir instalado; su login no autentica Glassys. Codex y OpenCode sí necesitan su binario en el PATH.
+**Agente / adaptador** es el producto en el host. **Transporte** es cómo le habla Glassys (SDK o ACP — nunca print-mode). **CLI** es el programa de terminal del vendor: puede seguir instalado; su login no autentica Glassys. OpenCode sí necesita su binario `opencode` en el PATH; Codex usa el que trae su SDK, no el del PATH.
 
 ## Qué no es
 
@@ -311,7 +314,7 @@ curl -fsSL https://raw.githubusercontent.com/KN990x/Glassys/main/scripts/install
 
 Equivalente a `git clone https://github.com/KN990x/Glassys.git glassys && cd glassys && pnpm install && pnpm run service:install`. Desde un clone: `bash scripts/install.sh`.
 
-Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`). El script clona si hace falta, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
+Hace falta Node.js **22.13+** y pnpm (Corepack: `corepack enable`; Node 25+ ya no trae Corepack, así que instálalo antes con `npm install -g corepack`, o [instala pnpm](https://pnpm.io/installation)). El script clona si hace falta, instala, construye si hace falta y arranca un **servicio de usuario** (launchd en macOS, systemd --user en Linux). Cerrar la terminal no para Glassys. Abre `http://127.0.0.1:8787` (o `GLASSYS_PORT`) y completa el asistente (contraseña de operador, adaptador, ruta absoluta del workspace, login del **SDK de Cursor** en el host). La API key es opcional. La PWA no entra al chat hasta terminar el onboarding.
 
 Quien fija la contraseña de operador se queda con la instancia, así que el setup desde cualquier otro dispositivo, o a través de un reverse proxy, pide el **código de configuración** de un solo uso que imprime el instalador (también en el log del gateway y en `$GLASSYS_DATA_DIR/setup-code` hasta terminar el setup). El instalador imprime además un enlace de primer arranque con el código. Desde un navegador en el propio host no hace falta.
 
@@ -364,6 +367,9 @@ Glassys con auto-run y un workspace del host es **acceso de operador a esa máqu
 - JWT opcional de Cloudflare Access (o un header de identidad documentado).
 - Sandbox y auto-run se ven en Ajustes. El SDK headless de Cursor no puede pausar para un OK humano; “auto-run off” usa Auto-review, que **deniega** llamadas arriesgadas. ACP con auto-run off deniega escrituras y terminales.
 - El bind por defecto es `127.0.0.1`. CORS / allowlist de orígenes sale de la config.
+- Deja el workspace fuera del directorio de datos de Glassys (secretos, sesiones); Ajustes avisa si no lo está. Claude y ACP rechazan las herramientas que entran ahí, pero Cursor, Codex, OpenCode y Gemini ejecutan sus herramientas dentro de su propio proceso, donde Glassys no puede intervenir: con ellos solo un sandbox o un workspace aparte mantienen fuera al agente.
+- Un agente ACP arranca con el entorno del gateway, claves de API de los proveedores incluidas; los del registro se ejecutan con `npx`, así que elige los que te fíes.
+- `edgeAuth: header` se fía de la cabecera tal cual llega: úsalo solo detrás de un proxy que la ponga, nunca con el puerto accesible directamente.
 - Los runs van por **WebSocket + keepalive** (25s por defecto), no SSE. Los proxies suelen cortar HTTP idle ~100s; un run del agente dura minutos.
 
 ## Estructura

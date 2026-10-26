@@ -23,7 +23,8 @@ agent:
   # Claude: permissionMode, autoRun.
   # ACP: command, args, registryId, autoRun (required command after onboarding too).
   # Codex: sandboxMode (read-only | workspace-write | danger-full-access; empty keeps ~/.codex/config.toml).
-  # OpenCode / Gemini: model only; they have no Glassys deny lever.
+  # OpenCode: model only; every permission it asks for is refused (Glassys has no one to ask).
+  # Gemini: model only; no Glassys deny lever.
   options:
     settingSources:
       - project

@@ -29,7 +29,9 @@ export interface AdapterCreateOptions {
   options: Record<string, unknown>;
   /**
    * Directories the agent must not read or write through tools Glassys mediates (the Glassys
-   * data dir: secrets, sessions). Without a sandbox a shell can still reach them.
+   * data dir: secrets, sessions). Only Claude (its PreToolUse hook) and ACP (the host that runs
+   * fs/terminal for the agent) can enforce this; Cursor, Codex, OpenCode and Gemini run tools in
+   * their own process and ignore it. Without a sandbox a shell can still reach them either way.
    */
   protectedPaths?: string[];
 }

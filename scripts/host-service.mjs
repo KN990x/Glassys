@@ -332,7 +332,11 @@ export function isRoot(uid = process.getuid?.()) {
 /** Why a spawn never ran (a missing binary), or null when it ran and failed on its own. */
 export function spawnFailure(cmd, result) {
   const code = result?.error?.code;
-  if (code === "ENOENT") return `${cmd} is not on PATH (for pnpm: corepack enable, or install pnpm).`;
+  if (code === "ENOENT") {
+    if (cmd !== "pnpm") return `${cmd} is not on PATH.`;
+    /* Node 25 and later no longer ship Corepack, so `corepack enable` alone is not always there. */
+    return "pnpm is not on PATH. Run `corepack enable` (on Node 25+ install Corepack first: `npm install -g corepack`), or install pnpm from https://pnpm.io/installation.";
+  }
   if (result?.error) return `${cmd} could not start: ${result.error.message}`;
   return null;
 }

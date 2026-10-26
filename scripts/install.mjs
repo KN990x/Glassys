@@ -67,7 +67,8 @@ export async function main(argv = process.argv.slice(2), opts = {}) {
   if (argv[0] === "-h" || argv[0] === "--help") {
     console.log(`Usage: node scripts/install.mjs
 
-Installs Glassys on this machine (Node 22.13+, pnpm via Corepack).
+Installs Glassys on this machine (Node 22.13+, pnpm via Corepack; on Node 25+
+install Corepack first with \`npm install -g corepack\`, or install pnpm itself).
 If this file is already inside a clone, that clone is used.
 Otherwise clones ${DEFAULT_REPO} into ./glassys (or $GLASSYS_DIR).
 `);

@@ -1,6 +1,6 @@
 # Contributing
 
-Glassys is a pnpm workspace. Node **22.13+** (see `.nvmrc`). Use the pnpm version pinned in `packageManager` (Corepack is enough: `corepack enable`).
+Glassys is a pnpm workspace. Node **22.13+** (see `.nvmrc`). Use the pnpm version pinned in `packageManager` (Corepack is enough: `corepack enable`; Node 25+ no longer ships it, so `npm install -g corepack` first).
 
 ```bash
 corepack enable
