@@ -534,6 +534,31 @@ describe("Chat composer and layout", () => {
     expect(host.querySelector(".alert-stack")?.textContent).toMatch(/could not save this transcript/);
   });
 
+  it("treats a message found in the reconnect snapshot as delivered", async () => {
+    await renderChat();
+    await act(async () => {
+      socket.setConnected();
+      socket.emit({ type: "transcript.snapshot", events: [] });
+    });
+    vi.useFakeTimers();
+    try {
+      await typeIn(host.querySelector("textarea") as HTMLTextAreaElement, "uptime");
+      await act(async () => {
+        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      const sent = socket.sent.find((m) => (m as { type?: string }).type === "user.message") as { id: string };
+      /* The socket dropped before the echo; the gateway had the message all along. */
+      await act(async () => {
+        socket.emit({ type: "transcript.snapshot", lastSeq: 1, events: [{ type: "user.message", text: "uptime", id: sent.id, seq: 1 }] });
+        vi.advanceTimersByTime(10_000);
+      });
+      expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("");
+      expect(host.textContent).not.toMatch(/did not confirm/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("offers saved operations on the empty transcript and inserts without sending", async () => {
     await renderChat();
     await act(async () => {

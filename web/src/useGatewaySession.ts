@@ -104,6 +104,11 @@ export function useGatewaySession(opts: {
           setTranscriptTruncated(Boolean(msg.truncated));
           setBlocks(replay(msg.events));
           lastSeq = msg.lastSeq ?? 0;
+          /* A message the gateway took just before the socket dropped comes back inside the
+             snapshot, not as a live echo; without this it would be handed back as undelivered. */
+          for (const e of msg.events) {
+            if ((e.type === "user.message" || e.type === "user.retracted") && e.id) o.onEcho?.(e.id);
+          }
           return;
         }
         if (msg.type === "session") {
