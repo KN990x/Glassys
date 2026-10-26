@@ -95,6 +95,24 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (!shouldHandle(url)) return;
+  /* Built assets carry their content hash in the name and never change: answer from the cache, so
+     a lazy chunk (Settings, the host views) opens offline once it has been fetched. */
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      caches.match(req).then(
+        (hit) =>
+          hit ||
+          fetch(req).then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              event.waitUntil(caches.open(CACHE).then((cache) => cache.put(req, copy)));
+            }
+            return res;
+          }),
+      ),
+    );
+    return;
+  }
   event.respondWith(
     fetch(req)
       .then((res) => {
