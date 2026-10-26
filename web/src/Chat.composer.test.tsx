@@ -60,12 +60,12 @@ vi.mock("./api", () => ({
     saveConfig: (...args: unknown[]) => saveConfig(...args),
     hostCapabilities: vi.fn(async () => ({ overview: true, services: "systemd", logs: "journald", files: true })),
     logout: vi.fn(),
-    threads: vi.fn(async () => ({ threads: [], currentId: null })),
     newThread: vi.fn(async () => ({ threads: [], currentId: null })),
     switchThread: vi.fn(async () => ({ threads: [], currentId: null })),
     deleteThread: vi.fn(async () => ({ threads: [], currentId: null })),
     restart: vi.fn(async () => ({ ok: true })),
     renameThread: vi.fn(async () => ({ threads: [], currentId: null })),
+    threads: vi.fn(async () => ({ threads: [], currentId: null })),
     exportThread: vi.fn(async () => ({ blob: new Blob(["# t"]), name: "t.md" })),
     upload: vi.fn(async (file: File) => ({ id: `up-${file.name}`, mime: file.type, name: file.name })),
     reachability: vi.fn(async () => ({
@@ -274,27 +274,18 @@ describe("Chat composer and layout", () => {
   });
 
   it("names the workspace once, and only badges an adapter that is not the current one", async () => {
-    const { api } = await import("./api");
-    vi.mocked(api.threads).mockResolvedValueOnce({
-      threads: [
-        {
-          id: "t1",
-          title: "ws",
-          adapter: "cursor",
-          cwd: "/tmp/ws",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        },
-        {
-          id: "t2",
-          title: "other agent",
-          adapter: "claude",
-          cwd: "/tmp/ws",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        },
-      ],
-      currentId: "t1",
-    });
     await renderChat();
+    /* The thread list arrives with the socket handshake. */
+    await act(async () => {
+      socket.emit({
+        type: "threads.snapshot",
+        threads: [
+          { id: "t1", title: "ws", adapter: "cursor", cwd: "/tmp/ws", updatedAt: "2026-01-01T00:00:00.000Z" },
+          { id: "t2", title: "other agent", adapter: "claude", cwd: "/tmp/ws", updatedAt: "2026-01-01T00:00:00.000Z" },
+        ],
+        currentId: "t1",
+      });
+    });
     const rail = host.querySelector(".sidebar") as HTMLElement;
     expect(rail.querySelectorAll(".ws-path")).toHaveLength(1);
     expect(rail.querySelector(".ws-path")?.textContent).toContain("/tmp/ws");

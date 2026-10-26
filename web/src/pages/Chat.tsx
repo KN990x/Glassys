@@ -243,10 +243,8 @@ export function Chat({
   useEffect(() => {
     void loadModels();
     loadAdapters();
-    api.threads().then((r) => {
-      setThreads(r.threads);
-      setCurrentThreadId(r.currentId);
-    }).catch(() => undefined);
+    /* No thread list over HTTP: every WS handshake sends threads.snapshot, and a slower HTTP
+       reply landed after a newer snapshot and put an old list back. */
     api
       .reachability()
       .then((r) => {
@@ -263,7 +261,7 @@ export function Chat({
         setPins(r.pins || []);
       })
       .catch(() => undefined);
-  }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd, setThreads, setCurrentThreadId]);
+  }, [loadModels, loadAdapters, config.agent.adapter, config.agent.cwd]);
 
   /* Read at a thread change only: the draft being left is whatever the composer holds then. */
   const composerState = useRef({ text, drafts });
