@@ -1107,6 +1107,28 @@ async function endThreadOp(): Promise<void> {
   });
 }
 
+/**
+ * The scheduler's workspace change. It saw the gateway idle, but a message may have arrived since;
+ * a plain config patch would then cancel that run and retract its queue. Refuse with 409 instead
+ * (the job records it and waits for its next slot), and hold new messages back until the change
+ * is in place.
+ */
+export async function applyCwdWhenIdle(cwd: string): Promise<void> {
+  /* The folder may be gone since the job was saved; fail the job, not the live thread. */
+  const check = await validateCwd(cwd);
+  if (!check.ok) throw new HttpError(400, check.error);
+  await withThreadOps(async () => {
+    await beginIdleThreadOp();
+    try {
+      await applyConfigPatchUnlocked({ agent: { cwd } });
+    } finally {
+      await endThreadOp();
+    }
+    /* The patch could not rotate the thread while this held `rotating`; nothing is running, so now. */
+    await finishIdentityResetIfIdle();
+  });
+}
+
 export async function listLiveThreads() {
   await ensureLiveThread();
   return listThreads();
@@ -1295,12 +1317,7 @@ export async function initRuntime(): Promise<void> {
     liveThreadId,
     liveCwd: async () => (await loadConfig()).agent.cwd,
     switchThread: (id) => switchLiveThread(id),
-    applyCwd: async (cwd) => {
-      /* The folder may be gone since the job was saved; fail the job, not the live thread. */
-      const check = await validateCwd(cwd);
-      if (!check.ok) throw new HttpError(400, check.error);
-      await applyConfigPatch({ agent: { cwd } });
-    },
+    applyCwd: applyCwdWhenIdle,
   });
   startSchedules();
 }

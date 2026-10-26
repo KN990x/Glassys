@@ -242,6 +242,39 @@ describe("runtime queue", () => {
     }
   });
 
+  it("refuses a scheduled workspace change while a run is in flight, without cancelling it", async () => {
+    control.hold();
+    const { mkdtemp: mk } = await import("node:fs/promises");
+    const other = await mk(join(tmpdir(), "glassys-ws2-"));
+    const { enqueueMessage, applyCwdWhenIdle, readTranscript, drainEmit } = await import("./runtime.js");
+    const { loadConfig } = await import("./config.js");
+    const first = enqueueMessage("one");
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.start"));
+    await expect(applyCwdWhenIdle(other)).rejects.toMatchObject({ status: 409 });
+    expect((await loadConfig()).agent.cwd).toBe(ws);
+    control.go();
+    await first;
+    await waitUntil(async () => (await readTranscript()).some((e) => e.type === "run.done"));
+    await drainEmit();
+    expect((await readTranscript()).some((e) => e.type === "run.cancelled")).toBe(false);
+  });
+
+  it("changes the workspace for a schedule when idle and starts a new thread there", async () => {
+    const { mkdtemp: mk } = await import("node:fs/promises");
+    const other = await mk(join(tmpdir(), "glassys-ws2-"));
+    const { enqueueMessage, applyCwdWhenIdle, readTranscript, drainEmit, runtimeBusy } = await import("./runtime.js");
+    const { loadConfig } = await import("./config.js");
+    await enqueueMessage("one");
+    await waitUntil(() => !runtimeBusy());
+    await applyCwdWhenIdle(other);
+    expect((await loadConfig()).agent.cwd).toBe(other);
+    expect(runtimeBusy()).toBe(false);
+    /* The old thread was archived: the live transcript no longer holds "one". */
+    await drainEmit();
+    expect((await readTranscript()).some((e) => e.type === "user.message")).toBe(false);
+    expect(await enqueueMessage("two")).toBe(true);
+  });
+
   it("cancels the current run and still runs the queued follow-up", async () => {
     control.hold();
     const { enqueueMessage, cancelRun, readTranscript, drainEmit } = await import("./runtime.js");
