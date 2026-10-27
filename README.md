@@ -54,6 +54,8 @@ Glassys is a self-hosted **chat face** for the coding agent that already runs on
 
 A Node gateway talks to each vendor’s **local SDK** (or ACP), translates the stream into a stable UI protocol, and serves a PWA.
 
+Website, docs and an interactive demo: **[glassys.dev](https://glassys.dev)**.
+
 Analogy: Open WebUI is to Ollama what Glassys is to Cursor, Claude Code, OpenCode, and similar tools — the UI, not the runtime.
 
 - **Audience:** operators and sysadmins who want a persistent chat while a local coding agent does systems work on the host.
@@ -225,6 +227,8 @@ Apache-2.0. See [LICENSE](LICENSE).
 Glassys es una **cara de chat** self-hosted para el agente de código que ya corre en tu máquina. No es el agente. El trabajo es **sistemas** en ese host (la máquina, archivos, servicios, git) desde el teléfono u otro dispositivo — no desarrollar aplicaciones. Los agentes de código son el runtime; Glassys no es un IDE.
 
 Un gateway Node habla con el **SDK local** de cada vendor (o ACP), traduce el stream a un protocolo de UI estable y sirve una PWA.
+
+Web, documentación y demo interactiva: **[glassys.dev/es](https://glassys.dev/es/)**.
 
 Analogía: Open WebUI es a Ollama lo que Glassys es a Cursor, Claude Code, OpenCode y herramientas similares — la UI, no el runtime.
 

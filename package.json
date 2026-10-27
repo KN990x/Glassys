@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/KN990x/Glassys/issues"
   },
-  "homepage": "https://github.com/KN990x/Glassys#readme",
+  "homepage": "https://glassys.dev",
   "packageManager": "pnpm@11.14.0",
   "engines": {
     "node": ">=22.13.0",
