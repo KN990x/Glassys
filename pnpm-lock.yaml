@@ -42,7 +42,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   adapters/claude:
     dependencies:
@@ -64,7 +64,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   adapters/codex:
     dependencies:
@@ -86,7 +86,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   adapters/contract:
     dependencies:
@@ -102,7 +102,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   adapters/cursor:
     dependencies:
@@ -124,7 +124,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   adapters/gemini:
     dependencies:
@@ -143,7 +143,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   adapters/opencode:
     dependencies:
@@ -165,7 +165,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   gateway:
     dependencies:
@@ -226,7 +226,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   protocol:
     devDependencies:
@@ -238,7 +238,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
   web:
     dependencies:
@@ -286,8 +286,8 @@ importers:
         specifier: ^7.1.1
         version: 7.1.1(eslint@10.11.0)
       happy-dom:
-        specifier: ^20.14.0
-        version: 20.14.5
+        specifier: ^21.0.4
+        version: 21.0.4
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -299,7 +299,7 @@ importers:
         version: 7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
 
 packages:
 
@@ -1567,8 +1567,8 @@ packages:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
 
-  happy-dom@20.14.5:
-    resolution: {integrity: sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ==}
+  happy-dom@21.0.4:
+    resolution: {integrity: sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw==}
     engines: {node: '>=20.0.0'}
 
   has-flag@4.0.0:
@@ -3694,7 +3694,7 @@ snapshots:
 
   gopd@1.2.0: {}
 
-  happy-dom@20.14.5:
+  happy-dom@21.0.4:
     dependencies:
       '@types/node': 24.13.6
       '@types/whatwg-mimetype': 3.0.2
@@ -4711,7 +4711,7 @@ snapshots:
       tsx: 4.23.15
       yaml: 2.9.1
 
-  vitest@4.1.12(@types/node@24.13.6)(happy-dom@20.14.5)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@4.1.12(@types/node@24.13.6)(happy-dom@21.0.4)(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.12
       '@vitest/mocker': 4.1.12(vite@7.3.7(@types/node@24.13.6)(tsx@4.23.15)(yaml@2.9.1))
@@ -4735,7 +4735,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.13.6
-      happy-dom: 20.14.5
+      happy-dom: 21.0.4
     transitivePeerDependencies:
       - msw
 
