@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import { writeFileAtomic } from "./atomic.js";
@@ -16,8 +16,9 @@ import { paths } from "./paths.js";
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 function newCode(): string {
-  const bytes = randomBytes(10);
-  const chars = [...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("");
+  // randomInt, not `byte % 31`: 256 is not a multiple of 31, so a modulo would favour the first
+  // eight letters of the alphabet.
+  const chars = Array.from({ length: 10 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
   return `${chars.slice(0, 5)}-${chars.slice(5)}`;
 }
 
