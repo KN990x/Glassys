@@ -37,6 +37,10 @@ overrides:
   # @hono/node-server (MCP SDK) still accepts hono releases before 4.13.11.
   hono: '^4.13.11'
   proxy-addr: '^2.0.8'
+  # express 5.2.1 (MCP SDK) still accepts body-parser 2.3 (GHSA-27r3-jxmh-p828) and qs 6.16.0
+  # (GHSA-6pq8-jhm2-2vcw).
+  body-parser: '^2.4.0'
+  qs: '^6.16.1'
   # Dev only: concurrently (pnpm run dev) still pins shell-quote 1.9.
   shell-quote: '^1.11.0'
   # Dev only: postcss (vite, vitest) still accepts source-map-js 1.2.1, whose indexed
