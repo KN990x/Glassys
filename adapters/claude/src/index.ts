@@ -137,7 +137,9 @@ export function claudeToolTouchesProtected(
   }
   if (toolName === "Glob" && typeof input.pattern === "string") {
     // The literal prefix of the pattern, before its first wildcard.
-    if (isProtectedPath(input.pattern.replace(/[*?{[].*$/, ""), base, protectedPaths)) return true;
+    const wildcard = input.pattern.search(/[*?{[]/);
+    const prefix = wildcard === -1 ? input.pattern : input.pattern.slice(0, wildcard);
+    if (isProtectedPath(prefix, base, protectedPaths)) return true;
   }
   return false;
 }

@@ -21,4 +21,12 @@ describe("claudeToolTouchesProtected", () => {
     expect(claudeToolTouchesProtected("Bash", { command: "docker compose ps" }, home, [data])).toBe(false);
     expect(claudeToolTouchesProtected("Read", { file_path: join(data, "x") }, home, [])).toBe(false);
   });
+
+  it("reads a Glob pattern up to its first wildcard, in linear time", () => {
+    expect(claudeToolTouchesProtected("Glob", { pattern: "glassys/data" }, home, [data])).toBe(true);
+    expect(claudeToolTouchesProtected("Glob", { pattern: "stacks/*/compose.yaml" }, home, [data])).toBe(false);
+    const started = performance.now();
+    expect(claudeToolTouchesProtected("Glob", { pattern: `${"*".repeat(50_000)}\n` }, home, [data])).toBe(false);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
