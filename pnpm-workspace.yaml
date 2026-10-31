@@ -36,6 +36,9 @@ overrides:
   '@modelcontextprotocol/sdk': '^1.32.0'
   # @hono/node-server (MCP SDK) still accepts hono releases before 4.13.11.
   hono: '^4.13.11'
+  # The MCP SDK accepts @hono/node-server ^2.0.5, which includes releases whose serveStatic decodes
+  # the path twice and skips middleware on static paths (GHSA-rmxm-3fg6-px4f).
+  '@hono/node-server': '^2.1.3'
   proxy-addr: '^2.0.8'
   # express 5.2.1 (MCP SDK) still accepts body-parser 2.3 (GHSA-27r3-jxmh-p828) and qs 6.16.0
   # (GHSA-6pq8-jhm2-2vcw).
