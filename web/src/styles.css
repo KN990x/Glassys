@@ -1136,9 +1136,11 @@ details label { margin-top: var(--s-2); }
 .app-shell > * { min-width: 0; min-height: 0; }
 
 /* The rail's children carry their own inline padding, so the head's and the
-   foot's hairlines run edge to edge and line up with the topbar's. */
+   foot's hairlines run edge to edge and line up with the topbar's. The column is explicit: an
+   implicit one sizes to its content and can grow past the rail, and the foot's hairline with it. */
 .sidebar {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-height: 0;
   min-width: 0;
@@ -1185,9 +1187,10 @@ details label { margin-top: var(--s-2); }
 }
 .rail-new:hover:not(:disabled) { background: var(--hover-bg); }
 .rail-new svg { width: var(--icon-md); height: var(--icon-md); color: var(--muted); flex: none; }
-/* The shortcut is a hint for the pointer that is already there. */
-.rail-new .kbd { margin-left: auto; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
-.rail-new:hover .kbd, .rail-new:focus-visible .kbd { opacity: 1; }
+/* The shortcut is a hint for the pointer that is already there. Hidden, it takes no room: on Linux
+   and Windows "Ctrl+Shift+O" is far wider than "⌘⇧O" and would truncate the label for nothing. */
+.rail-new .kbd { display: none; margin-left: auto; }
+.rail-new:hover .kbd, .rail-new:focus-visible .kbd { display: inline-flex; }
 /* A list that runs under the foot fades out instead of slicing a row in half. */
 .sidebar-scroll {
   overflow: auto;
