@@ -14,13 +14,6 @@ allowBuilds:
 # It does not affect --frozen-lockfile, so CI stays deterministic.
 minimumReleaseAge: 10080
 
-# @cursor/sdk (1.0.32, the latest) still depends on @connectrpc/connect-node 1.x, which pins
-# undici to ^5.28.4 — and no 5.x release carries the fixes for the WebSocket, CRLF and
-# response-smuggling advisories. connect-node only requires undici to polyfill `Headers` on
-# Node < 18 (node-headers-polyfill.js), and Glassys requires Node >= 22.13, so the
-# vulnerable code never runs. This floor closes the advisories without waiting on either
-# parent; undici 6 still exports `Headers`, and 6 rather than 7 moves the least.
-#
 # fast-uri and ip-address arrive through @anthropic-ai/claude-agent-sdk >
 # @modelcontextprotocol/sdk (ajv, express-rate-limit), whose ranges already accept the
 # patched releases; the floors only stop the lockfile from holding the vulnerable ones.
@@ -30,7 +23,6 @@ minimumReleaseAge: 10080
 # (GHSA-6qxp-vccf-f47h). proxy-addr arrives through its express and is spoofable via an
 # IPv4-mapped IPv6 trust subnet below 2.0.8. Both floors sit inside the parents' ranges.
 overrides:
-  undici: '^6.29.1'
   fast-uri: '^3.1.9'
   ip-address: '^10.7.4'
   '@modelcontextprotocol/sdk': '^1.32.0'
@@ -44,8 +36,6 @@ overrides:
   # (GHSA-6pq8-jhm2-2vcw).
   body-parser: '^2.4.0'
   qs: '^6.16.1'
-  # Dev only: concurrently (pnpm run dev) still pins shell-quote 1.9.
-  shell-quote: '^1.11.0'
   # Dev only: postcss (vite, vitest) still accepts source-map-js 1.2.1, whose indexed
   # source-map sections can stall the event loop (GHSA-68fv-2mgg-jv7q).
   source-map-js: '^1.2.2'
