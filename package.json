@@ -35,7 +35,7 @@
     "check": "pnpm lint && pnpm build && pnpm typecheck && pnpm test:run && pnpm budget"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.6",
     "typescript": "^5.9.2"
   }
 }
