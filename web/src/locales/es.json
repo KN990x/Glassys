@@ -429,7 +429,7 @@
   "host.refresh": "Actualizar",
   "host.loading": "Leyendo el host",
   "host.loadFailed": "No se pudo leer del host.",
-  "host.servicesUnavailable": "No se encontró un gestor de servicios (systemd o launchd) en este host.",
+  "host.servicesUnavailable": "No se encontró systemd en este host.",
   "host.logsUnavailable": "No se encontró el journal de systemd en este host.",
   "services.all": "Todos",
   "services.active": "Activos",

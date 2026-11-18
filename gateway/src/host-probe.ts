@@ -72,11 +72,10 @@ async function runs(cmd: string, args: string[]): Promise<boolean> {
 export function hostCapabilities(): Promise<HostCapabilities> {
   caps ??= (async () => {
     const systemd = platform === "linux" && (await runs("systemctl", ["--version"]));
-    const launchd = platform === "darwin" && (await runs("launchctl", ["version"]));
     const journald = platform === "linux" && (await runs("journalctl", ["--version"]));
     return {
       overview: true,
-      services: systemd ? "systemd" : launchd ? "launchd" : null,
+      services: systemd ? "systemd" : null,
       logs: journald ? "journald" : null,
       files: true,
     };
@@ -98,14 +97,9 @@ export function parseDf(stdout: string): HostDisk[] {
     const used = Number(cols[2]) * 1024;
     const mount = cols.slice(5).join(" ");
     if (!Number.isFinite(size) || size <= 0) continue;
-    // Real block devices only: no tmpfs, overlays, snaps or loop mounts, and on
-    // macOS only the system and data volumes of the APFS container.
+    // Real block devices only: no tmpfs, overlays, snaps or loop mounts.
     if (!fs.startsWith("/dev/") || fs.startsWith("/dev/loop")) continue;
     if (mount.startsWith("/snap/") || mount.startsWith("/boot/efi")) continue;
-    if (mount.startsWith("/System/Volumes/") && mount !== "/System/Volumes/Data") continue;
-    // Xcode mounts one read-only disk image per simulator runtime, and macOS
-    // mounts its recovery volume on its own now and then.
-    if (mount.startsWith("/Library/Developer/") || mount === "/Volumes/Recovery") continue;
     if (seen.has(fs)) continue;
     seen.add(fs);
     disks.push({ mount, fs, size, used });
@@ -128,33 +122,10 @@ export function parseMeminfoAvailable(text: string): number | undefined {
   return Number.isFinite(kb) ? kb * 1024 : undefined;
 }
 
-/**
- * Reclaimable memory from `vm_stat`: free, inactive and speculative pages. On
- * macOS os.freemem() counts only free pages, so a Mac with its file cache
- * warm read as 90% used.
- */
-export function parseVmStatAvailable(stdout: string): number | undefined {
-  const page = Number(stdout.match(/page size of (\d+) bytes/)?.[1]);
-  const pages = (label: string) => Number(stdout.match(new RegExp(`^Pages ${label}:\\s+(\\d+)`, "m"))?.[1]);
-  const free = pages("free");
-  const inactive = pages("inactive");
-  const speculative = pages("speculative");
-  if (![page, free, inactive].every(Number.isFinite)) return undefined;
-  return (free + inactive + (Number.isFinite(speculative) ? speculative : 0)) * page;
-}
-
 async function availableMemory(meminfo: string | undefined): Promise<number> {
   if (meminfo) {
     const available = parseMeminfoAvailable(meminfo);
     if (available !== undefined) return available;
-  }
-  if (platform === "darwin") {
-    try {
-      const available = parseVmStatAvailable((await exec("vm_stat", [])).stdout);
-      if (available !== undefined) return available;
-    } catch {
-      /* fall back to free pages */
-    }
   }
   return os.freemem();
 }
@@ -171,14 +142,6 @@ async function osName(): Promise<string> {
       if (pretty) return pretty;
     } catch {
       /* fall through to os.type() */
-    }
-  }
-  if (platform === "darwin") {
-    try {
-      const { stdout } = await exec("sw_vers", ["-productVersion"]);
-      return `macOS ${stdout.trim()}`;
-    } catch {
-      /* fall through */
     }
   }
   return os.type();
@@ -241,28 +204,6 @@ export function parseSystemctlPlain(stdout: string): ServiceUnit[] {
   return units;
 }
 
-/** `launchctl list`: PID, last exit status and label, tab-separated. */
-export function parseLaunchctl(stdout: string): ServiceUnit[] {
-  const units: ServiceUnit[] = [];
-  for (const line of stdout.split("\n").slice(1)) {
-    const [pid, status, label] = line.split("\t");
-    if (!label) continue;
-    const running = pid !== undefined && pid !== "-";
-    // A negative status is the signal launchd stopped the job with — an idle
-    // agent it reaped on demand, not a failure. Only a positive exit code is.
-    const code = Number(status);
-    const failed = !running && Number.isFinite(code) && code > 0;
-    units.push({
-      name: label.trim(),
-      description: "",
-      load: "loaded",
-      active: running ? "active" : failed ? "failed" : "inactive",
-      sub: running ? "running" : failed ? `exit ${status}` : "dead",
-    });
-  }
-  return units;
-}
-
 function filterState(units: ServiceUnit[], state: ServiceStateFilter): ServiceUnit[] {
   if (state === "failed") return units.filter((u) => u.active === "failed");
   if (state === "active") return units.filter((u) => u.active === "active");
@@ -271,10 +212,6 @@ function filterState(units: ServiceUnit[], state: ServiceStateFilter): ServiceUn
 
 export async function listServices(scope: ServiceScope, state: ServiceStateFilter): Promise<ServiceUnit[]> {
   const cap = await hostCapabilities();
-  if (cap.services === "launchd") {
-    const { stdout } = await exec("launchctl", ["list"]);
-    return filterState(parseLaunchctl(stdout), state);
-  }
   if (cap.services !== "systemd") throw new HttpError(404, "service manager not available on this host");
   const base = [...(scope === "user" ? ["--user"] : []), "list-units", "--type=service", "--all", "--no-pager"];
   let units: ServiceUnit[];

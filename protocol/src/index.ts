@@ -452,7 +452,7 @@ export function defaultPromptTemplates(): PromptTemplate[] {
       id: "status",
       slash: "status",
       title: "Host status",
-      text: "Check systemd/launchd failed units, disk usage, and memory. Summarize what needs attention.",
+      text: "Check systemd failed units, disk usage, and memory. Summarize what needs attention.",
     },
     {
       id: "disk",
@@ -649,7 +649,7 @@ export interface ScheduleList {
   schedules: Array<ScheduleJob & { nextRun: string | null }>;
 }
 
-export type ServiceKind = "launchd" | "systemd" | "none";
+export type ServiceKind = "systemd" | "none";
 export type UpgradePhase = "idle" | "starting" | "pulling" | "install" | "build" | "restart" | "error";
 
 export interface UpgradeStatus {
@@ -691,7 +691,7 @@ export interface AdapterAuthStatus {
  * PWA shows them, and every action they offer is drafted as a prompt for the
  * agent, never executed by the gateway.
  */
-export type HostServiceManager = "systemd" | "launchd";
+export type HostServiceManager = "systemd";
 export type HostLogSource = "journald";
 
 export interface HostCapabilities {

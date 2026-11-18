@@ -2,7 +2,7 @@
 // mkdtemp() directories per run and most never clean up, so they piled up in the system temp
 // dir (a RAM-backed tmpfs on many Linux hosts). Pointing TMPDIR at a throwaway directory fixes
 // every test at once instead of adding cleanup to each of them. os.tmpdir() reads TMPDIR on
-// Linux and macOS, the platforms the suites run on.
+// Linux, the platform the suites run on.
 //
 // Two ways in:
 // - Vitest `globalSetup`: runs in the main process before the workers start, so they inherit it.

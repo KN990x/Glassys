@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Install Glassys as a user service (launchd on macOS, systemd --user on Linux)
- * so closing the terminal does not stop the gateway.
+ * Install Glassys as a systemd --user service so closing the terminal does not stop the gateway.
+ * Glassys runs on Linux only.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -16,15 +16,6 @@ const MIN_NODE = [22, 13, 0];
 
 export function repoRootFrom(scriptUrl = import.meta.url) {
   return join(dirname(fileURLToPath(scriptUrl)), "..");
-}
-
-export function xmlEscape(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
 }
 
 /** systemd expands %-specifiers in most unit settings; a literal % is %%. */
@@ -101,7 +92,7 @@ export function healthProbeHosts(bind = process.env.GLASSYS_BIND || "127.0.0.1")
 }
 
 /**
- * A node path that survives the package manager upgrading node. Homebrew's Cellar path carries
+ * A node path that survives the package manager upgrading node. Linuxbrew's Cellar path carries
  * the version (`Cellar/node/26.10.0_2/bin/node`) and is deleted by the next `brew upgrade`, so a
  * service pinned to it stops starting. `opt/<formula>` (also right for keg-only `node@22`) and
  * `bin/` are the stable links. GLASSYS_NODE wins when the operator sets it.
@@ -139,7 +130,7 @@ export function nodePathIsVersioned(nodePath) {
 
 /**
  * PATH for the service. The shell's PATH at install time carries entries that do not outlive it:
- * pnpm's `node_modules/.bin` dirs (and store hashes) when run through `pnpm run`, Homebrew Cellar
+ * pnpm's `node_modules/.bin` dirs (and store hashes) when run through `pnpm run`, Linuxbrew Cellar
  * kegs, versioned tool dirs, temp dirs. Keep what is stable, drop what is gone, dedupe, and put
  * the node dir first.
  */
@@ -152,8 +143,6 @@ export function sanitizePath(envPath, nodeDir, { exists = existsSync } = {}) {
     /\/v?\d+\.\d+\.\d+[^/]*(\/|$)/,
     /\/fnm_multishells\//,
     /^\/tmp(\/|$)/,
-    /^\/private\/(var\/folders|tmp)(\/|$)/,
-    /^\/var\/folders\//,
   ];
   const fallback = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
   const out = [];
@@ -229,70 +218,6 @@ WantedBy=default.target
 `;
 }
 
-/**
- * @param {{
- *   node: string;
- *   gateway: string;
- *   cwd: string;
- *   dataDir: string;
- *   webDir: string;
- *   home: string;
- *   path: string;
- *   logOut: string;
- *   logErr: string;
- * }} opts
- */
-export function renderLaunchdPlist(opts) {
-  const env = {
-    NODE_ENV: "production",
-    HOME: opts.home,
-    PATH: opts.path,
-    GLASSYS_DATA_DIR: opts.dataDir,
-    GLASSYS_WEB_DIR: opts.webDir,
-    GLASSYS_SERVICE: "1",
-    ...(opts.graphical ?? {}),
-    ...(opts.listenEnv ?? {}),
-  };
-  const envXml = Object.entries(env)
-    .map(
-      ([k, v]) =>
-        `      <key>${xmlEscape(k)}</key>\n      <string>${xmlEscape(v)}</string>`,
-    )
-    .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${xmlEscape(SERVICE_LABEL)}</string>
-  <key>WorkingDirectory</key>
-  <string>${xmlEscape(opts.cwd)}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${xmlEscape(opts.node)}</string>
-    <string>${xmlEscape(opts.gateway)}</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-${envXml}
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${xmlEscape(opts.logOut)}</string>
-  <key>StandardErrorPath</key>
-  <string>${xmlEscape(opts.logErr)}</string>
-</dict>
-</plist>
-`;
-}
-
-export function launchdPlistPath(home = homedir()) {
-  return join(home, "Library", "LaunchAgents", `${SERVICE_LABEL}.plist`);
-}
-
 export function systemdUserUnitPath(home = homedir()) {
   return join(home, ".config", "systemd", "user", SYSTEMD_UNIT);
 }
@@ -312,8 +237,6 @@ export function resolveInstallPaths(env = process.env, root = repoRootFrom()) {
     webDir,
     home,
     path,
-    logOut: join(dataDir, "glassys.log"),
-    logErr: join(dataDir, "glassys.err"),
     graphical: graphicalEnvFrom(env),
     listenEnv: listenEnvFrom(env),
     port: gatewayListenPort(env),
@@ -460,70 +383,6 @@ function enableLinger(username) {
   return false;
 }
 
-/** Create (or tighten) a log file as owner-only before the service manager opens it. */
-function ensurePrivateFile(path) {
-  try {
-    closeSync(openSync(path, "a", 0o600));
-    chmodSync(path, 0o600);
-  } catch {
-    /* the service manager creates it */
-  }
-}
-
-function installDarwin(opts) {
-  mkdirSync(dirname(opts.logOut), { recursive: true, mode: 0o700 });
-  mkdirSync(dirname(launchdPlistPath(opts.home)), { recursive: true });
-  ensurePrivateFile(opts.logOut);
-  ensurePrivateFile(opts.logErr);
-  const plist = launchdPlistPath(opts.home);
-  writeFileSync(plist, renderLaunchdPlist(opts));
-  const uid = String(userInfo().uid);
-  const domain = `gui/${uid}`;
-  const target = `${domain}/${SERVICE_LABEL}`;
-  bootoutAndWait(target);
-  /* "Bootstrap failed: 5: Input/output error" is launchd still tearing the old job down; retry. */
-  let boot = run("launchctl", ["bootstrap", domain, plist]);
-  for (let attempt = 1; boot.status !== 0 && attempt < 5; attempt++) {
-    sleepMs(500 * attempt);
-    boot = run("launchctl", ["bootstrap", domain, plist]);
-  }
-  if (boot.status !== 0) {
-    throw new Error(`launchctl bootstrap failed:\n${boot.stderr || boot.stdout || ""}`);
-  }
-  console.log(`Wrote ${plist}`);
-  return finishInstall(opts);
-}
-
-function sleepMs(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-/** bootout returns before launchd has finished removing the job; wait until it is gone. */
-function bootoutAndWait(target, timeoutMs = 10_000) {
-  run("launchctl", ["bootout", target]);
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline && run("launchctl", ["print", target]).status === 0) sleepMs(200);
-}
-
-function uninstallDarwin(opts) {
-  const uid = String(userInfo().uid);
-  const target = `gui/${uid}/${SERVICE_LABEL}`;
-  run("launchctl", ["bootout", target]);
-  const plist = launchdPlistPath(opts.home);
-  if (existsSync(plist)) rmSync(plist);
-  console.log("Removed the Glassys LaunchAgent.");
-}
-
-function statusDarwin() {
-  const uid = String(userInfo().uid);
-  const printed = run("launchctl", ["print", `gui/${uid}/${SERVICE_LABEL}`]);
-  if (printed.status !== 0) {
-    console.log("Glassys service is not loaded.");
-    process.exit(1);
-  }
-  process.stdout.write(printed.stdout || printed.stderr || "");
-}
-
 function installLinux(opts) {
   mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
   mkdirSync(dirname(systemdUserUnitPath(opts.home)), { recursive: true });
@@ -595,6 +454,11 @@ function statusLinux() {
   process.exit(st.status === 0 ? 0 : 1);
 }
 
+/** Glassys is built for Linux servers: systemd, the journal and the host views assume one. */
+export function linuxOnlyMessage(platform) {
+  return `Glassys runs on Linux only (systemd --user); this host is ${platform}.`;
+}
+
 export async function main(argv = process.argv.slice(2), platform = process.platform) {
   const cmd = argv[0] || "install";
   if (cmd === "-h" || cmd === "--help" || cmd === "help") {
@@ -605,15 +469,15 @@ upgrade     git pull --ff-only, pnpm install, build, reinstall and restart the u
             (--allow-stale: keep going with the current clone when the pull fails)
 uninstall   stop and remove the user service
 status      show whether the service is running
-print       write the unit/plist to stdout (no install)
+print       write the systemd unit to stdout (no install)
 `);
     return;
   }
   if (!nodeMeetsMin()) {
     fail(`Glassys needs Node.js 22.13+ (this is v${process.versions.node}).`);
   }
-  if (platform !== "darwin" && platform !== "linux") {
-    fail(`No user-service installer for ${platform}. Run in the foreground: pnpm start`);
+  if (platform !== "linux") {
+    fail(linuxOnlyMessage(platform));
   }
 
   const root = repoRootFrom();
@@ -621,20 +485,17 @@ print       write the unit/plist to stdout (no install)
   opts.listen = await resolveListen(root, opts.dataDir);
 
   if (cmd === "print") {
-    const body = platform === "darwin" ? renderLaunchdPlist(opts) : renderSystemdUserUnit(opts);
-    process.stdout.write(body);
+    process.stdout.write(renderSystemdUserUnit(opts));
     return;
   }
 
   if (cmd === "status") {
-    if (platform === "darwin") statusDarwin();
-    else statusLinux();
+    statusLinux();
     return;
   }
 
   if (cmd === "uninstall") {
-    if (platform === "darwin") uninstallDarwin(opts);
-    else uninstallLinux(opts);
+    uninstallLinux(opts);
     return;
   }
 
@@ -658,7 +519,7 @@ print       write the unit/plist to stdout (no install)
       // Written before the restart: on systemd the restart can stop this script, and the new
       // gateway reads this to close the run.
       writeUpgradeStatus(opts.dataDir, "restart");
-      const health = platform === "darwin" ? installDarwin(opts) : installLinux(opts);
+      const health = installLinux(opts);
       if (health.detached) return;
       if (!health.ok) throw new Error(`Upgrade restart did not come up: ${health.reason}`);
       writeUpgradeStatus(opts.dataDir, "idle");
@@ -673,8 +534,7 @@ print       write the unit/plist to stdout (no install)
 
   ensureBuilt(root);
   mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
-  if (platform === "darwin") installDarwin(opts);
-  else installLinux(opts);
+  installLinux(opts);
 }
 
 /** @type {{ startedAt?: string, fromSha?: string, targetSha?: string }} */

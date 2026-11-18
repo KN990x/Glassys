@@ -19,6 +19,11 @@ main() {
     exit 1
   fi
 
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    echo "Glassys runs on Linux only (systemd --user); this host is $(uname -s)." >&2
+    exit 1
+  fi
+
   need_bin git
   need_bin node
 

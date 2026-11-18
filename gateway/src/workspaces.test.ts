@@ -10,11 +10,9 @@ describe("listWorkspaces", () => {
     await expect(listWorkspaces("/")).rejects.toThrow(/working directory/);
   });
 
-  it("narrows /Users and /home to the operator home", async () => {
+  it("narrows /home to the operator home", async () => {
     const home = homedir();
-    const hitsUsers = await listWorkspaces("/Users");
     const hitsHome = await listWorkspaces("/home");
-    expect(hitsUsers).toEqual([{ path: home, name: basename(home) }]);
     expect(hitsHome).toEqual([{ path: home, name: basename(home) }]);
   });
 

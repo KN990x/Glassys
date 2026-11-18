@@ -518,7 +518,7 @@ describe("http api", () => {
     const status = await fetch(`${base}/api/admin/update`, { headers: auth });
     expect(status.status).toBe(200);
     const snap = (await status.json()) as { service: string; upgrading?: { phase: string } };
-    expect(["none", "launchd", "systemd"]).toContain(snap.service);
+    expect(["none", "systemd"]).toContain(snap.service);
     expect(snap.upgrading === undefined || snap.upgrading.phase === "idle").toBe(true);
 
     const vapid = await fetch(`${base}/api/push/vapid`, { method: "POST", headers: auth });
@@ -580,7 +580,7 @@ describe("http api", () => {
     expect(job.cron).toBe("0 6 * * *");
 
     const { setDetectServiceForTests, setInstallGitForTests } = await import("./admin-update.js");
-    setDetectServiceForTests("launchd");
+    setDetectServiceForTests("systemd");
     setInstallGitForTests({ sha: "abc", branch: "main", dirty: true });
     const dirty = await fetch(`${base}/api/admin/upgrade`, { method: "POST", headers: auth });
     expect(dirty.status).toBe(409);

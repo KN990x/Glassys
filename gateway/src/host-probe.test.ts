@@ -8,13 +8,11 @@ import {
   listServices,
   parseDf,
   parseJournal,
-  parseLaunchctl,
   parseMeminfoAvailable,
   parseMeminfoSwap,
   parseOsRelease,
   parseSystemctlJson,
   parseSystemctlPlain,
-  parseVmStatAvailable,
   previewFile,
   readLogs,
   setHostProbeForTests,
@@ -39,17 +37,6 @@ describe("parsers", () => {
     ]);
   });
 
-  it("keeps only the system and data volumes on macOS", () => {
-    const mac = `Filesystem 1024-blocks Used Available Capacity Mounted on
-/dev/disk3s1s1 482797652 11000000 200000000 6% /
-/dev/disk3s6 482797652 4000000 200000000 2% /System/Volumes/VM
-/dev/disk3s5 482797652 250000000 200000000 56% /System/Volumes/Data
-/dev/disk5s1 8898560 8601444 297116 97% /Library/Developer/CoreSimulator/Volumes/iOS_23C54
-/dev/disk3s3 482797652 1000000 200000000 1% /Volumes/Recovery
-`;
-    expect(parseDf(mac).map((d) => d.mount)).toEqual(["/", "/System/Volumes/Data"]);
-  });
-
   it("reads swap and the distribution name", () => {
     expect(parseMeminfoSwap("SwapTotal:  2048 kB\nSwapFree:   512 kB\n")).toEqual({ total: 2048 * 1024, used: 1536 * 1024 });
     expect(parseMeminfoSwap("SwapTotal: 0 kB\nSwapFree: 0 kB\n")).toBeUndefined();
@@ -58,15 +45,6 @@ describe("parsers", () => {
 
   it("counts reclaimable memory as available, not only free pages", () => {
     expect(parseMeminfoAvailable("MemTotal: 8000000 kB\nMemFree: 200000 kB\nMemAvailable: 5000000 kB\n")).toBe(5000000 * 1024);
-    const vm = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
-Pages free:                                     5575.
-Pages active:                                 309209.
-Pages inactive:                               294426.
-Pages speculative:                              6628.
-Pages wired down:                             154109.
-`;
-    expect(parseVmStatAvailable(vm)).toBe((5575 + 294426 + 6628) * 16384);
-    expect(parseVmStatAvailable("nonsense")).toBeUndefined();
   });
 
   it("reads systemctl in JSON and in plain columns", () => {
@@ -85,17 +63,6 @@ Pages wired down:                             154109.
     expect(parseSystemctlPlain(plain)).toEqual([
       { name: "backup.service", load: "loaded", active: "failed", sub: "failed", description: "Nightly backup" },
       { name: "caddy.service", load: "loaded", active: "active", sub: "running", description: "Caddy web server" },
-    ]);
-  });
-
-  it("reads launchctl list", () => {
-    const out =
-      "PID\tStatus\tLabel\n123\t0\tcom.example.run\n-\t78\tcom.example.broken\n-\t0\tcom.example.idle\n-\t-9\tcom.example.reaped\n";
-    expect(parseLaunchctl(out).map((u) => [u.name, u.active])).toEqual([
-      ["com.example.run", "active"],
-      ["com.example.broken", "failed"],
-      ["com.example.idle", "inactive"],
-      ["com.example.reaped", "inactive"],
     ]);
   });
 

@@ -32,24 +32,24 @@ describe("admin update", () => {
     setPidAliveForTests(null);
   });
 
-  it("treats GLASSYS_SERVICE=1 as the user service", async () => {
-    expect(await detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("launchd");
+  it("treats GLASSYS_SERVICE=1 as the user service on Linux only", async () => {
     expect(await detectService({ GLASSYS_SERVICE: "1" }, "linux")).toBe("systemd");
+    expect(await detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("none");
   });
 
   it("honors the test override", async () => {
     setDetectServiceForTests("none");
-    expect(await detectService({ GLASSYS_SERVICE: "1" }, "darwin")).toBe("none");
+    expect(await detectService({ GLASSYS_SERVICE: "1" }, "linux")).toBe("none");
   });
 
   it("rejects upgrade when the working tree is dirty", async () => {
-    setDetectServiceForTests("launchd");
+    setDetectServiceForTests("systemd");
     setInstallGitForTests({ sha: "abc", branch: "main", dirty: true });
     await expect(startUpgrade()).rejects.toThrow(/dirty/i);
   });
 
   it("records error phase when spawn fails", async () => {
-    setDetectServiceForTests("launchd");
+    setDetectServiceForTests("systemd");
     setInstallGitForTests({ sha: "abc", branch: "main", dirty: false });
     setUpgradeSpawnForTests((() => {
       const child = new EventEmitter() as EventEmitter & { unref: () => void; pid?: number };
@@ -88,7 +88,7 @@ describe("admin update", () => {
   });
 
   it("treats an upgrade whose script died as failed, so the next one is not refused", async () => {
-    setDetectServiceForTests("launchd");
+    setDetectServiceForTests("systemd");
     setInstallGitForTests({ sha: "abc", branch: "main", dirty: false });
     setPidAliveForTests(() => false);
     await writeUpgradeStatus({ phase: "build", startedAt: new Date().toISOString(), pid: 999_999 });

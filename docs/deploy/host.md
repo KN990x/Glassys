@@ -1,6 +1,6 @@
 # Host gateway
 
-Run the Glassys gateway as a normal process on the machine the agent should operate (systems work: git, files, services). The PWA is served by the same process. You bring the reverse proxy.
+Run the Glassys gateway as a normal process on the Linux server the agent should operate (systems work: git, files, services). Glassys runs on Linux only: the installer, the host views and upgrades assume systemd and the journal. The PWA is served by the same process. You bring the reverse proxy.
 
 This is how Glassys is installed: the agent needs the real workspace, host `git`, and the operator’s files.
 
@@ -26,14 +26,13 @@ cd glassys && pnpm run service:upgrade
 cd glassys && pnpm run service:uninstall
 ```
 
-`service:upgrade` is `git pull --ff-only && pnpm install && pnpm build &&` restart of the user unit (not Docker, not Windows). Stay in the clone you installed from. From the PWA, **Upgrade** runs the same path only when the user service is installed (`GLASSYS_SERVICE=1` in the unit/plist). If `git pull --ff-only` fails, the PWA upgrade **stops** and does not install or build. Foreground `pnpm start` can Restart but cannot Upgrade (HTTP 409); use `pnpm run service:upgrade` in the clone.
+`service:upgrade` is `git pull --ff-only && pnpm install && pnpm build &&` restart of the user unit (not Docker, not Windows). Stay in the clone you installed from. From the PWA, **Upgrade** runs the same path only when the user service is installed (`GLASSYS_SERVICE=1` in the unit). If `git pull --ff-only` fails, the PWA upgrade **stops** and does not install or build. Foreground `pnpm start` can Restart but cannot Upgrade (HTTP 409); use `pnpm run service:upgrade` in the clone.
 
 Web Push needs HTTPS or localhost. A loopback bind on the LAN is not enough: put a tunnel or reverse proxy in front, then subscribe from Settings. iOS only delivers push to an installed PWA.
 
-Uninstall stops the service and removes the unit/LaunchAgent. It does not delete the clone or `data/` (operator hash, transcript).
+Uninstall stops the service and removes the unit. It does not delete the clone or `data/` (operator hash, transcript).
 
-- **macOS:** LaunchAgent `~/Library/LaunchAgents/dev.kn990x.glassys.plist` (`KeepAlive`).
-- **Linux:** systemd user unit `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot). If you install from a graphical session, the unit copies `DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS` when they are set; linger after reboot still has no display. Logs: `journalctl --user -u glassys`. The installer does **not** duplicate that journal into `data/glassys.log`.
+The service is a systemd user unit, `~/.config/systemd/user/glassys.service`. On a headless/SSH host, enable linger so logout does not stop it: `sudo loginctl enable-linger $USER` (the installer tries this and prints the command if it cannot). If you install from a graphical session, the unit copies `DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS` when they are set; linger after reboot still has no display. Logs: `journalctl --user -u glassys`. The installer does **not** duplicate that journal into `data/glassys.log`.
 
 The user-service unit runs as **your login user** with `WorkingDirectory` set to the clone. That is not the same as the example system unit below (`User=glassys`, `/opt/glassys`). Do not mix those paths.
 
@@ -98,11 +97,7 @@ RestartSec=2
 WantedBy=multi-user.target
 ```
 
-`Restart=always` brings the process back after a crash and after `POST /api/admin/restart` (exit 0). Bind, port, and edge auth are yaml/env only; change those files and bounce the unit (systemctl restart / launchctl). The PWA cannot change them.
-
-## launchd (macOS)
-
-`pnpm run service:install` writes the LaunchAgent. To do it by hand: `KeepAlive`, `ProgramArguments` pointing at `node` and `gateway/dist/index.js`, and `GLASSYS_DATA_DIR` in `EnvironmentVariables`.
+`Restart=always` brings the process back after a crash and after `POST /api/admin/restart` (exit 0). Bind, port, and edge auth are yaml/env only; change those files and bounce the unit (`systemctl restart`). The PWA cannot change them.
 
 ## Proxy
 

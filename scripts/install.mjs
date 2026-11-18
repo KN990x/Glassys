@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { isRoot, nodeMeetsMin, openUrl, resolveListen, spawnFailure } from "./host-service.mjs";
+import { isRoot, linuxOnlyMessage, nodeMeetsMin, openUrl, resolveListen, spawnFailure } from "./host-service.mjs";
 
 export const DEFAULT_REPO = "https://github.com/KN990x/Glassys.git";
 
@@ -67,13 +67,16 @@ export async function main(argv = process.argv.slice(2), opts = {}) {
   if (argv[0] === "-h" || argv[0] === "--help") {
     console.log(`Usage: node scripts/install.mjs
 
-Installs Glassys on this machine (Node 22.13+, pnpm via Corepack; on Node 25+
+Installs Glassys on this Linux server (systemd --user; Node 22.13+, pnpm via Corepack; on Node 25+
 install Corepack first with \`npm install -g corepack\`, or install pnpm itself).
 If this file is already inside a clone, that clone is used.
 Otherwise clones ${DEFAULT_REPO} into ./glassys (or $GLASSYS_DIR).
 `);
     return;
   }
+  /* Before cloning or building: there is no service to install anywhere else. */
+  const platform = opts.platform || process.platform;
+  if (platform !== "linux") fail(linuxOnlyMessage(platform));
   if (isRoot(opts.uid ?? process.getuid?.())) {
     fail("Do not install Glassys as root. Run this as the user the agent should act as.");
   }

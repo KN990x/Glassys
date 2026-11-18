@@ -16,24 +16,21 @@ import {
   healthProbeHosts,
   isRoot,
   nodeMeetsMin,
-  renderLaunchdPlist,
   renderSystemdUserUnit,
   systemdQuote,
   spawnFailure,
   upgradeRepo,
-  xmlEscape,
+  linuxOnlyMessage,
 } from "./host-service.mjs";
 
 const opts = {
-  node: "/opt/homebrew/bin/node",
+  node: "/usr/bin/node",
   gateway: "/opt/glassys/gateway/dist/index.js",
   cwd: "/opt/glassys",
   dataDir: "/opt/glassys/data",
   webDir: "/opt/glassys/web/dist",
-  home: "/Users/op",
-  path: "/opt/homebrew/bin:/usr/bin:/bin",
-  logOut: "/opt/glassys/data/glassys.log",
-  logErr: "/opt/glassys/data/glassys.err",
+  home: "/home/op",
+  path: "/usr/local/bin:/usr/bin:/bin",
 };
 
 test("nodeMeetsMin accepts 22.13+", () => {
@@ -44,8 +41,9 @@ test("nodeMeetsMin accepts 22.13+", () => {
   assert.equal(nodeMeetsMin("20.19.0"), false);
 });
 
-test("xmlEscape encodes plist specials", () => {
-  assert.equal(xmlEscape(`a&b<"c">`), "a&amp;b&lt;&quot;c&quot;&gt;");
+test("the installer names Linux as the only platform", () => {
+  assert.match(linuxOnlyMessage("darwin"), /Linux only/);
+  assert.match(linuxOnlyMessage("win32"), /win32/);
 });
 
 test("systemdQuote leaves safe paths, quotes spaces", () => {
@@ -53,14 +51,10 @@ test("systemdQuote leaves safe paths, quotes spaces", () => {
   assert.equal(systemdQuote("/home/op/My Apps/node"), `"/home/op/My Apps/node"`);
 });
 
-test("launchd plist keeps the process alive and does not embed secrets", () => {
-  const xml = renderLaunchdPlist(opts);
-  assert.match(xml, /<key>KeepAlive<\/key>\s*<true\/>/);
-  assert.match(xml, /<key>RunAtLoad<\/key>\s*<true\/>/);
-  assert.match(xml, /<string>\/opt\/homebrew\/bin\/node<\/string>/);
-  assert.match(xml, /<key>GLASSYS_SERVICE<\/key>\s*<string>1<\/string>/);
-  assert.match(xml, /<key>GLASSYS_DATA_DIR<\/key>\s*<string>\/opt\/glassys\/data<\/string>/);
-  assert.doesNotMatch(xml, /CURSOR_API_KEY|ANTHROPIC_API_KEY|password/i);
+test("systemd user unit does not embed secrets", () => {
+  const unit = renderSystemdUserUnit(opts);
+  assert.match(unit, /Environment=GLASSYS_DATA_DIR=\/opt\/glassys\/data/);
+  assert.doesNotMatch(unit, /CURSOR_API_KEY|ANTHROPIC_API_KEY|password/i);
 });
 
 test("systemd user unit restarts and uses default.target", () => {
@@ -70,7 +64,7 @@ test("systemd user unit restarts and uses default.target", () => {
   assert.match(unit, /Restart=always/);
   assert.match(unit, /WantedBy=default.target/);
   assert.match(unit, /WorkingDirectory=\/opt\/glassys/);
-  assert.match(unit, /ExecStart=\/opt\/homebrew\/bin\/node \/opt\/glassys\/gateway\/dist\/index.js/);
+  assert.match(unit, /ExecStart=\/usr\/bin\/node \/opt\/glassys\/gateway\/dist\/index.js/);
   assert.doesNotMatch(unit, /CURSOR_API_KEY|User=glassys/);
   assert.doesNotMatch(unit, /Environment=DISPLAY=/);
 });
@@ -125,19 +119,13 @@ test("gatewayListenPort reads GLASSYS_PORT", () => {
   assert.equal(gatewayListenPort({ GLASSYS_PORT: "nope" }), 8787);
 });
 
-test("unit and plist inject GLASSYS_PORT from listenEnv", () => {
+test("the unit injects GLASSYS_PORT from listenEnv", () => {
   const unit = renderSystemdUserUnit({
     ...opts,
     listenEnv: { GLASSYS_PORT: "9000", GLASSYS_BIND: "127.0.0.1" },
   });
   assert.match(unit, /Environment=GLASSYS_PORT=9000/);
   assert.match(unit, /Environment=GLASSYS_BIND=127.0.0.1/);
-  const xml = renderLaunchdPlist({
-    ...opts,
-    listenEnv: { GLASSYS_PORT: "9000", GLASSYS_BIND: "127.0.0.1" },
-  });
-  assert.match(xml, /<key>GLASSYS_PORT<\/key>\s*<string>9000<\/string>/);
-  assert.match(xml, /<key>GLASSYS_BIND<\/key>\s*<string>127.0.0.1<\/string>/);
 });
 
 test("a failed git pull stops the upgrade by default", () => {
@@ -190,18 +178,18 @@ test("runningInsideUnit reads the systemd cgroup", () => {
   assert.equal(runningInsideUnit(() => { throw new Error("no /proc"); }), false);
 });
 
-test("stableNodePath swaps a Homebrew Cellar path for the opt link", () => {
+test("stableNodePath swaps a Linuxbrew Cellar path for the opt link", () => {
   const exists = (p) => p === "/home/op/.linuxbrew/opt/node/bin/node" || p === "/home/op/.linuxbrew/bin/node";
   assert.equal(
     stableNodePath("/home/op/.linuxbrew/Cellar/node/26.10.0_2/bin/node", { env: {}, exists }),
     "/home/op/.linuxbrew/opt/node/bin/node",
   );
   assert.equal(
-    stableNodePath("/opt/homebrew/Cellar/node@22/22.13.0/bin/node", {
+    stableNodePath("/home/linuxbrew/.linuxbrew/Cellar/node@22/22.13.0/bin/node", {
       env: {},
-      exists: (p) => p === "/opt/homebrew/opt/node@22/bin/node",
+      exists: (p) => p === "/home/linuxbrew/.linuxbrew/opt/node@22/bin/node",
     }),
-    "/opt/homebrew/opt/node@22/bin/node",
+    "/home/linuxbrew/.linuxbrew/opt/node@22/bin/node",
   );
   assert.equal(stableNodePath("/usr/bin/node", { env: {}, exists }), "/usr/bin/node");
   assert.equal(stableNodePath("/x/Cellar/node/1/bin/node", { env: { GLASSYS_NODE: "/usr/local/bin/node" }, exists }), "/usr/local/bin/node");
@@ -230,7 +218,7 @@ test("sanitizePath drops pnpm, Cellar, versioned and missing dirs", () => {
     "/home/op/.local/share/pnpm/.pnpm/abc/node_modules/.bin",
     "/home/op/.linuxbrew/Cellar/node/26.10.0_2/bin",
     "/home/op/.local/share/cursor-agent/versions/2026.09.28-abc",
-    "/Users/op/.local/state/fnm_multishells/1900_17/bin",
+    "/home/op/.local/state/fnm_multishells/1900_17/bin",
     "/tmp/xyz",
     "/home/op/.local/bin",
     "/gone",

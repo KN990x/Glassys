@@ -52,7 +52,7 @@ export async function listWorkspaces(root: string): Promise<WorkspaceHit[]> {
   if (!root || !isAbsolute(root)) throw new HttpError(400, "Workspace root must be an absolute path");
   const abs = resolve(root);
   if (abs === "/") throw new HttpError(400, "Pick a working directory, not the filesystem root");
-  if (abs === "/Users" || abs === "/home") {
+  if (abs === "/home") {
     const home = homedir();
     return [{ path: home, name: basename(home) }];
   }

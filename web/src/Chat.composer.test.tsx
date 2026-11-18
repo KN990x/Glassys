@@ -446,7 +446,7 @@ describe("Chat composer and layout", () => {
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
-    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|failed units/i);
     expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
   });
 
@@ -685,7 +685,7 @@ describe("Chat composer and layout", () => {
     await act(async () => {
       [...chips!.querySelectorAll("button")].find((b) => b.textContent?.endsWith("/status"))?.click();
     });
-    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|launchd|failed units/i);
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toMatch(/systemd|failed units/i);
     expect(socket.sent.some((m) => (m as { type?: string }).type === "user.message")).toBe(false);
   });
 

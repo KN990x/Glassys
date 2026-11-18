@@ -8,7 +8,6 @@ import { hostCapabilities, hostOverview, listServices, readLogs } from "./host-p
  * for real, which the parser tests can only imitate. Elsewhere it is skipped.
  */
 const systemd = process.platform === "linux" && existsSync("/run/systemd/system");
-const macos = process.platform === "darwin";
 
 describe.skipIf(!systemd)("host probes on a live systemd host", () => {
   it("finds systemd and the journal", async () => {
@@ -46,21 +45,5 @@ describe.skipIf(!systemd)("host probes on a live systemd host", () => {
     expect(o.mem.total).toBeGreaterThan(0);
     expect(o.mem.used).toBeGreaterThan(0);
     expect(o.mem.used).toBeLessThanOrEqual(o.mem.total);
-  });
-});
-
-describe.skipIf(!macos)("host probes on a live macOS host", () => {
-  it("lists launchd jobs without counting reaped agents as failures", async () => {
-    expect((await hostCapabilities()).services).toBe("launchd");
-    const units = await listServices("system", "all");
-    expect(units.length).toBeGreaterThan(0);
-    expect(units.filter((u) => u.active === "failed").every((u) => /^exit [1-9]/.test(u.sub))).toBe(true);
-  });
-
-  it("measures memory with the file cache counted as available", async () => {
-    const o = await hostOverview();
-    expect(o.disks.some((d) => d.mount === "/")).toBe(true);
-    expect(o.disks.some((d) => d.mount.startsWith("/Library/Developer/"))).toBe(false);
-    expect(o.mem.used).toBeLessThan(o.mem.total);
   });
 });

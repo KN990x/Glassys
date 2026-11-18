@@ -429,7 +429,7 @@
   "host.refresh": "Refresh",
   "host.loading": "Reading the host",
   "host.loadFailed": "Could not read this from the host.",
-  "host.servicesUnavailable": "No service manager (systemd or launchd) was found on this host.",
+  "host.servicesUnavailable": "No systemd was found on this host.",
   "host.logsUnavailable": "No systemd journal was found on this host.",
   "services.all": "All",
   "services.active": "Active",

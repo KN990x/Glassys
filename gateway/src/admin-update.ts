@@ -19,7 +19,6 @@ import { HttpError } from "./errors.js";
 import { SAFE_GIT_ARGS, safeGitEnv } from "./host-git.js";
 import { listAdapters } from "./adapters.js";
 
-const SERVICE_LABEL = "dev.kn990x.glassys";
 const SYSTEMD_UNIT = "glassys.service";
 
 /**
@@ -126,16 +125,11 @@ async function exitsZero(cmd: string, args: string[]): Promise<boolean> {
  */
 export async function detectService(env = process.env, platform = process.platform): Promise<ServiceKind> {
   if (detectOverride) return detectOverride;
-  if (env.GLASSYS_SERVICE === "1") {
-    if (platform === "darwin") return "launchd";
-    if (platform === "linux") return "systemd";
-  }
+  if (env.GLASSYS_SERVICE === "1" && platform === "linux") return "systemd";
   const cacheable = env === process.env && platform === process.platform;
   if (cacheable && detected) return detected;
   let kind: ServiceKind = "none";
-  if (platform === "darwin" && (await exitsZero("launchctl", ["print", `gui/${process.getuid?.() ?? 0}/${SERVICE_LABEL}`]))) {
-    kind = "launchd";
-  } else if (platform === "linux" && (await exitsZero("systemctl", ["--user", "cat", SYSTEMD_UNIT]))) {
+  if (platform === "linux" && (await exitsZero("systemctl", ["--user", "cat", SYSTEMD_UNIT]))) {
     kind = "systemd";
   }
   if (cacheable) detected = kind;

@@ -71,7 +71,7 @@ prompts:
     - id: status
       slash: status
       title: Host status
-      text: Check systemd/launchd failed units, disk usage, and memory. Summarize what needs attention.
+      text: Check systemd failed units, disk usage, and memory. Summarize what needs attention.
     - id: disk
       slash: disk
       title: Disk usage
