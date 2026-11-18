@@ -39,3 +39,7 @@ overrides:
   # Dev only: postcss (vite, vitest) still accepts source-map-js 1.2.1, whose indexed
   # source-map sections can stall the event loop (GHSA-68fv-2mgg-jv7q).
   source-map-js: '^1.2.2'
+  # Dev only: eslint and typescript-eslint still ask for minimatch ^10, and every 10.x is open to
+  # globparts amplification (GHSA-g3hv-75wg-m249, fixed in 11.0.1). 11.0.7 also fixes the quadratic
+  # compile time 11.0.0 introduced. pnpm check (lint included) passes on 11.
+  minimatch: '^11.0.7'
