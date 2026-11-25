@@ -4,7 +4,7 @@ Glassys is a pnpm workspace. Node **22.13+** (see `.nvmrc`). Use the pnpm versio
 
 ```bash
 corepack enable
-pnpm install --frozen-lockfile
+pnpm run setup    # checks Node and pnpm, then pnpm install --frozen-lockfile (safe to rerun)
 pnpm check
 ```
 

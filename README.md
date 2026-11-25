@@ -151,6 +151,23 @@ pnpm run dev     # PWA on 127.0.0.1:5173, gateway on 127.0.0.1:8787
 pnpm check       # lint, build, typecheck, tests, bundle budget
 ```
 
+### Set up the project on another machine
+
+```bash
+git clone https://github.com/KN990x/Glassys.git glassys && cd glassys
+mise install        # Node from .nvmrc (any version manager that reads .nvmrc works too)
+corepack enable     # pnpm at the version in package.json → packageManager
+pnpm run setup      # checks Node and pnpm, installs dependencies with the frozen lockfile
+pnpm run dev        # then finish the onboarding wizard in the PWA
+```
+
+`pnpm run setup` is safe to run again. There are no keys to fill in: `config.yaml` and
+`secrets.json` are created in `data/` on first start, the wizard sets the operator password, and
+every variable in [.env.example](.env.example) is optional (export it in the shell or the service
+unit; the gateway does not read a `.env` file). Node 25+ no longer ships Corepack: install it first
+with `npm install -g corepack@latest`. To run Glassys as a service on the host, use the
+[Install](#install) steps instead.
+
 | Path | Role |
 | --- | --- |
 | `protocol/` | Versioned UI protocol |
@@ -297,5 +314,22 @@ pnpm install
 pnpm run dev     # PWA en 127.0.0.1:5173, gateway en 127.0.0.1:8787
 pnpm check       # lint, build, tipos, tests y presupuesto del bundle
 ```
+
+### Montar el proyecto en otra máquina
+
+```bash
+git clone https://github.com/KN990x/Glassys.git glassys && cd glassys
+mise install        # Node de .nvmrc (sirve cualquier gestor de versiones que lea .nvmrc)
+corepack enable     # pnpm con la versión de package.json → packageManager
+pnpm run setup      # comprueba Node y pnpm e instala las dependencias con el lockfile congelado
+pnpm run dev        # y después, el asistente de configuración en la PWA
+```
+
+`pnpm run setup` se puede repetir sin riesgo. No hay claves que rellenar: `config.yaml` y
+`secrets.json` se crean en `data/` en el primer arranque, el asistente pone la contraseña del
+operador y todas las variables de [.env.example](.env.example) son opcionales (se exportan en la
+shell o en la unidad del servicio; el gateway no lee un archivo `.env`). Desde Node 25, Node ya no
+trae Corepack: instálalo antes con `npm install -g corepack@latest`. Para dejar Glassys como servicio
+en el host, sigue los pasos de [Instalación](#instalación).
 
 Ver [CONTRIBUTING.md](CONTRIBUTING.md). Licencia [Apache-2.0](LICENSE).
