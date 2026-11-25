@@ -22,7 +22,6 @@
     "build": "pnpm -r run build",
     "build:packages": "pnpm --filter @glassys/protocol --filter @glassys/adapter-* run build",
     "dev": "pnpm run build:packages && concurrently -n pkgs,gateway,web -c cyan,green,magenta \"pnpm --filter @glassys/protocol --filter @glassys/adapter-* --parallel run build:watch\" \"pnpm --filter @glassys/gateway run dev\" \"pnpm --filter @glassys/web run dev\"",
-    "setup": "node scripts/setup.mjs",
     "start": "node gateway/dist/index.js",
     "service:install": "node scripts/host-service.mjs install",
     "service:uninstall": "node scripts/host-service.mjs uninstall",
