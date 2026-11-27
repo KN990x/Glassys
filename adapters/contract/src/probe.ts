@@ -6,9 +6,8 @@ const execFileAsync = promisify(execFile);
 
 /** Fail probe when a host CLI binary is missing from PATH. */
 export async function requireHostCommand(command: string, message: string): Promise<void> {
-  const finder = process.platform === "win32" ? "where" : "which";
   try {
-    await execFileAsync(finder, [command], { timeout: 4_000, windowsHide: true });
+    await execFileAsync("which", [command], { timeout: 4_000 });
   } catch {
     throw new AdapterError(message, "startup");
   }
@@ -22,7 +21,7 @@ export async function requireHostCommand(command: string, message: string): Prom
 export async function requireRunnableCommand(command: string, args: string[], name: string): Promise<void> {
   await requireHostCommand(command, `${name} CLI is not on PATH. Install the ${name} CLI on this host.`);
   try {
-    await execFileAsync(command, args, { timeout: 15_000, windowsHide: true });
+    await execFileAsync(command, args, { timeout: 15_000 });
   } catch (err) {
     const e = err as NodeJS.ErrnoException & { signal?: string; code?: number | string; stderr?: string };
     const why = e.signal ? `was killed (${e.signal})` : e.code !== undefined ? `exited with ${e.code}` : "failed";
